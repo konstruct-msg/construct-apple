@@ -28,6 +28,7 @@
 //
 
 import Foundation
+import SwiftProtobuf
 
 /// Why an envelope is carrying no intake credential, and therefore paying a token.
 ///
@@ -126,6 +127,20 @@ enum IntakePublishing {
     static let recheckInterval: Duration = .seconds(3600)
 }
 
+/// What the sender does with the server's verdict on a tag it presented
+/// (`SendMessageResponse.intake_verdict`, construct-protos #29).
+///
+/// Only "not accepted" suspends the key, and only until the epoch rolls (`noteCredentialRejected`).
+/// Not dropped: the usual cause is a recipient device whose window lapsed while it was off, and
+/// that key works again once it publishes — a dropped key never comes back, because the recipient
+/// has no reason to send its card again. "Unchecked" is the server failing to look (its tag store
+/// down): acting on it would make every sender throw away working keys during an outage.
+enum IntakeVerdictReaction {
+    static func suspendsKey(_ verdict: Shared_Proto_Services_V1_IntakeVerdict) -> Bool {
+        verdict == .notAccepted
+    }
+}
+
 /// What to do with this device's own intake key, given what the Keychain answered.
 ///
 /// Until 2026-10-29 any nil from the Keychain minted a fresh key: an unreadable item (locked
@@ -181,6 +196,13 @@ final class IntakeCredentialService {
     private static let rejectedKey = "construct.intake.rejected.v1"
 
     private var isPublishing = false
+
+    /// Envelopes in flight that presented a tag, by delivery tag → recipient account. The sealed
+    /// RPC sees only bytes; this is how its verdict finds the recipient it is about. Bounded: an
+    /// entry whose send never answered is dead weight, and the oldest go first.
+    private var presented: [Data: String] = [:]
+    private var presentedOrder: [Data] = []
+    private static let presentedLimit = 256
 
     private init() {}
 
@@ -336,6 +358,27 @@ final class IntakeCredentialService {
         rejected = rejected.filter { $0.value >= epoch }
         rejected[normalise(accountId)] = epoch
         defaults.set(rejected, forKey: Self.rejectedKey)
+    }
+
+    /// An envelope for `accountId` carrying our tag for them is about to go out.
+    func notePresented(deliveryTag: Data, forRecipient accountId: String) {
+        guard !deliveryTag.isEmpty else { return }
+        presented[deliveryTag] = accountId
+        presentedOrder.append(deliveryTag)
+        if presentedOrder.count > Self.presentedLimit {
+            presented.removeValue(forKey: presentedOrder.removeFirst())
+        }
+    }
+
+    /// The server answered a sealed send. `sealedInner` is the envelope that was sent; its
+    /// delivery tag says which recipient the verdict is about.
+    func noteVerdict(_ verdict: Shared_Proto_Services_V1_IntakeVerdict, sealedInner: Data) {
+        guard let inner = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInner),
+              let accountId = presented.removeValue(forKey: inner.deliveryTag) else { return }
+        presentedOrder.removeAll { $0 == inner.deliveryTag }
+        guard IntakeVerdictReaction.suspendsKey(verdict) else { return }
+        noteCredentialRejected(forRecipient: accountId)
+        Log.info("Intake: server did not accept our tag for \(accountId.prefix(8))… — paying tokens until the epoch rolls", category: "Intake")
     }
 
     /// Is this peer's credential suppressed for `epoch`?

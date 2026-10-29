@@ -100,6 +100,74 @@ public nonisolated enum Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf.Enum, 
 
 }
 
+/// The server's answer to an envelope's intake credential.
+///
+/// Only NOT_ACCEPTED means "the key you hold for this recipient is not accepted now": the sender
+/// stops presenting it until the epoch rolls and pays tokens meanwhile, then tries it once more.
+/// Not dropped: the commonest cause is a recipient device whose window lapsed while it was off,
+/// and that key works again as soon as the device publishes; a dropped key would never come back,
+/// because the recipient has no reason to send its card again. Every other value keeps the key
+/// in use.
+public nonisolated enum Shared_Proto_Services_V1_IntakeVerdict: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+
+  /// Not reported: SendMessage, or a server older than the field. Keep the key.
+  case unspecified // = 0
+
+  /// The envelope carried no intake tag.
+  case none // = 1
+
+  /// The tag is one the recipient published for the current or previous epoch; no token owed.
+  case accepted // = 2
+
+  /// The tag was read and the recipient does not accept it: unsealed but not in the recipient's
+  /// set, the wrong length, or the recipient published nothing for these epochs.
+  case notAccepted // = 3
+
+  /// The server could not check: its tag store was unavailable, it has no token key, or the tag
+  /// did not open with the server's key (the sender sealed to a stale server key — a fault of the
+  /// seal, not of the intake key). Not a statement about the key: a sender must not suspend a
+  /// working key because the server was down or rotated.
+  case unchecked // = 4
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .none
+    case 2: self = .accepted
+    case 3: self = .notAccepted
+    case 4: self = .unchecked
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .none: return 1
+    case .accepted: return 2
+    case .notAccepted: return 3
+    case .unchecked: return 4
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Shared_Proto_Services_V1_IntakeVerdict] = [
+    .unspecified,
+    .none,
+    .accepted,
+    .notAccepted,
+    .unchecked,
+  ]
+
+}
+
 /// ReactionEventType - Type of reaction event
 public nonisolated enum Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -738,6 +806,15 @@ public nonisolated struct Shared_Proto_Services_V1_SendMessageResponse: Sendable
   /// Clears the value of `attemptID`. Subsequent reads from it will return its default value.
   public mutating func clearAttemptID() {self._attemptID = nil}
 
+  /// SendSealedMessage only: what the server made of SealedInner.intake_tag_sealed. Set under
+  /// MSG_STEALTH_TOKEN_POLICY=warn as well as enforce — under warn nothing is refused, and until
+  /// 2026-10-29 a sender holding a stale intake key had no way to learn it, so the key lived
+  /// forever (construct-docs decisions/intake-key-is-the-accounts-not-the-devices.md).
+  ///
+  /// Tells the sender nothing it would not learn under enforce from the refusal itself, and the
+  /// server nothing new. Unset on SendMessage and from a server that predates the field.
+  public var intakeVerdict: Shared_Proto_Services_V1_IntakeVerdict = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1227,6 +1304,10 @@ fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
 nonisolated extension Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ERROR_CODE_UNSPECIFIED\0\u{1}ERROR_CODE_RECIPIENT_NOT_FOUND\0\u{1}ERROR_CODE_BLOCKED\0\u{1}ERROR_CODE_RATE_LIMIT\0\u{1}ERROR_CODE_TOO_LARGE\0\u{1}ERROR_CODE_ENCRYPTION_FAILED\0\u{1}ERROR_CODE_OFFLINE\0\u{2}\u{f}ERROR_CODE_INTERNAL\0")
+}
+
+nonisolated extension Shared_Proto_Services_V1_IntakeVerdict: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INTAKE_VERDICT_UNSPECIFIED\0\u{1}INTAKE_VERDICT_NONE\0\u{1}INTAKE_VERDICT_ACCEPTED\0\u{1}INTAKE_VERDICT_NOT_ACCEPTED\0\u{1}INTAKE_VERDICT_UNCHECKED\0")
 }
 
 nonisolated extension Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf._ProtoNameProviding {
@@ -1980,7 +2061,7 @@ nonisolated extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf
 
 nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{3}rate_limit_challenge\0\u{3}attempt_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{3}rate_limit_challenge\0\u{3}attempt_id\0\u{3}intake_verdict\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1995,6 +2076,7 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
       case 5: try { try decoder.decodeSingularMessageField(value: &self._error) }()
       case 6: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
+      case 8: try { try decoder.decodeSingularEnumField(value: &self.intakeVerdict) }()
       default: break
       }
     }
@@ -2026,6 +2108,9 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
     try { if let v = self._attemptID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 7)
     } }()
+    if self.intakeVerdict != .unspecified {
+      try visitor.visitSingularEnumField(value: self.intakeVerdict, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2037,6 +2122,7 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
     if lhs._error != rhs._error {return false}
     if lhs._rateLimitChallenge != rhs._rateLimitChallenge {return false}
     if lhs._attemptID != rhs._attemptID {return false}
+    if lhs.intakeVerdict != rhs.intakeVerdict {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
