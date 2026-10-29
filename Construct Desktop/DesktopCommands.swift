@@ -32,8 +32,19 @@ import AppKit
 struct ConstructCommands: Commands {
 
     let bridge: DesktopCommandBridge
+    @Environment(\.openWindow) private var openWindow
+    let updater: DesktopUpdater
 
     var body: some Commands {
+
+        if updater.isEnabled {
+            CommandGroup(after: .appInfo) {
+                Button(NSLocalizedString("desktop_check_for_updates", comment: "")) {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+            }
+        }
 
         // Replace the default "New Window" File menu
         CommandGroup(replacing: .newItem) {
@@ -137,6 +148,14 @@ struct ConstructCommands: Commands {
                     call.toggleStudio()
                 }
                 .disabled(!live)
+                Toggle(NSLocalizedString("studio_talkback_always_menu", comment: ""), isOn: Binding(
+                    get: { call.talkback.mode == .alwaysOn },
+                    set: { call.setTalkbackMode($0 ? .alwaysOn : .holdToTalk) }
+                ))
+                Button(NSLocalizedString("studio_check_menu", comment: "")) {
+                    openWindow(id: DesktopWindowID.studioCheck)
+                }
+                .disabled(live)
             }
         }
     }

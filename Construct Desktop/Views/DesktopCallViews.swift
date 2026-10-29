@@ -120,9 +120,120 @@ private struct CallStudioButton: View {
                 .background(model.studioOn ? Color.CT.accent : Color.CT.noise, in: Circle())
         }
         .buttonStyle(.plain)
+        .disabled(!model.studioOn && model.studioSource == nil)
         .help(NSLocalizedString(key, comment: ""))
         .accessibilityLabel(NSLocalizedString(key, comment: ""))
     }
+}
+
+/// Before Studio starts: the application whose sound and windows it takes, and whether the
+/// windows go too.
+private struct StudioSetupControls: View {
+    let model: DesktopCallModel
+
+    var body: some View {
+        VStack(spacing: CTSpace.m) {
+            Picker(NSLocalizedString("studio_source", comment: ""), selection: Binding(
+                get: { model.studioSource },
+                set: { if let source = $0 { model.setStudioSource(source) } }
+            )) {
+                if model.studioSource == nil {
+                    Text(NSLocalizedString("studio_source_none", comment: "")).tag(StudioSource?.none)
+                }
+                ForEach(model.studioSources, id: \.self) { source in
+                    Text(source.name).tag(Optional(source))
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 320)
+
+            Toggle(NSLocalizedString("studio_send_screen", comment: ""), isOn: Binding(
+                get: { model.studioSendsScreen },
+                set: { model.setStudioSendsScreen($0) }
+            ))
+            .toggleStyle(.switch)
+            .frame(maxWidth: 320, alignment: .leading)
+
+            if model.studioSource == nil {
+                Text(NSLocalizedString("studio_source_hint", comment: ""))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+}
+
+/// What went wrong with Studio on this side, and where to fix it.
+private struct StudioProblemNotice: View {
+    let model: DesktopCallModel
+    let problem: StudioProblem
+
+    var body: some View {
+        VStack(spacing: CTSpace.s) {
+            let name = model.studioSource?.name ?? NSLocalizedString("studio_source_generic", comment: "")
+            switch problem {
+            case .programNotCaptured:
+                Text(String(format: NSLocalizedString("studio_problem_program", comment: ""), name))
+            case .screenNotCaptured:
+                Text(String(format: NSLocalizedString("studio_problem_screen", comment: ""), name))
+                Button(NSLocalizedString("studio_open_screen_settings", comment: ""), action: model.openScreenRecordingSettings)
+                    .controlSize(.small)
+            }
+        }
+        .font(CTFont.caption)
+        .foregroundStyle(Color.CT.textDim)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 320)
+    }
+}
+
+/// Talkback while Studio is on: the mode, and in hold-to-talk the button that is held to talk —
+/// the same as holding the talk key from any application.
+private struct StudioTalkbackControls: View {
+    let model: DesktopCallModel
+
+    var body: some View {
+        VStack(spacing: CTSpace.m) {
+            Picker(NSLocalizedString("studio_talkback", comment: ""), selection: Binding(
+                get: { model.talkback.mode },
+                set: { model.setTalkbackMode($0) }
+            )) {
+                Text(NSLocalizedString("studio_talkback_hold", comment: "")).tag(StudioTalkbackMode.holdToTalk)
+                Text(NSLocalizedString("studio_talkback_always", comment: "")).tag(StudioTalkbackMode.alwaysOn)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 320)
+
+            if model.talkback.mode == .holdToTalk {
+                let held = model.talkback.held
+                Label(NSLocalizedString("studio_talk", comment: ""), systemImage: held ? "mic.fill" : "mic")
+                    .font(CTFont.bodyEmphasis)
+                    .foregroundStyle(held ? Color.CT.onFill : Color.CT.text)
+                    .frame(maxWidth: 320, minHeight: CTLayout.hitTarget)
+                    .background(held ? Color.CT.accent : Color.CT.noise, in: CTShape.control())
+                    .contentShape(CTShape.control())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { _ in model.setTalkHeld(true) }
+                        .onEnded { _ in model.setTalkHeld(false) })
+                    .opacity(model.muted ? 0.4 : 1)
+                    .allowsHitTesting(!model.muted)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(NSLocalizedString("studio_talk", comment: ""))
+                Text(String(format: NSLocalizedString("studio_talk_hint", comment: ""), StudioTalkKey.label))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+            }
+        }
+    }
+}
+
+/// The status line's microphone part: off by mute, waiting for the talk key, or talking.
+@MainActor
+private func microphoneStatus(_ model: DesktopCallModel) -> String? {
+    if model.muted { return NSLocalizedString("call_mic_off", comment: "") }
+    guard model.waitsForTalkKey else { return nil }
+    return NSLocalizedString(model.talkback.held ? "studio_talking" : "studio_talk_waiting", comment: "")
 }
 
 private struct CallEndButton: View {
@@ -251,7 +362,7 @@ struct DesktopCallBar: View {
 
     private func barStatus(_ phase: CallPhase, seconds: Int?) -> String {
         let status = callStatus(phase, seconds: seconds)
-        return model.muted ? status + " · " + NSLocalizedString("call_mic_off", comment: "") : status
+        return microphoneStatus(model).map { status + " · " + $0 } ?? status
     }
 }
 
@@ -333,6 +444,20 @@ struct DesktopCallWindowView: View {
                 }
                 labelled("call_end") { CallEndButton(model: model, size: CTLayout.callControlSize) }
             }
+            if model.studioOn {
+                StudioTalkbackControls(model: model)
+                    .padding(.top, CTSpace.l)
+                    .padding(.horizontal, CTSpace.xl)
+            } else if model.studioAvailable {
+                StudioSetupControls(model: model)
+                    .padding(.top, CTSpace.l)
+                    .padding(.horizontal, CTSpace.xl)
+            }
+            if model.studioAvailable, let problem = model.studioProblem {
+                StudioProblemNotice(model: model, problem: problem)
+                    .padding(.top, CTSpace.m)
+                    .padding(.horizontal, CTSpace.xl)
+            }
         default:
             EmptyView()
         }
@@ -376,7 +501,8 @@ struct DesktopCallWindowView: View {
 
     private func windowStatus(_ phase: CallPhase, seconds: Int?) -> String {
         let status = callStatus(phase, seconds: seconds)
-        return phase.isLive && model.muted ? status + " · " + NSLocalizedString("call_mic_off", comment: "") : status
+        guard phase.isLive, let microphone = microphoneStatus(model) else { return status }
+        return status + " · " + microphone
     }
 
     private func waiting(_ phase: CallPhase) -> Bool {

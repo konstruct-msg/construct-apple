@@ -258,11 +258,24 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// Studio's channels while a studio runs; empty otherwise. A call that never starts Studio
     /// makes none, so its SDP has no `m=application` and is what it always was.
     private var studioChannels: [StudioChannel: RTCDataChannel] = [:]
-    /// Fires once, when both of Studio's channels are open.
+    /// Fires once, when both of Studio's channels are open — on the side that offered Studio, not
+    /// before the answer: until then the other side has not made its channels, and what is sent
+    /// on ours is lost.
     var onStudioChannelsOpen: (@Sendable () -> Void)?
     private var studioOpenAnnounced = false
+    /// This side made the channels to offer them, and the answer is not in yet.
+    private var studioAwaitingAnswer = false
+    /// Channels of the studio before, still closing: their ids are not free until they are closed,
+    /// and a channel made on such an id is not made (`studioChannelsClosed()`).
+    private var closingStudioChannels: [RTCDataChannel] = []
+    private var studioClosedWaiters: [CheckedContinuation<Void, Never>] = []
+    /// The other side's DTLS certificate, as its last description named it (`PeerInstance`).
+    private var remoteFingerprint: String?
+    /// The other side is a new instance of the app: it restarted and answered this call's ICE
+    /// restart. What rode on the instance before — Studio's channels — went with it.
+    var onPeerRestarted: (() -> Void)?
     /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
-    private let studioReceiver = Mutex<(@Sendable (StudioChannel, Data) -> Void)?>(nil)
+    private let studioReceiver = Mutex<StudioReceiver?>(nil)
     /// Host: the screen's send-only section, made with Studio's offer and kept for the rest of the
     /// call, so a second Studio on it adds no section.
     private var studioScreenTransceiver: RTCRtpTransceiver?
@@ -356,6 +369,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         stopCapture()
         if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
+        // A start waiting for the studio before to close waits no more: there is no call.
+        closingStudioChannels.removeAll()
+        studioClosedWaiters.forEach { $0.resume() }
+        studioClosedWaiters.removeAll()
         // Do NOT deactivate the audio session here. A raw
         // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
         // internal active-state from the real session. With `useManualAudio`, that
@@ -541,6 +558,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func setRemoteAnswer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .answer, sdp: sdp)
         try await setRemoteDescription(desc)
+        if studioAwaitingAnswer {
+            studioAwaitingAnswer = false
+            studioChannelChanged()
+        }
         await onRemoteDescriptionSet()
     }
 
@@ -610,7 +631,19 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             dataChannel.delegate = self
             studioChannels[channel] = dataChannel
         }
+        studioAwaitingAnswer = peerConnection.signalingState == .stable
         Log.info("Studio channels made (negotiated, ids \(StudioChannel.allCases.map(\.rawValue)))", category: "Calls")
+        // On a call whose data section is already negotiated (a second studio), a channel can be
+        // open as it is made, and no change of state follows to say so.
+        studioChannelChanged()
+    }
+
+    /// Returns once the channels of the studio before are closed; at once when there are none.
+    func studioChannelsClosed() async {
+        closingStudioChannels.removeAll { $0.readyState == .closed }
+        guard !closingStudioChannels.isEmpty else { return }
+        Log.info("Studio: waiting for the channels of the studio before to close", category: "Calls")
+        await withCheckedContinuation { studioClosedWaiters.append($0) }
     }
 
     var studioChannelsOpen: Bool {
@@ -645,17 +678,20 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// signalling thread, never the main actor: the program goes into a ring buffer from there
     /// (`StudioPlayout`), and a hop per packet would put the main thread on the audio path.
     nonisolated func setStudioReceiver(_ receiver: (@Sendable (StudioChannel, Data) -> Void)?) {
-        studioReceiver.withLock { $0 = receiver }
+        studioReceiver.withLock { $0 = receiver.map(StudioReceiver.init) }
     }
 
     func closeStudioChannels() {
         guard !studioChannels.isEmpty else { return }
         for dataChannel in studioChannels.values {
-            dataChannel.delegate = nil
             dataChannel.close()
+            // Kept with this side as delegate until closed: its messages are dropped (it is not
+            // open), its closing is watched.
+            closingStudioChannels.append(dataChannel)
         }
         studioChannels.removeAll()
         studioOpenAnnounced = false
+        studioAwaitingAnswer = false
         Log.info("Studio channels closed", category: "Calls")
     }
 
@@ -705,7 +741,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     private func studioChannelChanged() {
-        guard !studioOpenAnnounced, studioChannelsOpen else { return }
+        closingStudioChannels.removeAll { $0.readyState == .closed }
+        if closingStudioChannels.isEmpty, !studioClosedWaiters.isEmpty {
+            let waiters = studioClosedWaiters
+            studioClosedWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
+        guard !studioOpenAnnounced, !studioAwaitingAnswer, studioChannelsOpen else { return }
         studioOpenAnnounced = true
         Log.info("Studio channels open", category: "Calls")
         onStudioChannelsOpen?()
@@ -741,12 +783,33 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     private func setRemoteDescription(_ sdp: RTCSessionDescription) async throws {
+        let text = sdp.sdp
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             peerConnection.setRemoteDescription(sdp) { error in
                 if let error { cont.resume(throwing: error); return }
                 cont.resume()
             }
         }
+        guard let fingerprint = PeerInstance.fingerprint(sdp: text) else { return }
+        defer { remoteFingerprint = fingerprint }
+        if PeerInstance.isNew(fingerprint, before: remoteFingerprint) { peerRestarted() }
+    }
+
+    /// The instance before is gone without a word — it crashed or was quit — and its channels
+    /// with it: a channel closed now is never answered, and a studio waiting for it would wait
+    /// for good (2026-10-28: the guest crashed, came back into the call, and every press of
+    /// Studio on the host waited for the channels of the studio before).
+    private func peerRestarted() {
+        Log.info("WebRTC: the other side is a new instance (its DTLS certificate changed)", category: "Calls")
+        onPeerRestarted?()
+        for dataChannel in studioChannels.values { dataChannel.close() }
+        studioChannels.removeAll()
+        studioOpenAnnounced = false
+        studioAwaitingAnswer = false
+        closingStudioChannels.removeAll()
+        let waiters = studioClosedWaiters
+        studioClosedWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     private static func makeLocalAudioTrack(factory: RTCPeerConnectionFactory) -> RTCAudioTrack {
@@ -873,6 +936,30 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     }
 }
 
+/// Which instance of the other app this call talks to. Each instance makes its own DTLS
+/// certificate, and every description it sends names it (`a=fingerprint`, RFC 8122): the same
+/// fingerprint is the same instance across ICE restarts; another one is the app started again.
+enum PeerInstance {
+    static func fingerprint(sdp: String) -> String? {
+        sdp.split(whereSeparator: \.isNewline)
+            .first { $0.hasPrefix("a=fingerprint:") }
+            .map { $0.dropFirst("a=fingerprint:".count).trimmingCharacters(in: .whitespaces).lowercased() }
+    }
+
+    /// A first description names no instance before it.
+    static func isNew(_ fingerprint: String, before: String?) -> Bool {
+        before.map { $0 != fingerprint } ?? false
+    }
+}
+
+/// The receiver, in a struct of its own inside the lock. A bare closure as the `Mutex`'s generic
+/// value is reabstracted on every read through `withLock`'s `inout` and written back wrapped in one
+/// more thunk: the closure grew a layer per message until the signalling thread's stack ran out
+/// (Desktop 0.3.18, 2026-10-28, ~5,600 packets in). A struct's field keeps the closure as it is.
+private struct StudioReceiver: Sendable {
+    let receive: @Sendable (StudioChannel, Data) -> Void
+}
+
 extension WebRTCSession: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Log.info("Studio channel \(dataChannel.label) (id \(dataChannel.channelId)) → state \(dataChannel.readyState.rawValue)", category: "Calls")
@@ -880,9 +967,9 @@ extension WebRTCSession: RTCDataChannelDelegate {
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        guard let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
+        guard dataChannel.readyState == .open, let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
         let data = buffer.data
-        studioReceiver.withLock { $0 }?(channel, data)
+        studioReceiver.withLock { $0 }?.receive(channel, data)
     }
 }
 

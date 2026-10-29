@@ -15,6 +15,7 @@ enum DesktopWindowID {
     static let synaps = "synaps"
     static let call = "call"
     static let studioScreen = "studio-screen"
+    static let studioCheck = "studio-check"
 }
 
 @main
@@ -28,6 +29,7 @@ struct Construct_DesktopApp: App {
 
     // Command bridge — owned here, wired up in DesktopRootView
     @State private var commandBridge = DesktopCommandBridge()
+    @State private var updater = DesktopUpdater()
 
     init() {
         // Every front this install knows leaves the logs before the first line could name one.
@@ -111,7 +113,7 @@ struct Construct_DesktopApp: App {
         // glass chat nav sat flush to the traffic lights; the toolbar now owns that slot.
         .windowToolbarStyle(.unified)
         .commands {
-            ConstructCommands(bridge: commandBridge)
+            ConstructCommands(bridge: commandBridge, updater: updater)
         }
 
         // Synapses is its own window — not a tab that replaces the open chat (D2).
@@ -122,6 +124,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(deepLinkHandler)
                 .frame(minWidth: 560, minHeight: 440)
+                .desktopTheme()
         }
         .defaultSize(width: 720, height: 560)
         .windowToolbarStyle(.unified)
@@ -130,6 +133,7 @@ struct Construct_DesktopApp: App {
         // DesktopRootView when a call starts or is answered; closes itself when the call is over.
         Window(LocalizedStringKey("call_window_title"), id: DesktopWindowID.call) {
             DesktopCallWindowView(model: DesktopCallModel.shared)
+                .desktopTheme()
         }
         .defaultSize(width: 440, height: 600)
         .windowResizability(.contentMinSize)
@@ -140,8 +144,18 @@ struct Construct_DesktopApp: App {
         Window(LocalizedStringKey("studio_screen_window_title"), id: DesktopWindowID.studioScreen) {
             DesktopStudioScreenView()
                 .frame(minWidth: 480, minHeight: 270)
+                .desktopTheme()
         }
         .defaultSize(width: 1280, height: 760)
+
+        // Studio's check before a call: the DAW's sound, windows and the talkback microphone, on
+        // this Mac alone. Opened from the Call menu.
+        Window(LocalizedStringKey("studio_check_window_title"), id: DesktopWindowID.studioCheck) {
+            DesktopStudioCheckView()
+                .frame(minWidth: 460, minHeight: 520)
+                .desktopTheme()
+        }
+        .defaultSize(width: 520, height: 720)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {
@@ -150,6 +164,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
+                .desktopTheme()
         }
     }
 }

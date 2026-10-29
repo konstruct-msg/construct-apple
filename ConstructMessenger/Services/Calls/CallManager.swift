@@ -64,6 +64,15 @@ final class CallManager: CallUIManaging {
         return studioCallId == active?.session.id
     }
 
+    /// What went wrong with Studio on this side of the current call, for the call window; kept
+    /// after the studio ends, so the reason stays on screen. Read through `studioProblem`.
+    var studioProblemInCall: (callId: String, problem: StudioProblem)?
+
+    var studioProblem: StudioProblem? {
+        guard let studioProblemInCall, studioProblemInCall.callId == active?.session.id else { return nil }
+        return studioProblemInCall.problem
+    }
+
     /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
     /// order the orchestrator encrypted them (see `sendCallSignalProto`). Without this,
     /// rapid transitions (offer → candidates → hangup) spawn independent send Tasks that
