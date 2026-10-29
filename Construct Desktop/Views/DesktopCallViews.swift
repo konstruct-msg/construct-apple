@@ -105,6 +105,25 @@ private struct CallDevicesButton: View {
     }
 }
 
+/// The camera: on and off like mute. Video calls on Desktop since 2026-10-29.
+private struct CallCameraButton: View {
+    let model: DesktopCallModel
+    let size: CGFloat
+
+    var body: some View {
+        Button(action: model.toggleCamera) {
+            Image(systemName: model.cameraOn ? "video.fill" : "video.slash.fill")
+                .font(CTFont.ui(size * 0.4, weight: .medium))
+                .foregroundStyle(model.cameraOn ? Color.CT.bg : Color.CT.text)
+                .frame(width: size, height: size)
+                .background(model.cameraOn ? Color.CT.text : Color.CT.noise, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help(NSLocalizedString("call_camera", comment: ""))
+        .accessibilityLabel(NSLocalizedString("call_camera", comment: ""))
+    }
+}
+
 /// Studio: on and off like mute — the symbol filled with the accent while Studio is on.
 private struct CallStudioButton: View {
     let model: DesktopCallModel
@@ -379,12 +398,17 @@ struct DesktopCallWindowView: View {
             if let phase = model.phase, phase.isLive, model.micAccess == .denied {
                 micDeniedBanner
             }
-            Spacer(minLength: CTSpace.l)
-            if let session = model.session, let phase = model.phase {
-                peer(session, phase)
+            if model.remoteCameraOn || model.cameraOn, model.phase?.isLive == true {
+                videoStage
+            } else {
+                Spacer(minLength: CTSpace.l)
+                if let session = model.session, let phase = model.phase {
+                    peer(session, phase)
+                }
+                Spacer(minLength: CTSpace.l)
             }
-            Spacer(minLength: CTSpace.l)
             controls
+                .padding(.top, CTSpace.l)
                 .padding(.bottom, CTSpace.l)
             footer
         }
@@ -395,6 +419,46 @@ struct DesktopCallWindowView: View {
             if phase == nil { dismissWindow() }
         }
     }
+
+    /// Their picture fills the stage; ours sits in the corner while our camera is on. With only
+    /// ours on, ours fills it, so the person sees what they are sending.
+    private var videoStage: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Color.CT.mediaGround
+            if model.remoteCameraOn {
+                CallVideoView(side: .remote)
+            } else if let session = model.session {
+                VStack(spacing: CTSpace.m) {
+                    MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.hero)
+                    Text(session.peerName)
+                        .font(CTFont.title)
+                        .foregroundStyle(Color.CT.onMediaDim)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if model.cameraOn {
+                CallVideoView(side: .local)
+                    .frame(width: Self.selfViewWidth, height: Self.selfViewWidth * 3 / 4)
+                    .clipShape(CTShape.card())
+                    .overlay(CTShape.card().strokeBorder(Color.CT.noise, lineWidth: 1))
+                    .padding(CTSpace.m)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            CallTicker(model: model) { seconds in
+                if let phase = model.phase {
+                    Text(windowStatus(phase, seconds: seconds))
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.onMediaDim)
+                        .padding(CTSpace.m)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private static let selfViewWidth: CGFloat = 160
 
     private func peer(_ session: CallSession, _ phase: CallPhase) -> some View {
         VStack(spacing: CTSpace.m) {
@@ -437,6 +501,9 @@ struct DesktopCallWindowView: View {
             HStack(alignment: .top, spacing: CTSpace.l) {
                 labelled(model.muted ? "call_mic_off" : "call_microphone") {
                     CallMuteButton(model: model, size: CTLayout.callControlSize)
+                }
+                if model.videoAvailable {
+                    labelled("call_camera") { CallCameraButton(model: model, size: CTLayout.callControlSize) }
                 }
                 labelled("call_sound") { CallDevicesButton(size: CTLayout.callControlSize) }
                 if model.studioAvailable {

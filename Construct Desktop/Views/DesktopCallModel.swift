@@ -174,6 +174,23 @@ final class DesktopCallModel {
         Task { await CallManager.shared.startOutgoingCall(to: peer, displayName: name, hasVideo: false) }
     }
 
+    // MARK: - Video
+
+    var videoAvailable: Bool { CallsFeature.isVideoEnabled && CallManager.shared.video.canSend }
+    /// This Mac's camera is sending.
+    var cameraOn: Bool { CallManager.shared.video.announcedCameraOn }
+    /// The other side's camera is on: the window shows their picture instead of the avatar.
+    var remoteCameraOn: Bool { CallManager.shared.video.remoteCameraOn }
+
+    func toggleCamera() {
+        CallManager.shared.setCameraOn(!CallManager.shared.video.localCameraOn)
+    }
+
+    func openCameraSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     func openMicrophoneSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else { return }
         NSWorkspace.shared.open(url)

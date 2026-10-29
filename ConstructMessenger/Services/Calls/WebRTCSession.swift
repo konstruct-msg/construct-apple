@@ -443,11 +443,23 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         let capturer = RTCCameraVideoCapturer(delegate: counter)
         // By position, for now. The design asks for the camera by the direction it faces, which
         // is what keeps "front" the front on a folded iPhone Duo (TODO 104).
-        let position: AVCaptureDevice.Position = facing == .front ? .front : .back
-        guard let device = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }) else {
+        let devices = RTCCameraVideoCapturer.captureDevices()
+        let systemDefault = AVCaptureDevice.default(for: .video)?.uniqueID
+        #if os(macOS)
+        let anyPosition = true
+        #else
+        let anyPosition = false
+        #endif
+        guard let index = CallCameraChoice.device(
+            positions: devices.map { $0.position == .front ? .front : $0.position == .back ? .back : .unspecified },
+            facing: facing,
+            defaultIndex: devices.firstIndex { $0.uniqueID == systemDefault },
+            anyPosition: anyPosition
+        ) else {
             Log.error("No \(facing) camera to capture from", category: "Calls")
             return
         }
+        let device = devices[index]
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
         let preferred = capturer.preferredOutputPixelFormat()
         let candidates = formats.map { format -> CallVideoCapture.Candidate in
