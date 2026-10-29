@@ -28,6 +28,8 @@ import UserNotifications
 
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 @MainActor
@@ -96,6 +98,15 @@ final class InAppNotificationService {
     static var appIsActive: Bool {
         #if canImport(UIKit)
         return UIApplication.shared.applicationState == .active
+        #elseif canImport(AppKit)
+        return MacOnScreen.isOnScreen(
+            appIsActive: NSApp.isActive,
+            windows: NSApp.windows.map {
+                .init(canBecomeMain: $0.canBecomeMain, isVisible: $0.isVisible,
+                      isMiniaturized: $0.isMiniaturized,
+                      isUnoccluded: $0.occlusionState.contains(.visible))
+            }
+        )
         #else
         return true
         #endif
@@ -127,6 +138,26 @@ final class InAppNotificationService {
             if let error {
                 Log.error("InAppNotification: flood alert failed — \(error)", category: "Notifications")
             }
+        }
+    }
+}
+
+/// Whether a Mac shows the app: macOS has no `applicationState`. Until 2026-10-29 the answer was
+/// always yes, so a message in the open chat made no banner while the window was minimised or
+/// another app was in front. On screen means the app is frontmost and one of its main windows
+/// is shown, not minimised and not fully covered. Pure, so the iOS test target can test it.
+enum MacOnScreen {
+    struct Window: Equatable {
+        /// A panel or the menu bar's helper windows cannot show a chat.
+        let canBecomeMain: Bool
+        let isVisible: Bool
+        let isMiniaturized: Bool
+        let isUnoccluded: Bool
+    }
+
+    static func isOnScreen(appIsActive: Bool, windows: [Window]) -> Bool {
+        appIsActive && windows.contains {
+            $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized && $0.isUnoccluded
         }
     }
 }
