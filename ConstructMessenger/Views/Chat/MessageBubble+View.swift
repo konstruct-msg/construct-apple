@@ -44,6 +44,7 @@ extension MessageBubble {
                     onSelect: onSelect,
                     onEnterSelectMode: onEnterSelectMode,
                     onTapMedia: onTapMedia,
+                    onTapSticker: onTapSticker,
                     onEdit: onEdit,
                     onReplyWithQuote: onReplyWithQuote,
                     onJumpToReply: onJumpToReply,

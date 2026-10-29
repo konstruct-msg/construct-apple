@@ -29,6 +29,7 @@ struct MessageBubbleRegularView: View {
     let onEnterSelectMode: ((TranscriptRow) -> Void)?
     /// Media open — second argument is the album tile index (0 for single-item).
     let onTapMedia: ((TranscriptRow, Int) -> Void)?
+    let onTapSticker: ((StickerReference) -> Void)?
     let onEdit: ((TranscriptRow) -> Void)?
     let onReplyWithQuote: ((TranscriptRow, String) -> Void)?
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
@@ -388,14 +389,24 @@ struct MessageBubbleRegularView: View {
             )
             .contentShape(.interaction, Rectangle())
             .onTapGesture {
-                if isEditMode {
-                    onSelect?(message)
+                switch BubbleTapAction.of(isEditMode: isEditMode, sticker: sticker) {
+                case .select: onSelect?(message)
+                #if !os(iOS)
+                case .openPack(let ref): onTapSticker?(ref)
+                #endif
+                default: break
                 }
             }
             #if os(iOS)
             // Simultaneous so swipe-to-reply and long-press keep the arena.
             // High-priority would steal the drag the way the old rightward reply did.
-            .simultaneousGesture(doubleTapLikeGesture)
+            // The single tap that opens a sticker's pack waits for the double tap to fail: a like
+            // on a sticker must not open its pack as well.
+            .simultaneousGesture(doubleTapLikeGesture.exclusively(before: TapGesture().onEnded {
+                if case .openPack(let ref) = BubbleTapAction.of(isEditMode: isEditMode, sticker: sticker) {
+                    onTapSticker?(ref)
+                }
+            }))
             #endif
             .onAppear { reloadReactionBadges() }
             .onReceive(NotificationCenter.default.publisher(for: Reactions.didChange)) { note in
@@ -656,5 +667,19 @@ struct MessageBubbleReplyPreview: View {
                 comment: "Jump to the message this reply quotes"
             )
         )
+    }
+}
+
+/// What a single tap on a bubble does. Pure, so it is tested apart from the gestures.
+enum BubbleTapAction: Equatable {
+    case select
+    /// A sticker opens its pack (`StickerPackPreviewView`).
+    case openPack(StickerReference)
+    case none
+
+    static func of(isEditMode: Bool, sticker: StickerReference?) -> Self {
+        if isEditMode { return .select }
+        if let sticker { return .openPack(sticker) }
+        return .none
     }
 }

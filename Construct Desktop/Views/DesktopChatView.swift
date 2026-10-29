@@ -38,6 +38,7 @@ struct DesktopChatView: View {
     @State private var showingForwardPicker = false
     @State private var forwardFailed = false
     @State private var galleryStartItem: GalleryStartItem?
+    @State private var stickerPackPreview: StickerPackPreviewItem?
 
     @State private var chatDropImages: [PlatformImage] = []
     @State private var chatDropFileURLs: [URL] = []
@@ -174,6 +175,16 @@ struct DesktopChatView: View {
                 }
                 .sheetNavigation()
                 .frame(minWidth: 400, minHeight: 320)
+            }
+            .sheet(item: $stickerPackPreview) { item in
+                StickerPackPreviewView(packID: item.pack) { ref in
+                    viewModel.sendSticker(ref, replyTo: replyingTo)
+                    replyingTo = nil
+                    replyQuoteText = nil
+                    clearReplyFocus(animated: true)
+                    scrollManager.shouldScrollToBottom = true
+                }
+                .frame(width: 400, height: 480)
             }
             .sheet(item: $galleryStartItem) { item in
                 DesktopMediaViewer(
@@ -748,6 +759,9 @@ struct DesktopChatView: View {
                             onEnterSelectMode: nil,
                             onTapMedia: { msg, itemIndex in
                                 galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
+                            },
+                            onTapSticker: { ref in
+                                stickerPackPreview = StickerPackPreviewItem(pack: ref.pack)
                             },
                             onEdit: { msg in viewModel.editingMessage = msg },
                             onReplyWithQuote: { msg, _ in quotingMessage = msg },
