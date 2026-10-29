@@ -1322,6 +1322,10 @@
 "desktop_new_conversation" = "Նոր զրույց";
 "desktop_sync_messages" = "Համաժամեցնել հաղորդագրությունները";
 "desktop_check_for_updates" = "Ստուգել թարմացումները…";
+"desktop_background_section" = "Հետին պլանում";
+"desktop_open_at_login" = "Բացել մուտք գործելիս";
+"desktop_open_at_login_footer" = "Պատուհանը փակ լինելիս Konstruct-ը շարունակում է աշխատել և ստանալ հաղորդագրություններ։ Բացեք այն մուտք գործելիս, որպեսզի այդպես լինի նաև վերագործարկումից հետո։";
+"desktop_login_item_needs_approval" = "Թույլատրեք Konstruct-ը Համակարգի կարգավորումներ → Մուտքի տարրեր բաժնում։";
 "desktop_menu_navigate" = "Նավարկում";
 "desktop_next_chat" = "Հաջորդ զրույց";
 "desktop_previous_chat" = "Նախորդ զրույց";

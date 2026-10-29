@@ -21,6 +21,8 @@ enum DesktopWindowID {
 @main
 struct Construct_DesktopApp: App {
 
+    @NSApplicationDelegateAdaptor(DesktopAppDelegate.self) private var appDelegate
+
     @State private var authViewModel     = AuthViewModel(context: PersistenceController.shared.container.viewContext)
     @State private var chatsViewModel    = ChatsViewModel()
     @State private var securityViewModel = SecurityViewModel()
