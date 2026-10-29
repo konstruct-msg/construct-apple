@@ -561,7 +561,6 @@ final class CallManager: CallUIManaging {
             if case .ended = self.state { self.state = .idle }
         }
 
-        #if os(iOS)
         // Taken on another of our devices: that device records the call; this one neither shows
         // a missed call nor a second entry for it.
         if reason != .hangup(.acceptedElsewhere) {
@@ -572,7 +571,6 @@ final class CallManager: CallUIManaging {
                 durationSeconds: duration
             )
         }
-        #endif
 
         #if os(iOS)
         if reportToCallKit && wasRegisteredWithCallKit {

@@ -84,6 +84,12 @@ struct ConstructCommands: Commands {
                 bridge.openPeople()
             }
 
+            if CallsFeature.isEnabled {
+                Button(NSLocalizedString("calls_recents", comment: "")) {
+                    bridge.openCalls()
+                }
+            }
+
             Button(NSLocalizedString("quick_open", comment: "")) {
                 bridge.focusSearch()
             }
@@ -179,6 +185,7 @@ final class DesktopCommandBridge {
     var onFocusSearch:     (() -> Void)?
     var onFind:            (() -> Void)?
     var onOpenPeople:      (() -> Void)?
+    var onOpenCalls:       (() -> Void)?
     var onSelectNext:      (() -> Void)?
     var onSelectPrev:      (() -> Void)?
     var onJumpToIndex:     ((Int) -> Void)?
@@ -192,6 +199,7 @@ final class DesktopCommandBridge {
     func focusSearch()     { onFocusSearch?() }
     func find()            { onFind?() }
     func openPeople()      { onOpenPeople?() }
+    func openCalls()       { onOpenCalls?() }
     func selectNextChat()  { onSelectNext?() }
     func selectPrevChat()  { onSelectPrev?() }
     func jumpToChat(index: Int) { onJumpToIndex?(index) }
