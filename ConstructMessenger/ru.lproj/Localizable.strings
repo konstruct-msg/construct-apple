@@ -633,6 +633,8 @@
 "sticker_catalog_failed" = "Не удалось загрузить наборы.";
 "sticker_catalog_retry" = "Повторить";
 "sticker_pack_remove" = "Убрать набор";
+"sticker_pack_add" = "Добавить набор";
+"sticker_pack_unavailable" = "Этот набор сейчас недоступен.";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";

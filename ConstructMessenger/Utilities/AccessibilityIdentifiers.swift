@@ -95,6 +95,10 @@ enum A11y {
 
     // MARK: - Media picker
 
+    enum StickerPackPreview {
+        static let toggle = "stickerPackPreview.toggle"
+    }
+
     enum MediaPicker {
         static let tabStickers    = "mediaPicker.tab.stickers"
         static let installFixture = "mediaPicker.stickers.installFixture"
