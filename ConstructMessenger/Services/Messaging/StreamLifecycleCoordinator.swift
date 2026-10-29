@@ -110,6 +110,23 @@ final class StreamLifecycleCoordinator {
         isStarted = true
         setupSubscribers()
         setupAppLifecycleObservers()
+        startIntakeRecheck()
+    }
+
+    /// Intake tags: what *our contacts* present to be let through without a token, so a window
+    /// that drains does not degrade this device — it quietly puts everyone who writes to us back
+    /// on the wallet. Published on every stream start (`startMessageStream`) and rechecked here
+    /// while the process lives, because a process can outlive the window it published: Konstruct
+    /// Desktop runs for days with its window closed, and this coordinator belongs to the app, not
+    /// to a window. Once per epoch is decided inside the call.
+    private func startIntakeRecheck() {
+        observationTasks.append(Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: IntakePublishing.recheckInterval)
+                guard !Task.isCancelled else { return }
+                await IntakeCredentialService.shared.publishTagWindowIfNeeded()
+            }
+        })
     }
 
     func stop() {
@@ -144,6 +161,8 @@ final class StreamLifecycleCoordinator {
         streamManager.connect(contactUserIds: ids, trigger: "startMessageStream(\(reason))") { [weak self] message in
             self?.handleIncomingMessage(message)
         }
+        // Every (re)connect, not only the first: a no-op RPC-wise within an epoch.
+        Task { await IntakeCredentialService.shared.publishTagWindowIfNeeded() }
         if !hasPerformedStartupOtpkCheck {
             hasPerformedStartupOtpkCheck = true
             Task { [weak self] in
@@ -176,12 +195,6 @@ final class StreamLifecycleCoordinator {
                 }
                 await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
                 await MlsKeyPackageService.replenishIfNeeded(deviceId: deviceId)
-                // Publish a week of intake tags. It belongs beside the other key housekeeping and
-                // not at app launch: what this publishes is what *our contacts* present to be let
-                // through without a token, so a window that drains does not degrade this device —
-                // it quietly puts everyone who writes to us back on the wallet. Once per epoch;
-                // the call is a no-op on every launch after the first of the day.
-                await IntakeCredentialService.shared.publishTagWindowIfNeeded()
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
                 await ProfileShareViewModel.rebroadcastIfOwed()
             }
