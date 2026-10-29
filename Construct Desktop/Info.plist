@@ -17,11 +17,34 @@
 	-->
 	<key>ATSApplicationFontsPath</key>
 	<string>.</string>
+	<!--
+	  Calls. The translations are the shared InfoPlist.strings; a key is localized only if the
+	  plist declares it. The sandbox side is com.apple.security.device.audio-input in the
+	  entitlements file.
+	-->
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Konstruct captures the sound of the app you choose to send it to the other side of a call in Studio mode.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Konstruct uses the microphone to record voice messages and make encrypted calls.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Konstruct uses the local network to transfer your message history to a newly linked device over Wi‑Fi.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_construct-transfer._tcp</string>
 	</array>
+	<!--
+	  Updates (Sparkle). The feed is chosen in code by the build's architecture
+	  (DesktopUpdateFeed); an update is installed only when its EdDSA signature verifies
+	  against SUPublicEDKey. KonstructUpdatesEnabled is per configuration: Beta only for now.
+	  The installer runs as Sparkle's XPC launcher service, which the sandbox requires.
+	-->
+	<key>KonstructUpdatesEnabled</key>
+	<string>$(DESKTOP_UPDATES_ENABLED)</string>
+	<key>SUPublicEDKey</key>
+	<string>fb3rBYXELJP7Z5cwz1Q2QtkV+fPtJyHcNw/dA5u9b70=</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 </dict>
 </plist>

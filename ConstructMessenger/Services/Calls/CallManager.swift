@@ -55,6 +55,24 @@ final class CallManager: CallUIManaging {
 
     var active: ActiveCall?
 
+    /// The call Studio is on, for the call window; `ActiveCall` is not observed. Read through
+    /// `studioIsOn`, so a call that ended with Studio on does not leave it showing.
+    var studioCallId: String?
+
+    var studioIsOn: Bool {
+        guard let studioCallId else { return false }
+        return studioCallId == active?.session.id
+    }
+
+    /// What went wrong with Studio on this side of the current call, for the call window; kept
+    /// after the studio ends, so the reason stays on screen. Read through `studioProblem`.
+    var studioProblemInCall: (callId: String, problem: StudioProblem)?
+
+    var studioProblem: StudioProblem? {
+        guard let studioProblemInCall, studioProblemInCall.callId == active?.session.id else { return nil }
+        return studioProblemInCall.problem
+    }
+
     /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
     /// order the orchestrator encrypted them (see `sendCallSignalProto`). Without this,
     /// rapid transitions (offer → candidates → hangup) spawn independent send Tasks that
@@ -130,6 +148,8 @@ final class CallManager: CallUIManaging {
         var stream: SignalStream?
         var turn: Shared_Proto_Signaling_V1_TurnCredentials?
         var webrtc: (any WebRTCSessionProtocol)?
+        /// The studio on this call, host or guest (`CallManager+Studio.swift`).
+        var studio: StudioRun?
         /// Asked for with the video button: the camera comes on as soon as there is a sender.
         var startsWithCamera = false
         /// Answered with "without video": a video offer that arrives after the answer does not
@@ -224,6 +244,8 @@ final class CallManager: CallUIManaging {
             iceFlushTask = nil
             iceRestartTask = nil
             offerWaitTimeout = nil
+            studio?.stop()
+            studio = nil
             webrtc?.close()
             webrtc = nil
             stream?.close()
@@ -316,6 +338,11 @@ final class CallManager: CallUIManaging {
     /// Mute or unmute the local microphone.
     func setMuted(_ muted: Bool) {
         active?.webrtc?.setMuted(muted)
+    }
+
+    /// The live call's microphone level, 0…1, for a level meter; nil without a call.
+    func microphoneLevel() async -> Double? {
+        await active?.webrtc?.microphoneLevel()
     }
 
     // MARK: - Camera

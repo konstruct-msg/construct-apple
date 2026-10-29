@@ -13,6 +13,9 @@ import UserNotifications
 /// Scene identifiers for secondary Desktop windows (D2).
 enum DesktopWindowID {
     static let synaps = "synaps"
+    static let call = "call"
+    static let studioScreen = "studio-screen"
+    static let studioCheck = "studio-check"
 }
 
 @main
@@ -26,6 +29,7 @@ struct Construct_DesktopApp: App {
 
     // Command bridge — owned here, wired up in DesktopRootView
     @State private var commandBridge = DesktopCommandBridge()
+    @State private var updater = DesktopUpdater()
 
     init() {
         // Every front this install knows leaves the logs before the first line could name one.
@@ -87,11 +91,15 @@ struct Construct_DesktopApp: App {
                     // async session restore completes.
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
 
-                    // Calls remain iOS-only while the protocol is being stabilized.
+                    // Calls on Desktop since 2026-10-21; no CallKit, WebRTC drives Core Audio itself.
                     if CallsFeature.isEnabled {
                         #if canImport(WebRTC)
                         WebRTCRuntime.bootstrap()
+                        CallManager.makeStudioCapture = StudioProcessTap.make
+                        CallManager.makeStudioOutput = StudioPlayoutOutput.make
+                        CallManager.makeStudioScreen = StudioWindowCapture.make
                         #endif
+                        DesktopIncomingCallRinger.shared.start()
                     }
 
                     // Touch STT early on Desktop too so WhisperModelManager runs reconcileModels()
@@ -105,7 +113,7 @@ struct Construct_DesktopApp: App {
         // glass chat nav sat flush to the traffic lights; the toolbar now owns that slot.
         .windowToolbarStyle(.unified)
         .commands {
-            ConstructCommands(bridge: commandBridge)
+            ConstructCommands(bridge: commandBridge, updater: updater)
         }
 
         // Synapses is its own window — not a tab that replaces the open chat (D2).
@@ -116,9 +124,38 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(deepLinkHandler)
                 .frame(minWidth: 560, minHeight: 440)
+                .desktopTheme()
         }
         .defaultSize(width: 720, height: 560)
         .windowToolbarStyle(.unified)
+
+        // The call's own window (design: claude.ai/artifact/NjvFrSAuKZxc43tqxRJHdj). Opened by
+        // DesktopRootView when a call starts or is answered; closes itself when the call is over.
+        Window(LocalizedStringKey("call_window_title"), id: DesktopWindowID.call) {
+            DesktopCallWindowView(model: DesktopCallModel.shared)
+                .desktopTheme()
+        }
+        .defaultSize(width: 440, height: 600)
+        .windowResizability(.contentMinSize)
+        .defaultPosition(.topTrailing)
+
+        // Guest: the host's DAW windows while Studio shows them. Opened by DesktopRootView,
+        // closes itself when the screen is hidden or the studio ends.
+        Window(LocalizedStringKey("studio_screen_window_title"), id: DesktopWindowID.studioScreen) {
+            DesktopStudioScreenView()
+                .frame(minWidth: 480, minHeight: 270)
+                .desktopTheme()
+        }
+        .defaultSize(width: 1280, height: 760)
+
+        // Studio's check before a call: the DAW's sound, windows and the talkback microphone, on
+        // this Mac alone. Opened from the Call menu.
+        Window(LocalizedStringKey("studio_check_window_title"), id: DesktopWindowID.studioCheck) {
+            DesktopStudioCheckView()
+                .frame(minWidth: 460, minHeight: 520)
+                .desktopTheme()
+        }
+        .defaultSize(width: 520, height: 720)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {
@@ -127,6 +164,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
+                .desktopTheme()
         }
     }
 }

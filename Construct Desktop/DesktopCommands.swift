@@ -17,6 +17,8 @@
 //    ⌘W          — close front window (macOS standard)
 //    ⌘⇧C         — copy id of the open chat
 //    ⌘R          — sync pending messages (manual fetch)
+//    ⌘⇧M         — mute / unmute the call
+//    ⌘⇧E         — end the call
 //
 //  Do not bind a shortcut to a feature that does not exist. ⌘⇧F was "global search"
 //  and called the same function as ⌘F.
@@ -30,8 +32,19 @@ import AppKit
 struct ConstructCommands: Commands {
 
     let bridge: DesktopCommandBridge
+    @Environment(\.openWindow) private var openWindow
+    let updater: DesktopUpdater
 
     var body: some Commands {
+
+        if updater.isEnabled {
+            CommandGroup(after: .appInfo) {
+                Button(NSLocalizedString("desktop_check_for_updates", comment: "")) {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+            }
+        }
 
         // Replace the default "New Window" File menu
         CommandGroup(replacing: .newItem) {
@@ -109,6 +122,40 @@ struct ConstructCommands: Commands {
 
             Button(NSLocalizedString("desktop_show_security", comment: "")) {
                 bridge.showSecurity()
+            }
+        }
+
+        // Call menu — only what a call in progress can do.
+        CommandMenu(LocalizedStringKey("call_window_title")) {
+            let call = DesktopCallModel.shared
+            let live = call.phase?.isLive == true
+            Button(NSLocalizedString(call.muted ? "call_unmute" : "call_mute", comment: "")) {
+                call.toggleMute()
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(!live)
+
+            Button(NSLocalizedString("call_end", comment: "")) {
+                call.end()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(!live)
+
+            // Studio while it is built: on unless `StudioFeature` is turned off by hand.
+            if call.studioAvailable {
+                Divider()
+                Button(NSLocalizedString(call.studioOn ? "call_studio_stop" : "call_studio_start", comment: "")) {
+                    call.toggleStudio()
+                }
+                .disabled(!live)
+                Toggle(NSLocalizedString("studio_talkback_always_menu", comment: ""), isOn: Binding(
+                    get: { call.talkback.mode == .alwaysOn },
+                    set: { call.setTalkbackMode($0 ? .alwaysOn : .holdToTalk) }
+                ))
+                Button(NSLocalizedString("studio_check_menu", comment: "")) {
+                    openWindow(id: DesktopWindowID.studioCheck)
+                }
+                .disabled(live)
             }
         }
     }
