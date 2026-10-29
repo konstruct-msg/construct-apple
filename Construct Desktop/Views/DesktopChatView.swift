@@ -50,6 +50,7 @@ struct DesktopChatView: View {
     @State private var floodGuard = IncomingFloodGuard.shared
     @State private var contactKTStatus: KTStatus = .unverified
     @State private var contactTrustAlert: ContactTrustAlert?
+    @State private var showingSafetyNumbers = false
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
@@ -127,6 +128,7 @@ struct DesktopChatView: View {
         
             VStack(spacing: 10) {
                 floodBurstBanner
+                keyChangeBanner
                 atRiskBanner
 
                 deleteButtonBar
@@ -169,6 +171,14 @@ struct DesktopChatView: View {
             }
             .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
                 Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
+            }
+            .sheet(isPresented: $showingSafetyNumbers) {
+                SafetyNumberView(
+                    theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: peerId),
+                    theirDisplayName: titleName
+                )
+                .sheetNavigation()
+                .frame(minWidth: 420, minHeight: 520)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -271,6 +281,18 @@ struct DesktopChatView: View {
 
     private var atRiskBanner: some View {
         ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+    }
+
+    /// The same trust event as iOS `ChatView`: a new device, a different address or a failed
+    /// proof. Until 2026-10-29 the Mac showed only the small badge in the title.
+    private var keyChangeBanner: some View {
+        ChatKeyChangeBannerView(
+            alert: contactTrustAlert,
+            contactName: titleName,
+            onVerify: { showingSafetyNumbers = true },
+            onAccept: { if KeyChangeUX.acknowledgeKeyChange(userId: peerId) { loadContactKTStatus() } }
+        )
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactTrustAlert)
     }
 
     private func refreshSessionAtRiskState() {
