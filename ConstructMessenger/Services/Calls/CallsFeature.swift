@@ -2,7 +2,7 @@ import Foundation
 
 enum CallsFeature {
     /// Audio calls, on iOS and on macOS (Desktop since 2026-10-21: studio mode is a mode of a
-    /// call). Video stays iOS-only — `isVideoEnabled`.
+    /// call). Video on both since 2026-10-29 — `isVideoEnabled`.
     static var isEnabled: Bool {
         !PreviewDetector.isRunningInPreview
     }
@@ -20,15 +20,14 @@ enum CallsFeature {
     static let videoSwitchKey = "ff.callsVideo"
     static let videoDefault = true
 
+    ///
+    /// Desktop since 2026-10-29 (owner): the Beta DMG is Desktop's only channel, so it follows
+    /// the release rule — on, with no switch to read.
     static var isVideoEnabled: Bool {
-        #if os(iOS)
-        #if DEBUG
+        #if os(iOS) && DEBUG
         isEnabled && (UserDefaults.standard.object(forKey: videoSwitchKey) as? Bool ?? videoDefault)
         #else
         isEnabled
-        #endif
-        #else
-        false
         #endif
     }
 }
