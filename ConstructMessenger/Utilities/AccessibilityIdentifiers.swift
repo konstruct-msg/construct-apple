@@ -75,6 +75,7 @@ enum A11y {
         static let title       = "chat.title"
 
         static let attach      = "chat.attach"
+        static let stickers    = "chat.stickers"
 
         static func message(_ messageId: String) -> String { "chat.message.\(messageId)" }
 

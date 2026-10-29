@@ -29,6 +29,9 @@ struct MessageInputTextBar: View {
     /// ⌘V should not need a click first (2026-10-14). iOS leaves it off: focus there raises the
     /// keyboard over the conversation the person came to read.
     let focusOnAppear: Bool
+    /// Drawn inside the pill before send/mic: Desktop's sticker button. nil on iOS, where
+    /// stickers are a tab of the media picker.
+    let accessory: AnyView?
 
     @FocusState private var focused: Bool
     #if os(macOS)
@@ -49,7 +52,8 @@ struct MessageInputTextBar: View {
         onStartVoice: (() -> Void)? = nil,
         onStartVideoNote: (() -> Void)? = nil,
         onPasteAttachment: (() -> Bool)? = nil,
-        focusOnAppear: Bool = false
+        focusOnAppear: Bool = false,
+        accessory: AnyView? = nil
     ) {
         self._text = text
         self.canSend = canSend
@@ -59,6 +63,7 @@ struct MessageInputTextBar: View {
         self.onStartVideoNote = onStartVideoNote
         self.onPasteAttachment = onPasteAttachment
         self.focusOnAppear = focusOnAppear
+        self.accessory = accessory
     }
 
     var body: some View {
@@ -67,6 +72,7 @@ struct MessageInputTextBar: View {
         HStack(alignment: .center, spacing: 0) {
             textField
             charCounter
+            accessory
             sendButton
             voiceButton
         }

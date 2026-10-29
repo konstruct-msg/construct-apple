@@ -370,6 +370,13 @@ struct DesktopChatView: View {
                 viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
                 scrollManager.shouldScrollToBottom = true
             },
+            onSendSticker: { ref in
+                viewModel.sendSticker(ref, replyTo: replyingTo)
+                replyingTo = nil
+                replyQuoteText = nil
+                clearReplyFocus(animated: true)
+                scrollManager.shouldScrollToBottom = true
+            },
             onCancelReply: {
                 replyingTo = nil
                 replyQuoteText = nil
