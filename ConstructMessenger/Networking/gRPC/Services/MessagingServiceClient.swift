@@ -292,6 +292,10 @@ final class MessagingServiceClient: Sendable {
             Log.debug("sendSealedMessage RPC → attemptId=\(attemptId) payloadBytes=\(sealedInner.count)", category: "MessagingServiceClient")
 
             let response = try await msgClient.sendSealedMessage(request: .init(message: request))
+            // Under warn the only way a sender learns its tag for this recipient is stale
+            // (decisions/intake-key-is-the-accounts-not-the-devices.md, point 1).
+            let verdict = response.intakeVerdict
+            await MainActor.run { IntakeCredentialService.shared.noteVerdict(verdict, sealedInner: sealedInner) }
 
             let errorCodeRaw = response.error.errorCode
             let retryAfterMs = response.error.hasRetryAfterMs ? response.error.retryAfterMs : 0

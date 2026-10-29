@@ -282,3 +282,19 @@ final class IntakeOwnKeyTests: XCTestCase {
         XCTAssertEqual(IntakeOwnKey.decide(.found(Data(repeating: 7, count: 16))), .mint)
     }
 }
+
+/// The server's verdict on a presented tag. Only "not accepted" may change what the sender does;
+/// "unchecked" is the server failing to look, and acting on it would make every sender drop a
+/// working key during an outage.
+final class IntakeVerdictReactionTests: XCTestCase {
+
+    /// Mutation: `verdict != .accepted` — this reddens on `.unchecked`.
+    func testOnlyNotAcceptedSuspendsTheKey() {
+        XCTAssertTrue(IntakeVerdictReaction.suspendsKey(.notAccepted))
+        XCTAssertFalse(IntakeVerdictReaction.suspendsKey(.unchecked))
+        XCTAssertFalse(IntakeVerdictReaction.suspendsKey(.accepted))
+        XCTAssertFalse(IntakeVerdictReaction.suspendsKey(.none))
+        // An older server leaves the field unset.
+        XCTAssertFalse(IntakeVerdictReaction.suspendsKey(.unspecified))
+    }
+}
