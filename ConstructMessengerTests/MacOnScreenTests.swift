@@ -47,4 +47,13 @@ final class MacOnScreenTests: XCTestCase {
         let onScreen = MacOnScreen.isOnScreen(appIsActive: true, windows: [window(minimised: true)])
         XCTAssertFalse(InAppNotificationService.isChatVisible("chat-1", activeChatId: "chat-1", appIsActive: onScreen))
     }
+
+    /// Hidden → shown marks the open chat read; staying shown or going away does not.
+    /// Mutation: return `isOnScreen` alone — the second assertion reddens.
+    func testTheOpenChatIsReadWhenItComesBack() {
+        XCTAssertTrue(MacOnScreen.cameBack(wasOnScreen: false, isOnScreen: true))
+        XCTAssertFalse(MacOnScreen.cameBack(wasOnScreen: true, isOnScreen: true))
+        XCTAssertFalse(MacOnScreen.cameBack(wasOnScreen: true, isOnScreen: false))
+        XCTAssertFalse(MacOnScreen.cameBack(wasOnScreen: false, isOnScreen: false))
+    }
 }
