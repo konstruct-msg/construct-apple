@@ -3,10 +3,8 @@
 //  CallManager.swift
 //  Construct Messenger
 //
-//  Minimal scaffolding for calls (signaling + PushKit + CallKit).
-//  Full WebRTC implementation will be layered in later.
-//
-//  macOS uses CallManagerStub.swift instead.
+//  Calls: signaling, WebRTC session, call history. iOS adds PushKit + CallKit; Konstruct Desktop
+//  uses the same manager without them (`CallsFeature`).
 //
 
 import Foundation

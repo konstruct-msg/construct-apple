@@ -102,7 +102,7 @@ final class InAppNotificationService {
         return MacOnScreen.isOnScreen(
             appIsActive: NSApp.isActive,
             windows: NSApp.windows.map {
-                .init(canBecomeMain: $0.canBecomeMain, isVisible: $0.isVisible,
+                .init(showsChats: MacChatWindows.contains($0), isVisible: $0.isVisible,
                       isMiniaturized: $0.isMiniaturized,
                       isUnoccluded: $0.occlusionState.contains(.visible))
             }
@@ -144,12 +144,14 @@ final class InAppNotificationService {
 
 /// Whether a Mac shows the app: macOS has no `applicationState`. Until 2026-10-29 the answer was
 /// always yes, so a message in the open chat made no banner while the window was minimised or
-/// another app was in front. On screen means the app is frontmost and one of its main windows
+/// another app was in front. On screen means the app is frontmost and a window that shows chats
 /// is shown, not minimised and not fully covered. Pure, so the iOS test target can test it.
 enum MacOnScreen {
     struct Window: Equatable {
-        /// A panel or the menu bar's helper windows cannot show a chat.
-        let canBecomeMain: Bool
+        /// The chats window. The call, Studio, Synapses and Recents windows, panels and the
+        /// ringer show no chat: one of them in front with the chats window minimised is not
+        /// "on screen" (until 2026-10-29 any window that could become main counted).
+        let showsChats: Bool
         let isVisible: Bool
         let isMiniaturized: Bool
         let isUnoccluded: Bool
@@ -163,7 +165,20 @@ enum MacOnScreen {
 
     static func isOnScreen(appIsActive: Bool, windows: [Window]) -> Bool {
         appIsActive && windows.contains {
-            $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized && $0.isUnoccluded
+            $0.showsChats && $0.isVisible && !$0.isMiniaturized && $0.isUnoccluded
         }
     }
 }
+
+#if canImport(AppKit) && !canImport(UIKit)
+/// The windows that show chats, registered by the view that hosts them (`DesktopRootView`).
+/// Weak: a closed window leaves by itself. SwiftUI owns `NSWindow.identifier` for restoration,
+/// so the mark lives here rather than on the window.
+@MainActor
+enum MacChatWindows {
+    private static let windows = NSHashTable<NSWindow>.weakObjects()
+
+    static func add(_ window: NSWindow) { windows.add(window) }
+    static func contains(_ window: NSWindow) -> Bool { windows.contains(window) }
+}
+#endif
