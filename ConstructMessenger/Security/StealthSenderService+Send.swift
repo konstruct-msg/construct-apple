@@ -112,6 +112,8 @@ extension StealthSenderService {
         }
         if let intakeTagSealed {
             inner.intakeTagSealed = intakeTagSealed
+            // So the server's verdict on this envelope finds the recipient (`noteVerdict`).
+            IntakeCredentialService.shared.notePresented(deliveryTag: inner.deliveryTag, forRecipient: recipientUserId)
         }
 
         let unitAlreadyPaid = spendUnit.map { !$0.shouldAttemptPayment } ?? false
