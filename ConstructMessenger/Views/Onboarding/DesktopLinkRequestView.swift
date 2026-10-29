@@ -39,7 +39,7 @@ struct DesktopLinkRequestView: View {
                 }
         }
         .frame(minWidth: 420, idealWidth: 460, minHeight: 540)
-        .task { await vm.generateJoinRequestQR() }
+        .task { await vm.generateJoinRequestQR(isAuthenticated: authViewModel.isAuthenticated) }
         // The join request saves keys the server does not know until the phone approves; a
         // restore in that window reads "Device not found" and replaces this screen with recovery.
         .onAppear { authViewModel.isRegistrationInProgress = true }
@@ -51,7 +51,7 @@ struct DesktopLinkRequestView: View {
             Button(LocalizedStringKey("ok"), role: .cancel) { vm.errorMessage = nil }
             Button(LocalizedStringKey("device_link_refresh")) {
                 vm.errorMessage = nil
-                Task { await vm.generateJoinRequestQR() }
+                Task { await vm.generateJoinRequestQR(isAuthenticated: authViewModel.isAuthenticated) }
             }
         }
         .onChange(of: vm.errorMessage) { _, msg in showError = msg != nil }
@@ -90,7 +90,7 @@ struct DesktopLinkRequestView: View {
                     .lineLimit(1).fixedSize()
                 Button {
                     vm.errorMessage = nil
-                    Task { await vm.generateJoinRequestQR() }
+                    Task { await vm.generateJoinRequestQR(isAuthenticated: authViewModel.isAuthenticated) }
                 } label: {
                     Text(LocalizedStringKey("device_link_refresh"))
                         .font(CTFont.body)
