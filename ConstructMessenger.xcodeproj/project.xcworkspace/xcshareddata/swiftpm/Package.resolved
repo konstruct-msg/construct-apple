@@ -1,5 +1,5 @@
 {
-  "originHash" : "ecccd61cff2d96ca803af9ed406b9c0db4ee84f35ad7fcf1a7863bda67fae1fa",
+  "originHash" : "f8746e880ce4b6c9acdbe3e6e8276db7e7f04c48447e707f43ba678a6845436d",
   "pins" : [
     {
       "identity" : "argmax-oss-swift",
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "176c5a434fd76f6f479848d1a8f7d44967534168",
         "version" : "2.4.1"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
+        "version" : "2.10.0"
       }
     },
     {

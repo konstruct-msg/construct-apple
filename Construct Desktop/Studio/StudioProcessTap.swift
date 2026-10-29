@@ -20,12 +20,9 @@ import Foundation
 final class StudioProcessTap: StudioProgramCapture {
     struct Failure: Error, CustomStringConvertible {
         let description: String
+        /// What the check before a call says about it.
+        var finding: StudioCheckFinding = .captureFailed
     }
-
-    /// The DAW whose output is the program; Reaper unless set:
-    /// `defaults write <bundle id> StudioSourceBundleID <the DAW's bundle id>`.
-    static let sourceDefaultsKey = "StudioSourceBundleID"
-    static let defaultSource = "com.cockos.reaper"
 
     let sourceDescription: String
     private var tapID = AudioObjectID(kAudioObjectUnknown)
@@ -36,7 +33,8 @@ final class StudioProcessTap: StudioProgramCapture {
     private var packetizer: StudioCapturePacketizer?
 
     static func make() throws -> any StudioProgramCapture {
-        let bundleID = UserDefaults.standard.string(forKey: sourceDefaultsKey) ?? defaultSource
+        // The DAW chosen in the call window, which stores it before Studio starts.
+        guard let bundleID = StudioSource.stored() else { throw Failure(description: "no source chosen") }
         return try StudioProcessTap(bundleIdentifier: bundleID)
     }
 
@@ -56,7 +54,8 @@ final class StudioProcessTap: StudioProgramCapture {
                                                   UInt32(MemoryLayout<pid_t>.size), &pid, &size, &processObject),
                        "translate pid")
         guard processObject != kAudioObjectUnknown else {
-            throw Failure(description: "\(sourceDescription) has no audio process object — has it played anything yet?")
+            throw Failure(description: "\(sourceDescription) has no audio process object — has it played anything yet?",
+                          finding: .sourceNeverPlayed)
         }
 
         let description = CATapDescription(stereoMixdownOfProcesses: [processObject])
@@ -79,7 +78,8 @@ final class StudioProcessTap: StudioProgramCapture {
         // would be sent as if it were 48 kHz. Refused until resampling exists.
         guard asbd.mSampleRate == StudioAudioFormat.lossless.sampleRate else {
             AudioHardwareDestroyProcessTap(tapID)
-            throw Failure(description: "the output device runs at \(Int(asbd.mSampleRate)) Hz; Studio needs 48000")
+            throw Failure(description: "the output device runs at \(Int(asbd.mSampleRate)) Hz; Studio needs 48000",
+                          finding: .sampleRate(Int(asbd.mSampleRate)))
         }
         tapFormat = asbd
 

@@ -178,8 +178,9 @@ extension CallManager {
     static let studioInviteTimeout: Duration = .seconds(30)
 
     /// Host: add Studio to the call in progress. Once both channels are open the invite goes out
-    /// on `studio-control`; the program starts when the guest accepts.
-    func startStudio() async {
+    /// on `studio-control`; the program starts when the guest accepts. `screen` false sends the
+    /// sound alone: no screen section in the offer.
+    func startStudio(screen: Bool = true) async {
         guard StudioFeature.isEnabled else { return }
         guard let active, let webrtc = active.webrtc as? WebRTCSession else {
             Log.info("Studio: no call to add it to", category: "Calls")
@@ -193,8 +194,12 @@ extension CallManager {
             Log.error("Studio: nothing on this machine can capture the program", category: "Calls")
             return
         }
+        // A second studio in this call makes its channels on the ids of the first.
+        await webrtc.studioChannelsClosed()
+        guard self.active === active, active.studio == nil else { return }
+        studioProblemInCall = nil
         let run = makeStudioRun(role: .host, on: webrtc, for: active)
-        if Self.makeStudioScreen != nil {
+        if screen, Self.makeStudioScreen != nil {
             run.screenFeed = webrtc.addStudioScreen()
         }
         do {
@@ -223,9 +228,12 @@ extension CallManager {
 
     /// Guest: the peer offered Studio; make our channels before the answer, so the answer accepts
     /// them. The invite follows on `studio-control`.
-    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) {
+    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) async {
         guard StudioFeature.isEnabled, StudioOffer.carriesStudio(sdp: sdp), let active,
-              let webrtc = webrtc as? WebRTCSession, !webrtc.studioChannelsOpen, active.studio == nil else { return }
+              let webrtc = webrtc as? WebRTCSession else { return }
+        // A second studio in this call: the channels of the first may still be closing.
+        await webrtc.studioChannelsClosed()
+        guard self.active === active, !webrtc.studioChannelsOpen, active.studio == nil else { return }
         let run = makeStudioRun(role: .guest, on: webrtc, for: active)
         do {
             webrtc.onStudioChannelsOpen = { Log.info("Studio: channels open as guest", category: "Calls") }
@@ -276,6 +284,9 @@ extension CallManager {
             guard let self, let run, let active, role == .guest else { return }
             self.showStudioScreen(shown, run: run, for: active)
         }
+        // A guest that crashed and came back into the call has none of this studio's channels:
+        // the host's program and screen would go nowhere, the guest would never say it left.
+        webrtc.onPeerRestarted = { [weak run] in run?.link.handle(.channelClosed) }
         run.link.onEnd = { [weak self, weak run, weak active] reason in
             Log.info("Studio ended: \(reason)", category: "Calls")
             guard let self, let run, let active else { return }
@@ -331,6 +342,9 @@ extension CallManager {
         guard let sender = run.sender, format.epoch == sender.epoch, let make = Self.makeStudioCapture else { return }
         do {
             let capture = try make()
+            // The sender is the capture thread's from here on: it is fed only there, and read on
+            // this actor again only after the capture has stopped (`StudioRun.stop`).
+            nonisolated(unsafe) let sender = sender
             let packetizer = StudioCapturePacketizer(format: sender.format) { samples, firstFrame in
                 do { try sender.submit(samples, firstFrame: firstFrame) } catch {
                     Log.error("Studio program not encoded: \(error)", category: "Calls")
@@ -339,9 +353,10 @@ extension CallManager {
             try capture.start(into: packetizer)
             run.capture = capture
             Log.info("Studio program: capturing \(capture.sourceDescription) → FLAC 48/24", category: "Calls")
-            startStudioScreen(run)
+            startStudioScreen(run, callId: active.session.id)
         } catch {
             Log.error("Studio program not started: \(error)", category: "Calls")
+            studioProblemInCall = (active.session.id, .programNotCaptured)
             run.link.handle(.leave)
         }
     }
@@ -371,17 +386,18 @@ extension CallManager {
     /// Host: capture the DAW's windows into the screen's section. The program does not wait for
     /// it, and does not stop with it: a screen that cannot be captured (no permission, the DAW
     /// has no window) is said hidden to the guest, and the studio goes on as sound.
-    private func startStudioScreen(_ run: StudioRun) {
+    private func startStudioScreen(_ run: StudioRun, callId: String) {
         guard let feed = run.screenFeed, run.screenCapture == nil, let make = Self.makeStudioScreen else { return }
         let capture = make()
         run.screenCapture = capture
-        Task { [weak run] in
+        Task { [weak self, weak run] in
             do {
                 try await capture.start(into: feed)
                 Log.info("Studio screen: capturing \(capture.sourceDescription)", category: "Calls")
             } catch {
                 Log.error("Studio screen not captured: \(error)", category: "Calls")
                 guard let run, run.screenCapture === capture else { return }
+                self?.studioProblemInCall = (callId, .screenNotCaptured)
                 run.screenCapture = nil
                 run.link.handle(.setScreen(false))
             }
@@ -418,12 +434,13 @@ extension CallManager {
         guard let webrtc = active.webrtc as? WebRTCSession else { return }
         webrtc.setStudioReceiver(nil)
         webrtc.onStudioChannelsOpen = nil
+        webrtc.onPeerRestarted = nil
         webrtc.closeStudioChannels()
         webrtc.releaseStudioScreenTrack()
     }
 }
 #else
 extension CallManager {
-    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) {}
+    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) async {}
 }
 #endif

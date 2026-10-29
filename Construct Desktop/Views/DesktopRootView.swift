@@ -30,7 +30,6 @@ struct DesktopRootView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
@@ -117,7 +116,7 @@ struct DesktopRootView: View {
             }
         }
         .errorToast()
-        .preferredColorScheme(appTheme.colorScheme)
+        .desktopTheme()
         // The People window outlives a sign-out and its @FetchRequest keeps faults into the store
         // that was just replaced; the next redraw raises. Close it with the data it was showing.
         .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
@@ -301,6 +300,10 @@ struct DesktopRootView: View {
             }
             .onChange(of: callManager.callQuality) { _, quality in
                 syncCall(state: callManager.state, quality: quality)
+            }
+            // Studio on or off changes what opens the microphone (talkback).
+            .onChange(of: callManager.studioIsOn) { _, _ in
+                DesktopCallModel.shared.applyMicrophone()
             }
             // Add Contact sheet (⌘⌥N)
             .sheet(isPresented: $showAddContact) {
