@@ -207,8 +207,10 @@ done
 # --- publish: release + feeds -------------------------------------------------
 
 if [ "$PUBLISH" -eq 1 ]; then
-    SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-$(find "$HOME/Library/Developer/Xcode/DerivedData" \
-        -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update' -type f 2>/dev/null | head -1)}"
+    # find exits non-zero on any unreadable folder in DerivedData; under pipefail that ended
+    # the script here, silently, after the release was made and before the feeds (0.3.21).
+    SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-$( { find "$HOME/Library/Developer/Xcode/DerivedData" \
+        -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update' -type f 2>/dev/null || true; } | head -1)}"
     [ -x "$SIGN_UPDATE" ] || { echo "sign_update not found; set SPARKLE_SIGN_UPDATE" >&2; exit 1; }
 
     TAG="desktop-v$VERSION-$BUILD_NUMBER"
@@ -224,10 +226,15 @@ if [ "$PUBLISH" -eq 1 ]; then
     done
 
     say "release $TAG"
-    gh release create "$TAG" --repo "$REPO" --prerelease --target "$(git rev-parse HEAD)" \
-        --title "Konstruct Desktop $VERSION ($BUILD_NUMBER) beta" \
-        --notes "Konstruct Desktop beta, one DMG per architecture: arm64 for Apple silicon, x86_64 for Intel. Installed copies update themselves." \
-        "${ASSETS[@]}"
+    # A second --publish of the same build (one that stopped half-way) replaces the assets.
+    if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+        gh release upload "$TAG" --repo "$REPO" --clobber "${ASSETS[@]}"
+    else
+        gh release create "$TAG" --repo "$REPO" --prerelease --target "$(git rev-parse HEAD)" \
+            --title "Konstruct Desktop $VERSION ($BUILD_NUMBER) beta" \
+            --notes "Konstruct Desktop beta, one DMG per architecture: arm64 for Apple silicon, x86_64 for Intel. Installed copies update themselves." \
+            "${ASSETS[@]}"
+    fi
 
     gh release view "$FEED_TAG" --repo "$REPO" >/dev/null 2>&1 || \
         gh release create "$FEED_TAG" --repo "$REPO" --prerelease --target "$(git rev-parse HEAD)" \
