@@ -72,6 +72,15 @@ enum HistoryRecord: Equatable {
 
 /// What the encoder hands the sender: transcript records, then media by reference — the file is
 /// read in pieces as it is sent, never loaded.
+/// What the stream tells the screen as media moves: the total once its manifest passes, then
+/// each piece. Records are not counted — the chats phase takes a second or two.
+enum HistoryProgressEvent: Sendable, Equatable {
+    case mediaTotal(UInt64)
+    case mediaBytes(Int)
+}
+
+typealias HistoryProgressReport = @Sendable (HistoryProgressEvent) async -> Void
+
 enum HistoryOutbound {
     case record(HistoryRecord)
     case media(id: String, mime: String)
@@ -137,6 +146,7 @@ enum HistoryCoreStream {
     static func send<Items: AsyncSequence>(
         _ items: Items,
         through sender: HistorySender,
+        progress: HistoryProgressReport? = nil,
         write: @Sendable (Data) async throws -> Void
     ) async throws where Items.Element == HistoryOutbound {
         var batch: [HistoryRecordOut] = []
@@ -153,13 +163,16 @@ enum HistoryCoreStream {
         for try await item in items {
             switch item {
             case .record(let record):
+                if case .manifest(let m) = record, m.mediaByteCount > 0 {
+                    await progress?(.mediaTotal(m.mediaByteCount))
+                }
                 let wire = try record.wire()
                 batch.append(wire)
                 batchBytes += wire.proto.count
                 if batchBytes >= recordBatchBytes { try await flush() }
             case .media(let id, let mime):
                 try await flush()
-                try await sendMedia(id: id, mime: mime, through: sender, write: write)
+                try await sendMedia(id: id, mime: mime, through: sender, progress: progress, write: write)
             }
         }
         try await flush()
@@ -185,6 +198,7 @@ enum HistoryCoreStream {
         id: String,
         mime: String,
         through sender: HistorySender,
+        progress: HistoryProgressReport?,
         write: @Sendable (Data) async throws -> Void
     ) async throws {
         let url = MediaManager.onDiskURL(for: id)
@@ -206,6 +220,7 @@ enum HistoryCoreStream {
                 let piece = chunk[offset..<end]
                 remaining -= UInt64(piece.count)
                 try await write(try sender.pushMedia(piece: Data(piece)))
+                await progress?(.mediaBytes(piece.count))
                 offset = end
             }
         }
@@ -225,10 +240,11 @@ enum HistoryCoreStream {
         sink: HistoryImportSink,
         pin: HistoryQRPin,
         resolve: @Sendable (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: (@Sendable (Data) async throws -> Void)?
+        reply: (@Sendable (Data) async throws -> Void)?,
+        progress: HistoryProgressReport? = nil
     ) async throws -> Outcome {
         do {
-            return try await receiveLoop(from: source, into: receiver, sink: sink, pin: pin, resolve: resolve, reply: reply)
+            return try await receiveLoop(from: source, into: receiver, sink: sink, pin: pin, resolve: resolve, reply: reply, progress: progress)
         } catch {
             await sink.abandonMedia()
             throw error
@@ -241,7 +257,8 @@ enum HistoryCoreStream {
         sink: HistoryImportSink,
         pin: HistoryQRPin,
         resolve: @Sendable (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: (@Sendable (Data) async throws -> Void)?
+        reply: (@Sendable (Data) async throws -> Void)?,
+        progress: HistoryProgressReport?
     ) async throws -> Outcome {
         while true {
             // Nothing to read means the receiver has stopped — for keys, a skip or the end — and
@@ -257,6 +274,9 @@ enum HistoryCoreStream {
             }
             let step = try receiver.feed(data: data)
             try await sink.consume(step.events)
+            if let progress {
+                for event in progressEvents(in: step.events) { await progress(event) }
+            }
             switch step.status {
             case .needMore:
                 continue
@@ -275,6 +295,29 @@ enum HistoryCoreStream {
                 return try await sink.finish()
             }
         }
+    }
+}
+
+extension HistoryCoreStream {
+    /// The receiving side's view of one step: the media total from a manifest record, and the
+    /// media bytes, summed. The sink reads the same events; this only counts them.
+    static func progressEvents(in events: [HistoryEvent]) -> [HistoryProgressEvent] {
+        var out: [HistoryProgressEvent] = []
+        var bytes = 0
+        for event in events {
+            switch event {
+            case .record(let type, let proto) where type == HistoryRecordType.manifest:
+                if let m = try? Construct_Client_History_V1_HistoryManifest(serializedBytes: proto), m.mediaByteCount > 0 {
+                    out.append(.mediaTotal(m.mediaByteCount))
+                }
+            case .mediaBytes(let data):
+                bytes += data.count
+            default:
+                break
+            }
+        }
+        if bytes > 0 { out.append(.mediaBytes(bytes)) }
+        return out
     }
 }
 

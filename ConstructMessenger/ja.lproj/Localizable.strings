@@ -1013,6 +1013,9 @@
 "history_sync_title_receiving_media" = "写真とファイルを受信中…";
 "history_sync_chats_done" = "チャットを転送しました";
 "history_sync_step_of" = "ステップ %1$d/%2$d";
+"history_sync_amount" = "%1$@ / %2$@";
+"history_sync_eta_seconds" = "残り約%d秒";
+"history_sync_eta_minutes" = "残り約%d分";
 "history_sync_next_media" = "次は写真とファイル";
 "history_sync_title_media_incomplete" = "一部の写真とファイルが届きませんでした";
 "history_sync_body_media_retry_here" = "あとで送信できます：連携済みデバイス → チャット履歴の転送 → メディアのみ。";

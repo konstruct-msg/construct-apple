@@ -1153,6 +1153,9 @@
 "history_sync_title_receiving_media" = "Получаем фото и файлы…";
 "history_sync_chats_done" = "Чаты перенесены";
 "history_sync_step_of" = "шаг %1$d из %2$d";
+"history_sync_amount" = "%1$@ из %2$@";
+"history_sync_eta_seconds" = "осталось около %d с";
+"history_sync_eta_minutes" = "осталось около %d мин";
 "history_sync_next_media" = "Дальше — фото и файлы";
 "history_sync_title_media_incomplete" = "Часть фото и файлов не дошла";
 "history_sync_body_media_retry_here" = "Их можно отправить позже: Связанные устройства → Перенос истории чатов → Только медиа.";
