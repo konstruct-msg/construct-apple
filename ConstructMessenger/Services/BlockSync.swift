@@ -80,9 +80,15 @@ final class BlockSyncService {
     private static let backoff: [Duration] = [.seconds(2), .seconds(10), .seconds(30), .seconds(120)]
 
     /// Records the wish and sends it. The caller has already set the local flag.
+    ///
+    /// The person's own block, on this device, so the intake key they hold is retired. A block
+    /// adopted from the server's list (`readBack`) does not come through here and does not rotate.
     func request(_ userId: String, blocked: Bool, reason: String? = nil) {
         BlockSync.record(userId, blocked: blocked, reason: reason)
         sync()
+        if blocked {
+            Task { await IntakeCredentialService.shared.rotate(dropping: userId) }
+        }
     }
 
     func sync() {
