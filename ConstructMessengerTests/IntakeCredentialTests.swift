@@ -195,6 +195,34 @@ final class IntakeCredentialRejectionTests: XCTestCase {
         XCTAssertTrue(service.isRejected(peer.lowercased(), inEpoch: epoch(today)))
     }
 
+    /// A peer rotated: the tag from their old key was refused and we suspended it. Their card with
+    /// the next generation arrives — the suspension was about the key we no longer hold.
+    func testAdoptingANewerKeyLiftsTheSuspension() {
+        defer { KeychainManager.shared.deletePeerIntakeKey(forAccount: peer) }
+        service.recordPeerIntakeKey(IntakeKeyState(generation: 1, key: Data(repeating: 1, count: 32)), from: peer)
+        service.noteCredentialRejected(forRecipient: peer)
+        service.noteCredentialRejected(forRecipient: other)
+
+        service.recordPeerIntakeKey(IntakeKeyState(generation: 2, key: Data(repeating: 2, count: 32)), from: peer)
+
+        let now = epoch(Date())
+        XCTAssertFalse(service.isRejected(peer, inEpoch: now))
+        XCTAssertTrue(service.isRejected(other, inEpoch: now), "only the account whose key changed")
+    }
+
+    /// A card we keep the old key over — the same generation again, or an older one — says nothing
+    /// about the key the server refused.
+    func testAKeptKeyDoesNotLiftTheSuspension() {
+        defer { KeychainManager.shared.deletePeerIntakeKey(forAccount: peer) }
+        service.recordPeerIntakeKey(IntakeKeyState(generation: 2, key: Data(repeating: 1, count: 32)), from: peer)
+        service.noteCredentialRejected(forRecipient: peer)
+
+        service.recordPeerIntakeKey(IntakeKeyState(generation: 2, key: Data(repeating: 1, count: 32)), from: peer)
+        service.recordPeerIntakeKey(IntakeKeyState(generation: 1, key: Data(repeating: 3, count: 32)), from: peer)
+
+        XCTAssertTrue(service.isRejected(peer, inEpoch: epoch(Date())))
+    }
+
     /// Entries for epochs already past are pruned on write, so a long-lived install does not
     /// accumulate one row per contact per day forever.
     func testStaleEntriesArePrunedWhenANewOneIsRecorded() {
