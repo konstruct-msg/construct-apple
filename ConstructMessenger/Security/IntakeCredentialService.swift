@@ -508,6 +508,12 @@ final class IntakeCredentialService {
     /// A peer handed us the key their account accepts. Kept only if its generation is above the
     /// one we hold (`intakeOffer`): a late card, or an old build's per-device key, does not
     /// replace the account's current one.
+    ///
+    /// Adopting lifts a suspension for that account. A suspension is the server's verdict on the
+    /// key we held — after a peer rotates, our next envelope carries the old generation's tag and
+    /// is refused — and the key just adopted is not that key. Without this we paid tokens for the
+    /// rest of the epoch while holding the right key (server no_match report, 2026-10-30). A card
+    /// we keep the old key over lifts nothing, so a replayed card cannot clear a suspension.
     func recordPeerIntakeKey(_ offered: IntakeKeyState, from accountId: String) {
         let held = keychain.loadPeerIntakeKey(forAccount: accountId).flatMap(IntakeKeyRecord.decode)
         guard let offer = try? intakeOffer(held: held, offered: offered) else {
@@ -520,6 +526,14 @@ final class IntakeCredentialService {
         }
         keychain.savePeerIntakeKey(IntakeKeyRecord.encode(offered), forAccount: accountId)
         Log.info("Intake: stored intake key generation \(offered.generation) from \(accountId.prefix(8))…", category: "Intake")
+        liftSuspension(for: accountId)
+    }
+
+    private func liftSuspension(for accountId: String) {
+        var rejected = rejectedEpochs()
+        guard rejected.removeValue(forKey: normalise(accountId)) != nil else { return }
+        defaults.set(rejected, forKey: Self.rejectedKey)
+        Log.info("Intake: a newer key from \(accountId.prefix(8))… lifts this epoch's suspension", category: "Intake")
     }
 
     /// Hand the account's key to our own devices that do not have it yet — a device linked since,
