@@ -1083,6 +1083,9 @@
 "history_sync_title_receiving_media" = "Réception des photos et fichiers…";
 "history_sync_chats_done" = "Discussions transférées";
 "history_sync_step_of" = "étape %1$d sur %2$d";
+"history_sync_amount" = "%1$@ sur %2$@";
+"history_sync_eta_seconds" = "environ %d s restantes";
+"history_sync_eta_minutes" = "environ %d min restantes";
 "history_sync_next_media" = "Ensuite : photos et fichiers";
 "history_sync_title_media_incomplete" = "Certaines photos et certains fichiers ne sont pas arrivés";
 "history_sync_body_media_retry_here" = "Vous pourrez les envoyer plus tard : Appareils liés → Transférer l’historique → Médias uniquement.";
