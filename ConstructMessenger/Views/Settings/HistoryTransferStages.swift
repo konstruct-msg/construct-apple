@@ -173,6 +173,8 @@ struct HistoryLocalNetworkSettingsButton: View {
 struct HistoryTransferLayout<Actions: View>: View {
     let screen: HistoryTransferScreen
     let side: HistoryTransferSide
+    /// The media phase's bytes, when it is under way: a filling bar and what is left.
+    var progress: HistoryTransferProgress? = nil
     @ViewBuilder var actions: Actions
 
     var body: some View {
@@ -180,7 +182,7 @@ struct HistoryTransferLayout<Actions: View>: View {
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Spacer(minLength: CTSpace.xl)
-                    HistoryTransferStatus(screen: screen, side: side)
+                    HistoryTransferStatus(screen: screen, side: side, progress: progress)
                     Spacer(minLength: CTSpace.xl)
                     if let footer = screen.footerKey {
                         Text(NSLocalizedString(footer, comment: ""))
@@ -204,6 +206,7 @@ struct HistoryTransferLayout<Actions: View>: View {
 private struct HistoryTransferStatus: View {
     let screen: HistoryTransferScreen
     let side: HistoryTransferSide
+    let progress: HistoryTransferProgress?
 
     var body: some View {
         VStack(spacing: CTSpace.xl) {
@@ -253,7 +256,11 @@ private struct HistoryTransferStatus: View {
                 }
                 .font(CTFont.body)
                 .accessibilityElement(children: .combine)
-                HistoryTransferBar()
+                if step.stage == .media, let progress, progress.totalBytes > 0 {
+                    HistoryTransferAmount(progress: progress)
+                } else {
+                    HistoryTransferBar()
+                }
                 if let next = step.nextKey {
                     Text(NSLocalizedString(next, comment: ""))
                         .font(CTFont.secondary)
@@ -349,8 +356,54 @@ private struct HistoryTransferPicture: View {
     #endif
 }
 
-/// Progress with no amount: the transfer reports its phase, not how much of it is done. A
-/// segment runs along the track; with Reduce Motion it stands still.
+/// The media phase with its amount: a bar that fills, how much of how much, and the time left at
+/// the rate so far — once there is a rate to go by. Ticks each second so the estimate moves
+/// between the percent steps the coordinator publishes.
+private struct HistoryTransferAmount: View {
+    let progress: HistoryTransferProgress
+
+    private static let height: CGFloat = 6
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(alignment: .leading, spacing: CTSpace.s) {
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(Color.CT.noise)
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.CT.accent)
+                                .frame(width: proxy.size.width * progress.fraction)
+                        }
+                        .clipShape(Capsule())
+                }
+                .frame(height: Self.height)
+                .animation(.linear(duration: 0.3), value: progress.fraction)
+                Text(Self.caption(progress, now: context.date))
+                    .font(CTFont.secondary)
+                    .foregroundStyle(Color.CT.textDim)
+                    .monospacedDigit()
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(Self.caption(progress, now: context.date)))
+            .accessibilityValue(Text(progress.fraction.formatted(.percent.precision(.fractionLength(0)))))
+        }
+    }
+
+    static func caption(_ progress: HistoryTransferProgress, now: Date) -> String {
+        let amount = String(
+            format: NSLocalizedString("history_sync_amount", comment: ""),
+            ByteCountFormatter.string(fromByteCount: Int64(progress.doneBytes), countStyle: .file),
+            ByteCountFormatter.string(fromByteCount: Int64(progress.totalBytes), countStyle: .file)
+        )
+        guard let seconds = progress.secondsLeft(now: now) else { return amount }
+        let left = HistoryTransferProgress.timeLeft(seconds: seconds)
+        return amount + " · " + String(format: NSLocalizedString(left.key, comment: ""), left.value)
+    }
+}
+
+/// Progress with no amount: the chats phase, which reports its phase, not how much of it is done.
+/// A segment runs along the track; with Reduce Motion it stands still.
 private struct HistoryTransferBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var position: CGFloat = Self.start
