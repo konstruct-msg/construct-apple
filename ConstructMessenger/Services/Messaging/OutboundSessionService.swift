@@ -365,9 +365,9 @@ final class OutboundSessionService {
     /// Sent to each of their devices once — when we first hear from it and when we first write to
     /// it, whichever comes first (`decisions/contact-card-carries-the-address-back.md`). Hearing
     /// counts because an invite carries the inviter's address and nothing back: the redeemer's
-    /// address reaches the inviter here, as soon as the redeemer says anything. Never swept across
-    /// the contact graph: a hundred sealed control envelopes at once, each paid for, for contacts
-    /// the user may never talk to again.
+    /// address reaches the inviter here, as soon as the redeemer says anything. Swept across the
+    /// contact graph only after a rotation (`IntakeCredentialService.rotate`), spread over an hour:
+    /// each card then travels with that contact's tag and costs no token.
     ///
     /// A device that has not seen the recovery phrase sends the key alone; the card is still worth
     /// its envelope.
@@ -377,6 +377,9 @@ final class OutboundSessionService {
     /// hands any relay a credential it can spend on us.
     func sendContactCard(to contactId: String) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        // Asked at the send, not when it was scheduled: a rotation's sweep spreads over an hour,
+        // and someone blocked within it gets nothing.
+        guard !BlockedContacts.isBlocked(contactId) else { return }
         guard StealthPolicy.shared.shouldUseSealedSender() else {
             // Stealth off: the key would go out identified, and the mechanism it feeds is the
             // sealed one. Leave the peer unmarked so the next send retries.
@@ -385,9 +388,9 @@ final class OutboundSessionService {
         let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
         guard !owed.isEmpty else { return }
 
-        // No key of a generation yet (unreadable, or due from our own devices): no card now, the
-        // devices stay owed and the next exchange retries.
-        guard let ownKey = IntakeCredentialService.shared.currentOwnKey() else { return }
+        // No key of a generation yet (unreadable, or due from our own devices), or one the server
+        // does not hold yet: no card now, the devices stay owed and the next exchange retries.
+        guard let ownKey = IntakeCredentialService.shared.publishedOwnKey() else { return }
         let ownAddress = await AccountAddress.confirmedOwn()
         let card: Data
         do {

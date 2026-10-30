@@ -237,6 +237,8 @@ class ChatsViewModel {
         let peerDevices = SessionAddressing.deviceIds(ofPeer: userId)
 
         chatManagementService.pruneContactLocally(userId: userId)
+        // They hold our intake key; a removal retires it like a block does.
+        Task { await IntakeCredentialService.shared.rotate(dropping: userId) }
 
         // Forget rather than archive. An archive keeps the ratchet for a late message, which is
         // the right answer for a session that ended; this contact is gone, and the leftovers are

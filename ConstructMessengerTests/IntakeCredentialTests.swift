@@ -368,3 +368,67 @@ final class IntakeVerdictReactionTests: XCTestCase {
         XCTAssertFalse(IntakeVerdictReaction.suspendsKey(.unspecified))
     }
 }
+
+/// A card names only a key the server holds. The marker goes whenever our key changes, so it
+/// names the current key; its tags last `windowEpochs`.
+final class IntakeServerHoldsTests: XCTestCase {
+
+    /// Mutation: `guard let last = lastPublishedEpoch` → `?? 0` — a never-published key reads as held.
+    func testNothingPublishedIsNotHeld() {
+        // An epoch inside a window counted from 0, so reading nil as epoch 0 would say "held".
+        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: nil, currentEpoch: 3))
+        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: nil, currentEpoch: 100))
+    }
+
+    /// Mutation: `<` → `<=` — the day after the window reads as held.
+    func testHeldForTheWindowAndNotAfter() {
+        XCTAssertTrue(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 100))
+        XCTAssertTrue(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 106))
+        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 107))
+    }
+
+    /// A clock that went backwards cannot reason about the window.
+    func testAMarkerFromTheFutureIsNotHeld() {
+        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: 101, currentEpoch: 100))
+    }
+}
+
+/// Point 4: a block or a removal retires the key the dropped contact holds.
+final class IntakeRotationTests: XCTestCase {
+
+    /// A sibling rotated and we have not heard: the new key goes above the server's.
+    /// Mutation: `max(held ?? 0, serverGeneration)` → `held ?? 0` — this reddens.
+    func testMintsAboveTheServerWhenItIsAhead() {
+        XCTAssertEqual(IntakeRotation.mintAbove(held: 2, serverGeneration: 5), 5)
+    }
+
+    /// Mutation: → `serverGeneration` — this reddens.
+    func testMintsAboveWhatWeHoldWhenTheServerIsBehindOrUnreachable() {
+        XCTAssertEqual(IntakeRotation.mintAbove(held: 3, serverGeneration: 0), 3)
+        XCTAssertEqual(IntakeRotation.mintAbove(held: nil, serverGeneration: 0), 0)
+    }
+
+    /// Mutation: `>` → `>=` — an equal generation (the server merges it) would re-mint.
+    func testReMintsOnceAboveANewerAccount() {
+        XCTAssertEqual(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 6), 6)
+        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 4))
+        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 3))
+    }
+
+    /// Mutations, each reddens: drop `!$0.isBlocked`; drop the dropped-id check; drop the own-id check;
+    /// compare without `lowercased()`.
+    func testTheSweepSkipsTheDroppedTheBlockedAndOurselves() {
+        let people = [record("a"), record("B-DROPPED"), record("c", blocked: true), record("me"), record("d")]
+        XCTAssertEqual(IntakeRotation.sweep(people, dropping: "b-dropped", ownAccountId: "ME"), ["a", "d"])
+    }
+
+    private func record(_ id: String, blocked: Bool = false) -> ContactRecord {
+        ContactRecord(
+            id: id, username: id, displayName: id, localAlias: nil, avatar: nil,
+            knownIdentityKey: nil, accountAddress: nil, isContact: true, isBlocked: blocked,
+            isSharingWithMe: false, amISharingWith: false, sharedWithMeAt: nil,
+            addedAt: nil, ktStatus: .unverified, securityNotice: .none,
+            profileEditedAtMs: 0, pendingAvatarRef: nil, pendingAvatarSince: nil
+        )
+    }
+}
