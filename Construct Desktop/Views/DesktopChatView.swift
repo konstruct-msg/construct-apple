@@ -79,6 +79,7 @@ struct DesktopChatView: View {
             )
             .environment(\.containerWidth, containerWidth)
                 .onChange(of: viewModel.entries.count) { oldCount, count in
+                    logFollowProbe(oldCount: oldCount, newCount: count)
                     // Shared with iOS ChatView: open / corrective pin / animated follow.
                     scrollManager.handleTranscriptCountChange(
                         oldCount: oldCount,
@@ -768,6 +769,23 @@ struct DesktopChatView: View {
             containerWidth = metrics.width
         }
         attemptLoadOlderHistory()
+    }
+
+    /// The transcript does not follow a new message on Desktop and has to be scrolled by hand
+    /// (owner, 2026-10-30); not reproduced. One line when the message arrives and one after the
+    /// follow should have landed, so the log says whether follow was off before the message, was
+    /// switched off by the layout it caused, or ran and did not reach the bottom.
+    private func logFollowProbe(oldCount: Int, newCount: Int) {
+        guard oldCount > 0, newCount > oldCount else { return }
+        let m = scrollManager
+        func state() -> String {
+            "follow=\(m.shouldScrollToBottom) fromBottom=\(Int(m.distanceFromBottom)) opening=\(m.isOpening) dragging=\(m.isUserDragging) jump=\(m.shouldShowScrollToBottomButton)"
+        }
+        Log.info("FOLLOW_PROBE +\(newCount - oldCount) before: \(state())", category: "DesktopChat")
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            Log.info("FOLLOW_PROBE after: \(state())", category: "DesktopChat")
+        }
     }
 
     private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
