@@ -13,7 +13,8 @@ import CoreData
 /// or from legacy `decryptedContent` for unmigrated rows.
 ///
 /// UI text edge: `plaintext(for:)` decodes via `LocalMessagePayload` (E1/E2).
-/// `@unchecked`: the only state is `cache`, and `NSCache` is thread-safe (not annotated in this SDK).
+/// `@unchecked`: the state is `cache`, thread-safe but not annotated in this SDK, and `reported`,
+/// read and written only under `reportedLock`.
 final class MessageDisplayCache: @unchecked Sendable {
 
     static let shared = MessageDisplayCache()
@@ -70,16 +71,31 @@ final class MessageDisplayCache: @unchecked Sendable {
         }
 
         let encrypted = message.encryptedContent
-        guard let keyRef = message.contentKeyRef,
-              let key = MessageKeyStore.shared.fetch(messageId: keyRef),
-              !encrypted.isEmpty,
-              let plainData = try? MessageStorageCrypto.decrypt(ciphertext: encrypted, key: key)
-        else {
-            return Data()
+        guard let keyRef = message.contentKeyRef else { return unreadable(id, "no key ref") }
+        guard !encrypted.isEmpty else { return unreadable(id, "no ciphertext") }
+        guard let key = MessageKeyStore.shared.fetch(messageId: keyRef) else {
+            return unreadable(id, LocalStoreKey.current() == nil ? "store key unreadable" : "no key in MessageKeyStore")
+        }
+        guard let plainData = try? MessageStorageCrypto.decrypt(ciphertext: encrypted, key: key) else {
+            return unreadable(id, "ciphertext does not open")
         }
 
         cache.setObject(WipedOnRelease(plainData), forKey: id as NSString)
         return plainData
+    }
+
+    private let reportedLock = NSLock()
+    private var reported = Set<String>()
+
+    /// An empty body, said once per message. This branch was silent, and a retry that found a
+    /// 74-character text "unrecoverable" could not tell which link failed (TODO 165). A row with
+    /// no body renders on every redraw, hence once.
+    private func unreadable(_ messageId: String, _ reason: String) -> Data {
+        let first = reportedLock.withLock { reported.insert(messageId).inserted }
+        if first {
+            Log.error("MessageDisplayCache: body of \(messageId.prefix(8))… unreadable — \(reason)", category: "Storage")
+        }
+        return Data()
     }
 
     /// Decoded local payload (media album / text / legacy JSON).
