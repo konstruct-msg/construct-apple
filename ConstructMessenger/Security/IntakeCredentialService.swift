@@ -126,6 +126,47 @@ enum IntakePublishing {
     /// holding its key was "unrecognised" on the server. An hour is far below the epoch and costs
     /// nothing in between, because the RPC runs only when the epoch has changed.
     static let recheckInterval: Duration = .seconds(3600)
+
+    /// Whether the server holds the key we published, `currentEpoch` being today. The marker goes
+    /// whenever our key changes, so a marker names the current key; its tags cover `windowEpochs`
+    /// from the epoch it was set in. A contact card names only a key the server holds: one it does
+    /// not gets `NOT_ACCEPTED`, and the contact suspends the key for the rest of the epoch.
+    static func serverHolds(lastPublishedEpoch: UInt64?, currentEpoch: UInt64) -> Bool {
+        guard let last = lastPublishedEpoch, currentEpoch >= last else { return false }
+        return currentEpoch - last < UInt64(windowEpochs)
+    }
+}
+
+/// A block or a removal retires the key the dropped contact holds: a new generation, published so
+/// the server replaces the account's tags, then a card to everyone else
+/// (`decisions/intake-key-is-the-accounts-not-the-devices.md`, point 4). Only on the device where
+/// the person did it — a block adopted from the server or a sibling does not come through here.
+enum IntakeRotation {
+    /// The new key is minted above both what we hold and what the server has, so a sibling's
+    /// rotation we have not heard of yet is not undercut. A server that could not be asked counts
+    /// as 0: the rotation still happens, because the old key must not stay ours.
+    static func mintAbove(held: UInt32?, serverGeneration: UInt32) -> UInt32 {
+        max(held ?? 0, serverGeneration)
+    }
+
+    /// The server refused our publish as stale: a sibling rotated in the same minute. Mint once
+    /// above the generation it named — an address, not a retry budget. Nil when nothing is redone.
+    static func reMintAbove(minted: UInt32, currentGeneration: UInt32) -> UInt32? {
+        currentGeneration > minted ? currentGeneration : nil
+    }
+
+    /// Who gets the new card: everyone we hold a row for except the person dropped, the blocked and
+    /// ourselves. Blocking is asked again at each send; this is only who is scheduled.
+    static func sweep(_ people: [ContactRecord], dropping: String, ownAccountId: String) -> [String] {
+        let dropped = dropping.lowercased(), own = ownAccountId.lowercased()
+        return people
+            .filter { !$0.isBlocked && $0.id.lowercased() != dropped && $0.id.lowercased() != own }
+            .map(\.id)
+    }
+
+    /// Cards to contacts go out at random moments within this window, never as a batch: a burst
+    /// right after a block would say on the wire that one happened.
+    static let sweepWindow: TimeInterval = 3600
 }
 
 /// What the sender does with the server's verdict on a tag it presented
@@ -371,6 +412,17 @@ final class IntakeCredentialService {
         ) else { return }
 
         guard let own = await resolveOwnKey() else { return }
+        _ = await publish(own, accountId: accountId, currentEpoch: currentEpoch)
+    }
+
+    private enum PublishOutcome: Equatable {
+        case stored
+        /// Refused: the account is at a newer generation.
+        case stale(currentGeneration: UInt32)
+        case failed
+    }
+
+    private func publish(_ own: IntakeKeyState, accountId: String, currentEpoch: UInt64) async -> PublishOutcome {
         var entries: [(epoch: UInt64, tag: Data)] = []
         for epoch in IntakePublishing.epochsToPublish(currentEpoch: currentEpoch) {
             guard let tag = try? intakeTag(
@@ -378,7 +430,7 @@ final class IntakeCredentialService {
             ) else { continue }
             entries.append((epoch, Data(tag)))
         }
-        guard !entries.isEmpty else { return }
+        guard !entries.isEmpty else { return .failed }
 
         do {
             let result = try await MessagingServiceClient.shared.publishIntakeTags(entries, generation: own.generation)
@@ -386,15 +438,68 @@ final class IntakeCredentialService {
                 // Refused as stale: the account moved on and the newer key is due from one of
                 // our own devices. Not marked, so the next publish asks again.
                 Log.info("Intake: publish of generation \(own.generation) refused — the account is at \(result.currentGeneration)", category: "Intake")
-                return
+                return .stale(currentGeneration: result.currentGeneration)
             }
+            // A rotation while this was in flight cleared the marker for a newer key; marking now
+            // would say the server holds a key it has never seen.
+            guard currentOwnKey() == own else { return .failed }
             // Recorded only on success. Recording the attempt would mean one failed publish costs
             // a whole epoch of tokens, because nothing would try again until tomorrow.
             defaults.set(NSNumber(value: currentEpoch), forKey: Self.lastPublishedEpochKey)
             Log.info("Intake: published \(result.accepted)/\(entries.count) tag(s), generation \(own.generation), for epoch \(currentEpoch)+", category: "Intake")
             await offerOwnKeyToOwnDevices(own)
+            return .stored
         } catch {
             Log.info("Intake: tag publish failed (\(error.localizedDescription)) — contacts keep paying tokens until it lands", category: "Intake")
+            return .failed
+        }
+    }
+
+    /// The key a contact card may name: ours, and held by the server. Nil while a new key is not
+    /// published yet — the contact stays owed and gets the card with the first message after the
+    /// publish lands.
+    func publishedOwnKey(now: Date = Date()) -> IntakeKeyState? {
+        let last = defaults.object(forKey: Self.lastPublishedEpochKey) as? NSNumber
+        let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
+        guard IntakePublishing.serverHolds(lastPublishedEpoch: last?.uint64Value, currentEpoch: epoch) else { return nil }
+        return currentOwnKey()
+    }
+
+    // MARK: - Rotation
+
+    /// The person blocked or removed `accountId` on this device: retire the key they hold.
+    func rotate(dropping accountId: String) async {
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        // An unreadable key is replaced all the same: what we cannot read, we cannot keep handing out.
+        let held: UInt32?
+        if case .use(let state) = IntakeOwnKey.decide(keychain.readOwnIntakeKey()) { held = state.generation } else { held = nil }
+        let serverGeneration = (try? await MessagingServiceClient.shared.getIntakeState().generation) ?? 0
+
+        let epoch = intakeEpoch(unixSeconds: UInt64(Date().timeIntervalSince1970))
+        var above = IntakeRotation.mintAbove(held: held, serverGeneration: serverGeneration)
+        var outcome = PublishOutcome.failed
+        for _ in 0..<2 {
+            guard let minted = try? intakeMint(aboveGeneration: above),
+                  adoptAsOwn(minted, why: "rotated to generation \(minted.generation) — a contact was dropped") != nil
+            else { return }
+            outcome = await publish(minted, accountId: myId, currentEpoch: epoch)
+            guard case .stale(let current) = outcome,
+                  let next = IntakeRotation.reMintAbove(minted: minted.generation, currentGeneration: current)
+            else { break }
+            above = next
+        }
+        // Not stored: no sweep. The contacts stay owed and get the card lazily, once a publish lands.
+        guard outcome == .stored else { return }
+
+        let people = (try? LocalRepositories.contacts.everyContact(except: myId)) ?? []
+        let recipients = IntakeRotation.sweep(people, dropping: accountId, ownAccountId: myId)
+        Log.info("Intake: new key goes to \(recipients.count) contact(s) within the hour", category: "Intake")
+        for contactId in recipients {
+            let delay = Double.random(in: 0..<IntakeRotation.sweepWindow)
+            Task {
+                try? await Task.sleep(for: .seconds(delay))
+                await OutboundSessionService.shared.sendContactCard(to: contactId)
+            }
         }
     }
 
