@@ -26,7 +26,8 @@ struct HistoryTransferReceiveView: View {
     var body: some View {
         HistoryTransferLayout(
             screen: .of(phase: coordinator.phase, side: .receiving, localNetworkDenied: coordinator.localNetworkDenied),
-            side: .receiving
+            side: .receiving,
+            progress: coordinator.progress
         ) {
             if coordinator.localNetworkDenied, isWaiting {
                 HistoryLocalNetworkSettingsButton()

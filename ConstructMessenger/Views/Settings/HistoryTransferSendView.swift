@@ -73,7 +73,8 @@ struct HistoryTransferSendView: View {
                         phase: coordinator.phase, side: .sending, stages: stages, peerNotSeen: peerNotSeen,
                         localNetworkDenied: coordinator.localNetworkDenied
                     ),
-                    side: .sending
+                    side: .sending,
+                    progress: coordinator.progress
                 ) {
                     if coordinator.localNetworkDenied, coordinator.phase == .idle {
                         HistoryLocalNetworkSettingsButton()

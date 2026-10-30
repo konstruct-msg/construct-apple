@@ -1142,6 +1142,9 @@
 "history_sync_title_receiving_media" = "Receiving photos and files…";
 "history_sync_chats_done" = "Chats transferred";
 "history_sync_step_of" = "step %1$d of %2$d";
+"history_sync_amount" = "%1$@ of %2$@";
+"history_sync_eta_seconds" = "about %d s left";
+"history_sync_eta_minutes" = "about %d min left";
 "history_sync_next_media" = "Next: photos and files";
 "history_sync_title_media_incomplete" = "Some photos and files did not arrive";
 "history_sync_body_media_retry_here" = "You can send them later: Linked devices → Transfer chat history → Media only.";

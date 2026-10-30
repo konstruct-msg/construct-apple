@@ -1142,6 +1142,9 @@
 "history_sync_title_receiving_media" = "Լուսանկարների և ֆայլերի ստացում…";
 "history_sync_chats_done" = "Զրույցները փոխանցված են";
 "history_sync_step_of" = "քայլ %1$d / %2$d";
+"history_sync_amount" = "%1$@ / %2$@";
+"history_sync_eta_seconds" = "մնաց մոտ %d վ";
+"history_sync_eta_minutes" = "մնաց մոտ %d ր";
 "history_sync_next_media" = "Հաջորդը՝ լուսանկարներ և ֆայլեր";
 "history_sync_title_media_incomplete" = "Որոշ լուսանկարներ և ֆայլեր չեն հասել";
 "history_sync_body_media_retry_here" = "Դրանք կարող եք ուղարկել ավելի ուշ՝ Կապված սարքեր → Փոխանցել զրույցների պատմությունը → Միայն մեդիա։";
