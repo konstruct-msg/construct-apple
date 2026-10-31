@@ -115,8 +115,6 @@ enum NetworkSettingsLayout {
 enum NetworkSettingsLabels {
     static let quic = "QUIC"
     static let h2 = "H2"
-    static let tls = "TLS"
-    static let obfs4 = "obfs4"
 }
 
 enum BackgroundFetchSettingsLayout {

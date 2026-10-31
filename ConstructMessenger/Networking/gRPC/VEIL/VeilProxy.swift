@@ -22,7 +22,7 @@ import Foundation
 struct VeilProxyEnsureResult: Sendable {
     let port: UInt16
     let restarted: Bool
-    /// Which obfuscator won the probe race inside Rust. nil when reusing a prior session.
+    /// Which obfuscator won the probe race, also retained when reusing the listener.
     let method: VeilMethod?
     /// Probe latency reported by Rust, in milliseconds. nil when reusing a prior session.
     let latencyMs: UInt32?

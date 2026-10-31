@@ -14,22 +14,12 @@ import GRPCCore
 /// transport-layer error classification testable and to enforce the invariant
 /// that transport errors are handled before application-layer auth retry.
 enum VeilFailurePolicy {
-    private static let lock = NSLock()
-    nonisolated(unsafe) private static var _webTunnelActive = false
-
-    /// Whether the proxy is up over WebTunnel — the only transport where a non-200 HTTP status is
-    /// a carrier's decoy rather than the server's answer. Mirrors `VeilProxyManager`'s flag for
-    /// classification from any thread.
-    static var webTunnelActive: Bool {
-        get { lock.withLock { _webTunnelActive } }
-        set { lock.withLock { _webTunnelActive = newValue } }
-    }
-
     /// Classify an error as a transport-layer VEIL failure, or nil if application-layer.
+    /// `method` is captured with the failed call's route; a later rotation cannot change it.
     ///
     /// - Returns: `VeilFailureReason` if the error represents a transport failure that
     ///            should trigger VEIL failover; `nil` for application errors (auth, validation, etc.).
-    static func classify(_ error: Error) -> VeilFailureReason? {
+    static func classify(_ error: Error, method: VeilMethod? = nil) -> VeilFailureReason? {
         // Local proxy dead — distinct from relay failure.
         if isStaleLocalProxy(error) { return .staleLocalProxy }
         
@@ -45,7 +35,7 @@ enum VeilFailurePolicy {
             // answer to a method it does not serve: on 2026-10-14 a server without
             // ServerTrustService answered 404 and a working veil-front tunnel was torn down as
             // "WebTunnel blocked" on every trust refresh.
-            if webTunnelActive, isWebTunnelBlocked(rpc) { return .webTunnelBlocked }
+            if method == .webTunnel, isWebTunnelBlocked(rpc) { return .webTunnelBlocked }
             return nil  // Other unimplemented errors are application-layer.
             
         case .unavailable, .unknown:
