@@ -62,6 +62,25 @@ class ProfileShareViewModel {
         set { UserDefaults.standard.set(newValue, forKey: rebroadcastOwedKey) }
     }
 
+    /// This device's user removed their photo. Per account, on this device only: another device
+    /// of the same account does not have the bytes, and "no bytes here" is not a removal.
+    private static func avatarRemovedKey(for accountId: String) -> String {
+        "profileAvatarRemoved.\(accountId.lowercased())"
+    }
+
+    static func isAvatarRemoved(accountId: String) -> Bool {
+        UserDefaults.standard.bool(forKey: avatarRemovedKey(for: accountId))
+    }
+
+    static func setAvatarRemoved(_ removed: Bool, accountId: String) {
+        let key = avatarRemovedKey(for: accountId)
+        if removed {
+            UserDefaults.standard.set(true, forKey: key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+
     /// Rebroadcast if an earlier one went out without its avatar. Called on stream connect.
     static func rebroadcastIfOwed() async {
         guard rebroadcastOwed else { return }
@@ -96,10 +115,14 @@ class ProfileShareViewModel {
 
     /// Snapshot our name and avatar, and upload the avatar. Nil when there is no signed-in user.
     ///
-    /// The avatar goes as one of three states (`ProfileShare.Avatar`): uploaded → `set`; we have
-    /// none → `removed`, so a contact holding an old one clears it; the upload failed → `unchanged`,
-    /// so contacts keep what they have, and the rebroadcast is owed (`rebroadcastOwed`). Before
-    /// 2026-10-02 the last two were the same message, and no contact ever cleared an avatar.
+    /// The avatar goes as one of three states (`ProfileShare.Avatar`): uploaded → `set`; this
+    /// device's user removed it (`isAvatarRemoved`) → `removed`, so a contact holding one clears
+    /// it; anything else → `unchanged`, so contacts keep what they have. "Anything else" is an
+    /// upload that failed (the rebroadcast is then owed) and a device that simply has no bytes —
+    /// a second device never received the photo. Treating that as removal, and stamping the
+    /// version "now" so the message wins, erased the photo a contact had just saved
+    /// (2026-10-31). Before 2026-10-02 a failed upload and a removal were the same message, and
+    /// no contact ever cleared an avatar.
     ///
     /// The `Task`s that send it hold `self` strongly on purpose. Until 2026-10-02 they captured it
     /// weakly (`463a8533`, 2026-04-10), and `rebroadcastProfileToSharedContacts` runs on a view
@@ -111,23 +134,25 @@ class ProfileShareViewModel {
               let currentUserId = AuthSessionManager.shared.currentUserId,
               var me = try? LocalRepositories.ownProfile.profile(accountId: currentUserId) else { return nil }
 
-        // A profile that has never been stamped (edited before the stamp existed) gets one now,
-        // once, and keeps it: what makes it a version is that sending again does not change it.
-        if me.profileEditedAtMs == 0 {
-            me.markEdited()
-            try? LocalRepositories.ownProfile.save(me)
-        }
-
         // Only a name we chose, or our username: never the generated one, which a contact
         // computes for itself and would take for a name we picked (`ProfileShare.chosenName`).
         let displayName = DisplayNameGenerator.isGenerated(me.displayName, for: currentUserId)
             ? me.username
             : (me.displayName.isEmpty ? me.username : me.displayName)
-        let editedAtMs = UInt64(me.profileEditedAtMs)
         let avatarImage = me.avatar.flatMap { ImageHelper.imageFromData($0) }
+        let removed = avatarImage == nil && Self.isAvatarRemoved(accountId: currentUserId)
+        // A profile that has never been stamped gets one when this device actually has a photo
+        // or recorded a removal. Stamping a device that has neither would make "now" newer than
+        // the device that set the photo, and the contact would keep this empty version.
+        if me.profileEditedAtMs == 0 && (avatarImage != nil || removed) {
+            me.markEdited()
+            try? LocalRepositories.ownProfile.save(me)
+        }
+        let editedAtMs = UInt64(me.profileEditedAtMs)
 
         let avatar: ProfileShare.Avatar
         if let avatarImage {
+            Self.setAvatarRemoved(false, accountId: currentUserId)
             do {
                 let upload = try await uploadAvatar(avatarImage)
                 avatar = .set(ProfileShare.AvatarRef(
@@ -142,8 +167,11 @@ class ProfileShareViewModel {
                 avatar = .unchanged
                 Self.rebroadcastOwed = true
             }
-        } else {
+        } else if removed {
             avatar = .removed
+        } else {
+            Log.info("No avatar on this device — profile leaves the contact's avatar unchanged", category: "ProfileShare")
+            avatar = .unchanged
         }
 
         return OutgoingProfile(

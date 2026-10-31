@@ -24,6 +24,7 @@ final class ProfileRebroadcastTests: XCTestCase {
 
     override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
+        ProfileShareViewModel.setAvatarRemoved(false, accountId: me)
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
@@ -68,8 +69,9 @@ final class ProfileRebroadcastTests: XCTestCase {
 
     /// The profile carries when we last edited it, not when it was sent: two rebroadcasts of an
     /// unchanged profile carry the same version, so a contact applies the first and ignores the
-    /// second. With no avatar it says "removed" — the state that lets a contact clear one.
-    func testTheVersionIsTheEditNotTheSendAndNoAvatarIsRemoved() async {
+    /// second. No photo on this device is not a removal — a second device has no bytes either,
+    /// and announcing "removed" with a fresh stamp erased the photo the other device had set.
+    func testTheVersionIsTheEditNotTheSendAndNoBytesIsNotRemoval() async {
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         let context = container.viewContext
@@ -94,14 +96,55 @@ final class ProfileRebroadcastTests: XCTestCase {
         await vm.rebroadcastProfileToSharedContacts()
 
         XCTAssertEqual(sent.count, 2)
-        XCTAssertGreaterThan(sent[0].editedAtMs, 0, "an unstamped profile is stamped once")
+        XCTAssertEqual(sent[0].editedAtMs, 0, "a device that never edited does not stamp 'now' by sending")
         XCTAssertEqual(sent[0].editedAtMs, sent[1].editedAtMs, "sending again is not an edit")
-        XCTAssertEqual(sent[0].avatar, .removed)
+        XCTAssertEqual(sent[0].avatar, .unchanged, "no bytes here is not a removal")
 
         self_.markProfileEdited(now: Date().addingTimeInterval(1))
         try? context.save()
         await vm.rebroadcastProfileToSharedContacts()
         XCTAssertGreaterThan(sent[2].editedAtMs, sent[1].editedAtMs, "an edit is a newer version")
+        XCTAssertEqual(sent[2].avatar, .unchanged, "a name edit on a device without the photo still does not remove it")
+    }
+
+    /// What the logs showed on 2026-10-31: this device has no photo and had never stamped a
+    /// version, so the old send put editedAt at "now" and avatar "removed". The contact who had
+    /// just saved the other device's photo then dropped it for the generated one. The two stores
+    /// are separate: the sender's own row and the receiver's contact row are the same account.
+    func testABlankDeviceDoesNotEraseAnAvatarAnotherDevicePublished() async throws {
+        let sender = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(sender)
+        let senderContext = sender.viewContext
+        let self_ = User(context: senderContext)
+        self_.id = me
+        self_.username = "me"
+        self_.displayName = "Alice"
+        try senderContext.save()
+
+        let sent = await ProfileShareViewModel(context: senderContext).prepareProfile()
+        let profile = try XCTUnwrap(sent)
+        XCTAssertEqual(profile.data.avatar, .unchanged)
+        XCTAssertEqual(profile.data.editedAtMs, 0, "a device with no photo does not publish a newer version")
+
+        let receiver = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(receiver)
+        let receiverContext = receiver.viewContext
+        let contact = User(context: receiverContext)
+        contact.id = me
+        contact.username = "alice"
+        contact.displayName = "Alice"
+        contact.isContact = true
+        let photo = Data([9, 9, 9])
+        let heldVersion = Int64(Date().timeIntervalSince1970 * 1000) - 60_000
+        contact.avatarData = photo
+        contact.profileEditedAtMs = heldVersion
+        try receiverContext.save()
+
+        ProfileSharingManager.shared.apply(profile.data, from: me)
+
+        let held = try XCTUnwrap(try LocalRepositories.contacts.contact(me))
+        XCTAssertEqual(held.avatar, photo, "the photo the other device published stays")
+        XCTAssertEqual(held.profileEditedAtMs, heldVersion, "the blank device's profile is not a newer version")
     }
 
     // MARK: - TODO 144: the avatar must not show whom we share the profile with

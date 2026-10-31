@@ -160,14 +160,18 @@ class ProfileSharingManager {
                 userId, displayName: profile.chosenName(of: userId) ?? "",
                 sharedWithMeAt: Date(), profileEditedAtMs: Int64(clamping: profile.editedAtMs)
             )
+            let avatarLog: String
             switch action {
             case .download(let ref):
                 try contacts.setPendingAvatar(userId, ref: try ref.stored(), since: Date())
+                avatarLog = "download"
             case .clear:
                 try contacts.setAvatar(userId, nil, pendingRef: nil, pendingSince: nil)
+                avatarLog = "clear"
             case .keep:
-                break
+                avatarLog = "keep"
             }
+            Log.info("Profile from \(userId.prefix(8))… applied (editedAt=\(profile.editedAtMs), avatar=\(avatarLog))", category: "ProfileSharingManager")
         } catch {
             Log.error("Failed to save profile from \(userId.prefix(8))…: \(error)", category: "ProfileSharingManager")
             return

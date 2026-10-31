@@ -126,6 +126,7 @@ class SettingsViewModel {
             Log.error("Failed to remove avatar: \(error)")
             return
         }
+        ProfileShareViewModel.setAvatarRemoved(true, accountId: userId)
         profileImage = nil
         Log.info("Avatar removed")
         Task {
@@ -158,6 +159,7 @@ class SettingsViewModel {
                 me.avatar = processedData
                 me.markEdited()
                 try LocalRepositories.ownProfile.save(me)
+                ProfileShareViewModel.setAvatarRemoved(false, accountId: userId)
 
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
