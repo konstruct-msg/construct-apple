@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5A1E00012FF0000000C0FFEE /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A1E00022FF0000000C0FFEE /* Sparkle */; };
 		068895AE2C1F0AADFF68BB17 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = EDA879377E8BAF2452B5BF6B /* GRPCCore */; };
 		0B30150B2702D505361B1132 /* envelope.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE05E5D0228AA8842AFB44B /* envelope.pb.swift */; };
 		0FC5363023189B3889CE3C0C /* identity.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B493D3DD2C627D27FA9D63 /* identity.pb.swift */; };
@@ -18,6 +17,7 @@
 		460D93398052DBB0EFB9BACD /* ServerEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A0A0B62A803AAD651F41E2 /* ServerEndpoint.swift */; };
 		52DC79E18C4774AA8E0544D8 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BC8E3CB4A389C0E7CFF2E /* NotificationService.swift */; };
 		58B16C1D7FB166CB8B7BC3A2 /* AlertDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F734356F8B330F7BA68866 /* AlertDecision.swift */; };
+		5A1E00012FF0000000C0FFEE /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A1E00022FF0000000C0FFEE /* Sparkle */; };
 		68AFEF4061D54FD4D885332F /* ConstructTransport.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */; };
 		6DE5ACACF78379CA40F3CA93 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = C48D13418225FD1E00C36CA5 /* GRPCProtobuf */; };
 		8DD84F66E1149D4D2FB16527 /* construct_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F4353680E29D849BBB5D3D7 /* construct_core.swift */; };
@@ -898,7 +898,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 764;
+				CURRENT_PROJECT_VERSION = 767;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -920,7 +920,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.28.1;
+				MARKETING_VERSION = 0.28.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -968,7 +968,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 764;
+				CURRENT_PROJECT_VERSION = 767;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -984,7 +984,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.28.1;
+				MARKETING_VERSION = 0.28.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1111,14 +1111,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEAD_CODE_STRIPPING = YES;
+				DESKTOP_UPDATES_ENABLED = NO;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				DESKTOP_UPDATES_ENABLED = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1141,7 +1141,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.27;
+				MARKETING_VERSION = 0.3.28;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1164,14 +1164,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEAD_CODE_STRIPPING = YES;
+				DESKTOP_UPDATES_ENABLED = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				DESKTOP_UPDATES_ENABLED = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1194,7 +1194,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.27;
+				MARKETING_VERSION = 0.3.28;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1217,14 +1217,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 37;
+				CURRENT_PROJECT_VERSION = 38;
 				DEAD_CODE_STRIPPING = YES;
+				DESKTOP_UPDATES_ENABLED = NO;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
-				DESKTOP_UPDATES_ENABLED = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1247,7 +1247,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.27;
+				MARKETING_VERSION = 0.3.28;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1513,7 +1513,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 764;
+				CURRENT_PROJECT_VERSION = 767;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1528,7 +1528,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.28.1;
+				MARKETING_VERSION = 0.28.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1622,6 +1622,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 		BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift";
@@ -1662,22 +1670,9 @@
 				minimumVersion = 2.2.1;
 			};
 		};
-		5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = exactVersion;
-				version = 2.10.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		5A1E00022FF0000000C0FFEE /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
 		294D54FD21A4550FBEE9D6E7 /* SwiftProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
@@ -1687,6 +1682,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */;
 			productName = GRPCNIOTransportHTTP2;
+		};
+		5A1E00022FF0000000C0FFEE /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		BF0A1D222FCF418600D0597C /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
