@@ -27,12 +27,7 @@ final class VeilProxyManager: ObservableObject {
         // Load persisted mode (or platform default if never set).
         self.mode = VeilProxyStore.loadMode()
 
-        // Restart the VEIL proxy whenever the network interface changes.
-        // After a cellular ↔ WiFi switch the old TCP tunnel to the relay is dead;
-        // the Rust proxy process is still "running" but silently broken.
-        // We restart proactively so the next RPC finds a healthy proxy immediately.
-        // TransportRouter handles the actual proxy lifecycle on path change; we only
-        // mirror the local UI state (stop publishes isRunning=false).
+        // The router restarts the proxy on a path change. Discovery belongs to the old LAN.
         NotificationCenter.default.addObserver(
             forName: .networkPathChanged,
             object: nil,
@@ -45,27 +40,15 @@ final class VeilProxyManager: ObservableObject {
         }
     }
 
-    // MARK: - Published state
+    // MARK: - Router-derived state
 
-    @Published private(set) var isRunning = false {
-        didSet {
-            // Notify ConnectionStatusManager so it can proactively degrade status
-            // when the VEIL proxy dies while the stream hasn't noticed yet.
-            NotificationCenter.default.post(
-                name: .veilProxyStateChanged,
-                object: nil,
-                userInfo: ["isRunning": isRunning]
-            )
-        }
-    }
-    @Published private(set) var proxyPort: UInt16 = 0
-    @Published private(set) var activeRelay: VeilRelay?
+    // SwiftUI tracks the observable mirror even when these getters are read through this
+    // ObservableObject. The manager owns preferences/provisioning, never a second route state.
+    var isRunning: Bool { TransportRouterMirror.shared.isUsingVEIL }
+    var activeRelay: String? { TransportRouterMirror.shared.state.currentRelay }
+    var activeMethod: VeilMethod? { TransportRouterMirror.shared.state.veilMethod }
     @Published private(set) var lastError: String?
-    /// True when the active transport is WebTunnel (VEIL v2) rather than obfs4.
-    @Published private(set) var isWebTunnelActive: Bool = false
-    /// True while VEIL is in cooldown after a relay failure. Drives the UI directly —
-    /// changes to this property cause the Network settings view to re-render.
-    @Published private(set) var isOnCooldown: Bool = false
+    var isOnCooldown: Bool { TransportRouterMirror.shared.state.isOnVeilCooldown }
 
     // MARK: - Persisted path memory
 
@@ -88,7 +71,7 @@ final class VeilProxyManager: ObservableObject {
 
     /// Quality level for the currently active relay (persisted history).
     @MainActor var currentRelayQuality: RelayQuality {
-        guard let active = activeRelay?.address else { return .unknown }
+        guard let active = activeRelay else { return .unknown }
         return qualityForRelay(active)
     }
 
@@ -183,20 +166,9 @@ final class VeilProxyManager: ObservableObject {
     }
 
     /// The current effective routing path for traffic.
-    /// Updates automatically because it reads `@Published` properties.
+    /// Updates automatically because it reads the observable router mirror.
     var currentTrafficPath: TrafficPath {
-        if isOnCooldown { return .veilCooldown }
-        guard isRunning, let relay = activeRelay else {
-            if isEnabled { return .veilConnecting }
-            return .direct
-        }
-        if isWebTunnelActive { return .veilWebTunnel(relay: relay.address) }
-        // iOS uses veil-front (honest-front HTTPS); obfs4/WebTunnel are retired.
-        return .veilFront(relay: relay.address)
-    }
-
-    func clearCooldown() {
-        isOnCooldown = false
+        TransportRouterMirror.shared.state.trafficPath
     }
 
     /// Whether a bridge cert is available (from Keychain or hardcoded fallback).
@@ -340,7 +312,7 @@ final class VeilProxyManager: ObservableObject {
             ordered.append(candidate)
         }
         append(address)
-        append(activeRelay?.address)
+        append(activeRelay)
         for front in learnedFronts.all() { append(front.address) }
         for seed in VEILConfig.hardcodedRelayAddresses { append(seed) }
         return ordered
@@ -400,7 +372,7 @@ final class VeilProxyManager: ObservableObject {
         // failure between the ~46-day renewals. No-ops once the floor is met.
         VeilFrontFloorMaintainer.shared.topUpIfBelowFloor(
             candidates: capabilityCandidateAddresses(preferring: address),
-            through: activeRelay?.address ?? target
+            through: activeRelay ?? target
         )
     }
 
@@ -414,16 +386,12 @@ final class VeilProxyManager: ObservableObject {
         VeilFrontFloorMaintainer.shared.frontBecameUnavailable(
             address,
             candidates: capabilityCandidateAddresses(),
-            through: activeRelay?.address
+            through: activeRelay
         )
     }
 
-    /// Called on app foreground to verify the VEIL proxy process is actually alive.
-    /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
+    /// Stop LAN discovery. Proxy lifecycle and the state shown in settings belong to the router.
     func stop() {
-        isRunning = false; proxyPort = 0; isWebTunnelActive = false
-        VeilFailurePolicy.webTunnelActive = false
-        activeRelay = nil
         // Tear down Source 3 discovery when VEIL is torn down: discovered relays are only
         // valid on the current LAN, and browsing costs battery + keeps the local-net prompt live.
         VeilLocalDiscovery.shared.stop()
@@ -486,32 +454,23 @@ final class VeilProxyManager: ObservableObject {
     ///
     /// All six post-start background fetches use this so that relay retirement is always handled.
     private func fetchConfigAndEvictIfRemoved() async {
+        let active = activeRelay
+        let manifestId = VeilCertFetcher.cachedRelayInfosSync()?.first { $0.addressWithPort == active }?.id
         guard let freshList = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() else { return }
         // Always push the fresh manifest into the router's proxy pool so subsequent probes pick it up.
         let freshRelays = RelaySnapshot.snapshotRelays()
         await TransportRouter.shared.updateRelays(freshRelays)
-        guard let active = activeRelay, let mid = active.manifestId else { return }
+        guard let active, activeRelay == active, let mid = manifestId else { return }
         let freshIds   = Set(freshList.map(\.id))
         let deprecated = VeilCertFetcher.cachedDeprecatedIdsSync()
         let isRetired  = deprecated.contains(mid) || (!freshIds.isEmpty && !freshIds.contains(mid))
         guard isRetired else { return }
-        Log.info("Active relay \(active.address) [\(mid)] retired by server — rotating", category: "VEIL")
+        Log.info("Active relay \(active) [\(mid)] retired by server — rotating", category: "VEIL")
         await TransportRouter.shared.send(.veilConfigChanged)
     }
 
     func saveRelay(_ relay: VeilRelay) {
         VeilProxyStore.saveStoredRelay(relay)
-    }
-
-    /// Keeps published state in sync with the actual proxy. **No caller since `ConnectionLoop` was
-    /// deleted** — `isRunning`, `activeRelay` and `VeilFailurePolicy.webTunnelActive` stay false
-    /// while a tunnel is up (TODO 188); to be wired from the router, not deleted.
-    func updateVEILProxyState(isRunning: Bool, port: UInt16, relay: VeilRelay?, isWebTunnel: Bool) {
-        self.isRunning = isRunning
-        self.proxyPort = port
-        self.activeRelay = relay
-        self.isWebTunnelActive = isWebTunnel
-        VeilFailurePolicy.webTunnelActive = isRunning && isWebTunnel
     }
 
     /// Record the most recent proxy-start failure reason (from `veil_last_error`,

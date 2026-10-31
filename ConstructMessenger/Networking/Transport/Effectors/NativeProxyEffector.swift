@@ -89,7 +89,7 @@ actor NativeProxyEffector: ProxyEffector {
             // the others until it is next chosen and comes up.
             pool.recordSuccess(relay)
             if reportsToManager { await VeilProxyManager.shared.reportLastError(nil) }
-            return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
+            return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted, method: result.method)
         } catch VeilProxyError.stopped {
             return nil
         } catch {

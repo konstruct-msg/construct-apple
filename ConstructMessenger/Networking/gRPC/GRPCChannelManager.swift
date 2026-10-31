@@ -706,7 +706,7 @@ final class GRPCChannelManager: Sendable {
             // Outcomes go to the router tagged `.sealed`: this connection can die while the
             // authenticated one (and the stream on it) stays up, and the router counts the two
             // apart (TODO 159). Only the report is here; what it means is `TransportReducer`'s.
-            let target = await currentTransportTarget()
+            let (target, method) = await currentTransportRoute()
             do {
                 if let timeout {
                     let opTask = Task<Result, Error> { try await operation(client) }
@@ -731,12 +731,12 @@ final class GRPCChannelManager: Sendable {
                 }
             } catch {
                 await TransportRouter.shared.send(.rpcFailed(
-                    kind: RPCFailureClassifier.classify(error),
+                    kind: RPCFailureClassifier.classify(error, method: method),
                     via: target,
                     foreground: AppActivityState.shared.isForeground,
                     lane: .sealed
                 ))
-                if Self.sealedFailureKeepsConnection(error) { throw error }
+                if Self.sealedFailureKeepsConnection(error, method: method) { throw error }
                 lastError = error
                 invalidateSealedPersistentClient()
                 if attempt == 1 { throw error }
@@ -747,20 +747,21 @@ final class GRPCChannelManager: Sendable {
 
     /// The path the next RPC travels, as the router names it: the VEIL proxy and relay when one is
     /// up, direct otherwise. The same naming `GRPCCallExecutor` reports with.
-    private func currentTransportTarget() async -> TransportTarget {
+    private func currentTransportRoute() async -> (TransportTarget, VeilMethod?) {
+        let state = await TransportRouter.shared.snapshot().state
         guard let port = veilProxyPort(),
-              let relay = await TransportRouter.shared.snapshot().state.currentRelay else {
-            return .direct(.h2)
+              let relay = state.currentRelay else {
+            return (.direct(.h2), nil)
         }
-        return .veil(port: port, relay: relay)
+        return (.veil(port: port, relay: relay), state.veilMethod)
     }
 
     /// The server answered — a status such as NOT_FOUND for expired media, or a refused
     /// token. Until 2026-09-30 every failure replaced the sealed connection and asked again,
     /// which was harmless while only sends used it; a media download that finds its item
     /// expired would tear down the channel sends are using, every time.
-    nonisolated static func sealedFailureKeepsConnection(_ error: Error) -> Bool {
-        switch RPCFailureClassifier.classify(error) {
+    nonisolated static func sealedFailureKeepsConnection(_ error: Error, method: VeilMethod? = nil) -> Bool {
+        switch RPCFailureClassifier.classify(error, method: method) {
         case .applicationError, .authRejected: return true
         default: return false
         }

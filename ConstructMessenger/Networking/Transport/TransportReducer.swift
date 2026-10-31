@@ -95,8 +95,8 @@ enum TransportReducer {
         case .veilProbing:
             return reduceProbing(event: event, config: config, now: now)
 
-        case .veilActive(let relay, let port, let since, let softFails):
-            return reduceActive(relay: relay, port: port, since: since, softFails: softFails, event: event, config: config, now: now)
+        case .veilActive(let relay, let port, let since, let softFails, let method):
+            return reduceActive(relay: relay, port: port, since: since, softFails: softFails, method: method, event: event, config: config, now: now)
 
         case .veilCooldown(let until):
             return reduceCooldown(until: until, event: event, config: config, now: now)
@@ -256,10 +256,10 @@ enum TransportReducer {
 
     private static func reduceProbing(event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
         switch event {
-        case .proxyStarted(let relay, let port, let restarted):
+        case .proxyStarted(let relay, let port, let restarted, let method):
             var effects: [TransportEffect] = [.setVeilPort(port)]
             if restarted { effects.append(.invalidateGRPCClient) }
-            return (.veilActive(relay: relay, port: port, since: now), effects)
+            return (.veilActive(relay: relay, port: port, since: now, method: method), effects)
 
         case .proxyStartFailed:
             // Single probe cycle failed (happy-eyeballs inside Rust). Host owns the
@@ -273,9 +273,9 @@ enum TransportReducer {
         }
     }
 
-    private static func reduceActive(relay: String, port: UInt16, since: Date, softFails: SoftFails, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
+    private static func reduceActive(relay: String, port: UInt16, since: Date, softFails: SoftFails, method: VeilMethod?, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
         func active(_ counts: SoftFails = softFails) -> TransportState {
-            .veilActive(relay: relay, port: port, since: since, softFails: counts)
+            .veilActive(relay: relay, port: port, since: since, softFails: counts, method: method)
         }
         switch event {
         case .rpcSucceeded(let via, _, let lane):
@@ -387,7 +387,7 @@ extension TransportEvent {
             return "veil-config-changed"
         case .backgroundWake:
             return "background-wake"
-        case .proxyStarted(let r, let p, let restarted):
+        case .proxyStarted(let r, let p, let restarted, _):
             return "proxy-started(\(r):\(p)\(restarted ? ",new" : ",reuse"))"
         case .proxyStartFailed(let r, let why):
             return "proxy-failed(\(r ?? "?"): \(why))"

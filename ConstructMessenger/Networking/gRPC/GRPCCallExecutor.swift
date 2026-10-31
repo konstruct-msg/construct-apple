@@ -111,7 +111,7 @@ final class GRPCCallExecutor: Sendable {
                 // Classify the failure and feed it into the TransportRouter FSM.
                 // The router decides on rotation / probe restart / cooldown via effects;
                 // here we only decide whether to retry the local for-loop.
-                let kind = RPCFailureClassifier.classify(error)
+                let kind = RPCFailureClassifier.classify(error, method: usingVEIL ? routerSnapshot.state.veilMethod : nil)
 
                 // Channel yanked out from under this RPC: some other event invalidated the
                 // persistent connection mid-call (a routing change, a VEIL relay rotation, or
@@ -341,6 +341,7 @@ final class GRPCCallExecutor: Sendable {
         usingVEIL: Bool,
         capturedRelayAddr: String?
     ) async -> AuthRetryResult {
+        let refreshMethod = await TransportRouter.shared.snapshot().state.veilMethod
         var refreshError: Error?
         do {
             let refreshed = try await TokenRefreshCoordinator.shared.refreshIfPossible()
@@ -351,7 +352,7 @@ final class GRPCCallExecutor: Sendable {
         }
 
         // Classify the refresh error — transport failures must bubble up.
-        if let refreshErr = refreshError, let reason = VeilFailurePolicy.classify(refreshErr) {
+        if let refreshErr = refreshError, let reason = VeilFailurePolicy.classify(refreshErr, method: refreshMethod) {
             return .transportFailure(reason)
         }
 
