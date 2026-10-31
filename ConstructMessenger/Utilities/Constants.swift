@@ -698,4 +698,7 @@ extension Notification.Name {
     /// Posted when a contact's at-risk (degraded-session) state changes — e.g. after an at-risk
     /// session is auto-upgraded to a fresh one. userInfo: ["userId": String]
     static let sessionAtRiskChanged = Notification.Name("constructSessionAtRiskChanged")
+    /// Our own profile changed: a sibling sent the name or the avatar, or the username arrived
+    /// from the account server. Settings copied the fields once and does not watch the store.
+    static let ownProfileDidChange = Notification.Name("constructOwnProfileDidChange")
 }

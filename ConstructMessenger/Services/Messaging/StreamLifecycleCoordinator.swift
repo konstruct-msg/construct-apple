@@ -197,6 +197,7 @@ final class StreamLifecycleCoordinator {
                 await MlsKeyPackageService.replenishIfNeeded(deviceId: deviceId)
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
                 await ProfileShareViewModel.rebroadcastIfOwed()
+                await ProfileShareViewModel.syncOwnProfileToSiblingsIfStale()
             }
         }
     }

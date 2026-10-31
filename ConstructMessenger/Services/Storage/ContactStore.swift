@@ -76,6 +76,24 @@ extension OwnProfileRecord {
     mutating func markEdited(now: Date = Date()) {
         profileEditedAtMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
     }
+
+    /// The username the account server has. A display name that was the previous username follows
+    /// a rename and that is an edit. An empty display name is left alone, and the version does
+    /// not move: the name and the photo may still be on the way from the device that set them,
+    /// and a stamp of "now" would make this fill newer than that edit, so the device that has
+    /// them would be ignored from then on. Nil when `serverUsername` says nothing new.
+    func fillingUsername(from serverUsername: String, now: Date = Date()) -> OwnProfileRecord? {
+        let trimmed = serverUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, username != trimmed else { return nil }
+        var next = self
+        let previous = next.username
+        next.username = trimmed
+        if !previous.isEmpty && next.displayName == previous {
+            next.displayName = trimmed
+            next.markEdited(now: now)
+        }
+        return next
+    }
 }
 
 struct IdentityKeyPin: Equatable, Sendable {

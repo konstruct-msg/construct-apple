@@ -53,9 +53,16 @@ struct DesktopAccountSettingsView: View {
         .background(Color.CT.bg)
         .onAppear {
             viewModel.setContext(viewContext)
+            if viewModel.needsUserInfoRefresh(from: authViewModel) {
+                viewModel.loadUserInfo(from: authViewModel)
+            }
+            originalUsername = viewModel.username
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .ownProfileDidChange)) { _ in
             viewModel.loadUserInfo(from: authViewModel)
             originalUsername = viewModel.username
         }
+        .task { await authViewModel.refreshOwnUsernameFromServer() }
         .task { await recoveryVM.loadStatus() }
         .sheet(isPresented: $showingRecoverySetup) {
             RecoverySetupView().sheetNavigation(closes: false)

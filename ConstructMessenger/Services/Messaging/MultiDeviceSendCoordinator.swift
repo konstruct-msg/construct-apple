@@ -637,8 +637,8 @@ final class MultiDeviceSendCoordinator {
     }
 
     /// One plan's payloads to each of our other devices, in envelopes that say SENDER_SYNC (23)
-    /// outside — whatever the frame says inside: a copy of a sent message, or read markers (30).
-    /// The relay cannot tell the two apart by type. True when every copy went out.
+    /// outside — whatever the frame says inside: a copy of a sent message, read markers (30),
+    /// or our profile (29). The relay cannot tell them apart by type. True when every copy went out.
     private func sendToOwnDevices(
         plan: ChunkedMessagePlan,
         messageId: String,
@@ -775,6 +775,55 @@ final class MultiDeviceSendCoordinator {
         }
     }
 
+    /// True when this account has a device besides ours. The list is fetched now, not from the
+    /// hour-long cache: a Desktop linked since the last fetch is who this profile is for. A failed
+    /// fetch is false, and the caller tries again on the next connect rather than uploading an
+    /// avatar for a list it does not have.
+    func hasOwnOtherDevice(myUserId: String, myDeviceId: String) async -> Bool {
+        guard !myDeviceId.isEmpty else { return false }
+        do {
+            let others = try await fetchOwnOtherDevices(myUserId: myUserId, myDeviceId: myDeviceId, fresh: true)
+            return !others.isEmpty
+        } catch {
+            Log.info("Profile sync: own-device fetch failed: \(error) — retried on the next connect", category: "MultiDevice")
+            return false
+        }
+    }
+
+    /// Our profile (content type 29) to our other devices, and to nobody else. Unsealed, like read
+    /// markers: the relay already knows both ends are this account, and the name and the avatar
+    /// reference stay inside the ciphertext. The avatar bytes themselves are a media object, as
+    /// they are for a contact. True when every other device got it. False when one did not, or
+    /// when there is no other device — the caller must not record the version as delivered in
+    /// either case, or a device that links afterwards never hears it.
+    func sendOwnProfile(_ payload: Data, senderUserId: String, senderDeviceId: String) async -> Bool {
+        guard !senderDeviceId.isEmpty, !payload.isEmpty else { return false }
+        do {
+            let otherDevices = try await fetchOwnOtherDevices(myUserId: senderUserId, myDeviceId: senderDeviceId)
+            guard !otherDevices.isEmpty else { return false }
+            let id = UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: payload, messageId: id,
+                contentType: UInt8(Shared_Proto_Core_V1_ContentType.profile.rawValue)
+            )
+            guard !plan.payloads.isEmpty else { return false }
+            let sent = await sendToOwnDevices(
+                plan: plan, messageId: id.uuidString.lowercased(), otherDevices: otherDevices,
+                senderUserId: senderUserId, senderDeviceId: senderDeviceId,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            Log.info(
+                sent ? "Profile sent to \(otherDevices.count) own device(s)"
+                     : "Profile not delivered to every own device — retried on the next connect",
+                category: "MultiDevice"
+            )
+            return sent
+        } catch {
+            Log.info("Profile: own-device fetch failed: \(error) — retried on the next connect", category: "MultiDevice")
+            return false
+        }
+    }
+
     // MARK: - Private helpers
 
     /// One device did not get its copy — count it and say why.
@@ -809,8 +858,8 @@ final class MultiDeviceSendCoordinator {
     }
 
 
-    private func fetchOwnOtherDevices(myUserId: String, myDeviceId: String) async throws -> [DeviceBundleData] {
-        if let cache = ownDeviceCache,
+    private func fetchOwnOtherDevices(myUserId: String, myDeviceId: String, fresh: Bool = false) async throws -> [DeviceBundleData] {
+        if !fresh, let cache = ownDeviceCache,
            Date().timeIntervalSince(cache.fetchedAt) < cacheTTL {
             return cache.bundles.filter { $0.deviceId != myDeviceId }
         }

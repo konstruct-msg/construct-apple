@@ -107,9 +107,8 @@ class SettingsViewModel {
             return
         }
 
-        if let avatarData = (try? LocalRepositories.ownProfile.profile(accountId: userId))?.avatar {
-            profileImage = ImageHelper.imageFromData(avatarData)
-        }
+        let avatarData = (try? LocalRepositories.ownProfile.profile(accountId: userId))?.avatar
+        profileImage = avatarData.flatMap { ImageHelper.imageFromData($0) }
     }
 
     /// Removes our avatar and tells every contact we share with, so theirs clears too: the profile
@@ -126,10 +125,11 @@ class SettingsViewModel {
             Log.error("Failed to remove avatar: \(error)")
             return
         }
+        ProfileShareViewModel.setAvatarRemoved(true, accountId: userId)
         profileImage = nil
         Log.info("Avatar removed")
         Task {
-            let shareVM = ProfileShareViewModel(context: context)
+            let shareVM = ProfileShareViewModel(context: context, syncsToSiblings: ProfileShareViewModel.siblingSyncEnabled)
             await shareVM.rebroadcastProfileToSharedContacts()
         }
     }
@@ -158,6 +158,7 @@ class SettingsViewModel {
                 me.avatar = processedData
                 me.markEdited()
                 try LocalRepositories.ownProfile.save(me)
+                ProfileShareViewModel.setAvatarRemoved(false, accountId: userId)
 
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
@@ -166,7 +167,9 @@ class SettingsViewModel {
 
                 // Re-send profile to all contacts we share with so they see the new avatar
                 Task {
-                    let shareVM = ProfileShareViewModel(context: context)
+                    let shareVM = ProfileShareViewModel(
+                        context: context, syncsToSiblings: ProfileShareViewModel.siblingSyncEnabled
+                    )
                     await shareVM.rebroadcastProfileToSharedContacts()
                 }
             } else {
@@ -237,6 +240,10 @@ class SettingsViewModel {
 
         do {
             if var me = try LocalRepositories.ownProfile.profile(accountId: userId) {
+                // The Desktop field writes on every change, including the reload that follows a
+                // sibling's profile. The same name is not an edit: stamping it would make this
+                // device newer than the one that set the photo, and the photo would stop arriving.
+                guard me.displayName != trimmed else { return }
                 me.displayName = trimmed
                 me.markEdited()
                 try LocalRepositories.ownProfile.save(me)
@@ -249,7 +256,9 @@ class SettingsViewModel {
 
                 // Re-send profile to all contacts we share with so they see the updated name
                 Task {
-                    let shareVM = ProfileShareViewModel(context: context)
+                    let shareVM = ProfileShareViewModel(
+                        context: context, syncsToSiblings: ProfileShareViewModel.siblingSyncEnabled
+                    )
                     await shareVM.rebroadcastProfileToSharedContacts()
                 }
             }
