@@ -85,6 +85,10 @@ struct AccountSettingsView: View {
             syncDraftProfileFields()
             viewModel.refreshOwnFingerprint()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .ownProfileDidChange)) { _ in
+            viewModel.loadUserInfo(from: authViewModel)
+            if !isEditingProfile { syncDraftProfileFields() }
+        }
         .onChange(of: viewModel.username) { _, _ in
             if !isEditingProfile { syncDraftProfileFields() }
         }

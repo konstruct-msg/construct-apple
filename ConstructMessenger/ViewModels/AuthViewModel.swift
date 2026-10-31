@@ -211,6 +211,11 @@ class AuthViewModel {
         CryptoManager.shared.setLocalUserId(userId)
         loadUserFromCoreData(userId: userId)
         runPostAuthMaintenance(userId: userId, reason: reason)
+        // The link copies the username once. A fetch that failed, or a Desktop that was linked
+        // before the name was set, would otherwise show an empty profile forever: nothing else
+        // asks the server again. The name and the photo are not on the server; our other device
+        // sends those.
+        Task { await refreshOwnUsernameFromServer() }
     }
 
 
@@ -694,17 +699,11 @@ class AuthViewModel {
             let profiles = LocalRepositories.ownProfile
             if var me = try profiles.profile(accountId: userId) {
                 Log.info("Found existing user in Core Data")
-                // Update username if provided and different
-                if let newUsername = username, !newUsername.isEmpty, me.username != newUsername {
+                if let newUsername = username, let filled = me.fillingUsername(from: newUsername) {
                     Log.info("Updating username")
-                    let oldUsername = me.username
-                    me.username = newUsername
-                    // Also update displayName if it's empty or was same as old username
-                    if me.displayName.isEmpty || me.displayName == oldUsername {
-                        me.displayName = newUsername
-                        me.markEdited()
-                    }
+                    me = filled
                     try profiles.save(me)
+                    NotificationCenter.default.post(name: .ownProfileDidChange, object: nil)
                     Log.info("Saved user changes to Core Data")
                 }
             } else {
@@ -732,6 +731,20 @@ class AuthViewModel {
             
         } catch {
             Log.info("Failed to fetch or create user from Core Data: \(error)")
+        }
+    }
+
+    /// The username lives on the account server. Asked again whenever a session starts, and when
+    /// settings open: the one copy at link time is how a Desktop ended up with the field empty
+    /// after the phone had set it. Does not publish a profile version — see `fillingUsername`.
+    func refreshOwnUsernameFromServer() async {
+        guard let userId = currentUserId else { return }
+        do {
+            let remote = try await UserServiceClient.shared.getUserProfile(userId: userId)
+            let username = remote.username.isEmpty ? nil : remote.username
+            loadUserFromCoreData(userId: userId, username: username)
+        } catch {
+            Log.debug("Own username refresh failed (non-fatal): \(error)", category: "Auth")
         }
     }
 }

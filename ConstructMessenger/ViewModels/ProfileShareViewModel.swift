@@ -28,14 +28,37 @@ class ProfileShareViewModel {
     typealias Pause = (Duration) async -> Void
     private var pause: Pause = { try? await Task.sleep(for: $0) }
 
+    /// A rebroadcast also tells our other devices. Tests leave this off: the send is a real
+    /// own-device copy, and a unit test has no session to make one with.
+    private var syncsToSiblings = false
+
     init() {}
 
     init(context: NSManagedObjectContext, deliver: Deliver? = nil,
-         uploadAvatar: UploadAvatar? = nil, pause: Pause? = nil) {
+         uploadAvatar: UploadAvatar? = nil, pause: Pause? = nil,
+         syncsToSiblings: Bool = false) {
         self.viewContext = context
         self.deliverOverride = deliver
         if let uploadAvatar { self.uploadAvatar = uploadAvatar }
         if let pause { self.pause = pause }
+        self.syncsToSiblings = syncsToSiblings
+    }
+
+    /// One rebroadcast at a time. A second save while the first is still walking contacts does
+    /// not start another walk beside it — that is what hit the sealed-sender limit on
+    /// 2026-10-31, three overlapping walks to the same 19 contacts. The walk in progress stops
+    /// at the next contact and starts again from the profile as it is now.
+    private static var rebroadcastRunning = false
+    private static var rebroadcastAgain = false
+
+    /// A settings save starts a rebroadcast on its own. Tests turn this off: the simulator can
+    /// hold a real session, and the rebroadcast would otherwise ask the server for the test
+    /// account's devices.
+    static var siblingSyncEnabled = true
+
+    static func resetRebroadcastGateForTesting() {
+        rebroadcastRunning = false
+        rebroadcastAgain = false
     }
 
     /// The wait before each contact after the first. Sends in one burst would tell the server
@@ -86,8 +109,48 @@ class ProfileShareViewModel {
         guard rebroadcastOwed else { return }
         rebroadcastOwed = false
         Log.info("Profile rebroadcast owed from a failed avatar upload — sending again", category: "ProfileShare")
-        let shareVM = ProfileShareViewModel(context: PersistenceController.shared.container.viewContext)
+        let shareVM = ProfileShareViewModel(
+            context: PersistenceController.shared.container.viewContext, syncsToSiblings: true
+        )
         await shareVM.rebroadcastProfileToSharedContacts()
+    }
+
+    /// Whether our other devices still need this profile. `lastSyncedEditedAtMs` nil means they
+    /// have never been sent one from this device. An empty, never-edited profile has nothing to
+    /// say; sending it would publish a version a sibling then treats as current.
+    static func siblingSyncIsDue(editedAtMs: Int64, lastSyncedEditedAtMs: Int64?, hasNameOrAvatar: Bool) -> Bool {
+        if editedAtMs == 0 && !hasNameOrAvatar { return false }
+        guard let lastSyncedEditedAtMs else { return true }
+        return editedAtMs != lastSyncedEditedAtMs
+    }
+
+    private static func siblingSyncKey(for accountId: String) -> String {
+        "profileSyncedToSiblings.\(accountId.lowercased())"
+    }
+
+    /// `integer(forKey:)` is 0 both when the key is absent and when the synced version is 0.
+    /// Absence means our other devices have never been sent this profile.
+    private static func lastSyncedEditedAtMs(for accountId: String) -> Int64? {
+        let key = siblingSyncKey(for: accountId)
+        guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
+        return Int64(UserDefaults.standard.integer(forKey: key))
+    }
+
+    /// Our other devices get the profile once per version, on stream connect. A linked Desktop
+    /// otherwise never learns the name or the photo: a profile share goes to contacts, and the
+    /// copy a sibling would need was never sent.
+    static func syncOwnProfileToSiblingsIfStale() async {
+        guard let accountId = AuthSessionManager.shared.currentUserId,
+              let me = try? LocalRepositories.ownProfile.profile(accountId: accountId) else { return }
+        let last = lastSyncedEditedAtMs(for: accountId)
+        let hasNameOrAvatar = !me.displayName.isEmpty || me.avatar != nil
+        guard siblingSyncIsDue(
+            editedAtMs: me.profileEditedAtMs, lastSyncedEditedAtMs: last, hasNameOrAvatar: hasNameOrAvatar
+        ) else { return }
+        let shareVM = ProfileShareViewModel(
+            context: PersistenceController.shared.container.viewContext, syncsToSiblings: true
+        )
+        await shareVM.sendCurrentProfileToSiblings()
     }
 
     /// Share profile (displayName and avatar) with another user via E2E encrypted message.
@@ -334,37 +397,96 @@ class ProfileShareViewModel {
     /// away that each upload is ours: the upload token names the account — that is the anonymous
     /// upload decision, not this.
     func rebroadcastProfileToSharedContacts() async {
-        guard viewContext != nil,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
-
-        // The contacts we have chosen to share our profile with
-        let contactIds = (try? LocalRepositories.contacts.sharingWith(except: currentUserId)) ?? []
-        guard !contactIds.isEmpty else {
-            Log.info("No contacts to rebroadcast profile to", category: "ProfileShare")
+        if Self.rebroadcastRunning {
+            Self.rebroadcastAgain = true
             return
         }
-
-        Log.info("Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
-
-        for (index, contactId) in contactIds.shuffled().enumerated() {
-            if index > 0 {
-                await pause(.seconds(Double.random(in: Self.rebroadcastSpacing)))
-            }
-            guard let profile = await prepareProfile() else {
-                Log.error("Profile rebroadcast: no signed-in user", category: "ProfileShare")
-                return
-            }
-            let (success, error): (Bool, String?)
-            if let deliverOverride {
-                (success, error) = await deliverOverride(profile, contactId)
-            } else {
-                (success, error) = await deliver(profile, to: contactId)
-            }
-            if success {
-                Log.info("Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
-            } else {
-                Log.error("Profile rebroadcast to \(contactId.prefix(8)) failed: \(error ?? "unknown")", category: "ProfileShare")
-            }
+        Self.rebroadcastRunning = true
+        await runRebroadcastPasses()
+        Self.rebroadcastRunning = false
+        // A save that arrived after the last check and before the flag dropped would have set
+        // `rebroadcastAgain` and returned. No await sits between these two lines, so that save
+        // cannot have started a walk of its own. Pick it up.
+        if Self.rebroadcastAgain {
+            await rebroadcastProfileToSharedContacts()
         }
+    }
+
+    private func runRebroadcastPasses() async {
+        guard viewContext != nil, AuthSessionManager.shared.currentUserId != nil else { return }
+        repeat {
+            Self.rebroadcastAgain = false
+            if syncsToSiblings {
+                await sendCurrentProfileToSiblings()
+            }
+            let currentUserId = AuthSessionManager.shared.currentUserId
+            let contactIds = (try? LocalRepositories.contacts.sharingWith(except: currentUserId)) ?? []
+            guard !contactIds.isEmpty else {
+                Log.info("No contacts to rebroadcast profile to", category: "ProfileShare")
+                // A save that landed while the sibling copy was going out still has to walk,
+                // once. With nothing newer waiting, leaving the loop is what stops it: `continue`
+                // here would spin, the gate would stay taken, and no later save would start.
+                if Self.rebroadcastAgain { continue }
+                break
+            }
+
+            Log.info("Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
+
+            for (index, contactId) in contactIds.shuffled().enumerated() {
+                if Self.rebroadcastAgain { break }
+                if index > 0 {
+                    await pause(.seconds(Double.random(in: Self.rebroadcastSpacing)))
+                    if Self.rebroadcastAgain { break }
+                }
+                guard let profile = await prepareProfile() else {
+                    Log.error("Profile rebroadcast: no signed-in user", category: "ProfileShare")
+                    return
+                }
+                let (success, error): (Bool, String?)
+                if let deliverOverride {
+                    (success, error) = await deliverOverride(profile, contactId)
+                } else {
+                    (success, error) = await deliver(profile, to: contactId)
+                }
+                if success {
+                    Log.info("Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
+                } else {
+                    Log.error("Profile rebroadcast to \(contactId.prefix(8)) failed: \(error ?? "unknown")", category: "ProfileShare")
+                }
+            }
+        } while Self.rebroadcastAgain
+    }
+
+    /// One copy of the current profile to each of our other devices. Unsealed, like read markers:
+    /// the relay already knows both ends are this account. The avatar, when there is one, is a
+    /// fresh upload named in the profile, not the bytes themselves.
+    func sendCurrentProfileToSiblings() async {
+        guard syncsToSiblings,
+              let accountId = AuthSessionManager.shared.currentUserId,
+              let deviceId = AuthSessionManager.shared.currentDeviceId, !deviceId.isEmpty,
+              AuthSessionManager.shared.sessionToken != nil else { return }
+        // No other device: do not upload an avatar for nobody, and do not record the version.
+        // A Desktop linked later is owed this profile on the next connect. Recording it now
+        // would make that connect believe the profile had already been delivered.
+        guard await MultiDeviceSendCoordinator.shared.hasOwnOtherDevice(
+            myUserId: accountId, myDeviceId: deviceId
+        ) else { return }
+        let owedBefore = Self.rebroadcastOwed
+        guard let profile = await prepareProfile() else { return }
+        let payload: Data
+        do {
+            payload = try profile.data.encoded()
+        } catch {
+            Log.error("Profile for our other devices did not encode: \(error)", category: "ProfileShare")
+            return
+        }
+        let sent = await MultiDeviceSendCoordinator.shared.sendOwnProfile(
+            payload, senderUserId: accountId, senderDeviceId: deviceId
+        )
+        // A failed avatar upload left the profile as "unchanged". The name went, the photo did
+        // not, so the next connect tries again rather than recording this version as delivered.
+        let uploadFailed = Self.rebroadcastOwed && !owedBefore
+        guard sent, !uploadFailed else { return }
+        UserDefaults.standard.set(Int64(clamping: profile.data.editedAtMs), forKey: Self.siblingSyncKey(for: accountId))
     }
 }

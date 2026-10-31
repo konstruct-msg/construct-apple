@@ -20,11 +20,17 @@ final class ProfileRebroadcastTests: XCTestCase {
         try await super.setUp()
         savedUserId = AuthSessionManager.shared.currentUserId
         AuthSessionManager.shared.updateUserId(me)
+        // A settings save starts a rebroadcast. With a session in the simulator keychain that
+        // would ask the server for this test account's devices.
+        ProfileShareViewModel.siblingSyncEnabled = false
+        ProfileShareViewModel.resetRebroadcastGateForTesting()
     }
 
     override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         ProfileShareViewModel.setAvatarRemoved(false, accountId: me)
+        ProfileShareViewModel.siblingSyncEnabled = true
+        ProfileShareViewModel.resetRebroadcastGateForTesting()
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
@@ -252,5 +258,115 @@ final class ProfileRebroadcastTests: XCTestCase {
         XCTAssertGreaterThan(self_.profileEditedAtMs, 1, "a removal is a newer version, or contacts would ignore it")
         let profile = await ProfileShareViewModel(context: context).prepareProfile()
         XCTAssertEqual(profile?.data.avatar, .removed)
+    }
+
+    /// What hit the sealed-sender limit on 2026-10-31: three avatar saves, three walks to the same
+    /// contacts at once. A second save while the first is between contacts stops that walk and
+    /// starts it again from the profile as it is now. One walk, not two beside each other.
+    func testASecondSaveRestartsTheWalkInsteadOfRunningBesideIt() async throws {
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
+        let self_ = User(context: context)
+        self_.id = me
+        self_.username = "me"
+        self_.displayName = "Alice"
+        for _ in 0..<3 {
+            let contact = User(context: context)
+            contact.id = UUID().uuidString
+            contact.username = "c"
+            contact.displayName = ""
+            contact.amISharingWith = true
+        }
+        try context.save()
+
+        let pause = OnePause()
+        var names: [String] = []
+        let vm = ProfileShareViewModel(context: context, deliver: { profile, _ in
+            names.append(profile.data.displayName)
+            return (true, nil)
+        }, pause: { _ in await pause.wait() })
+
+        let walk = Task { await vm.rebroadcastProfileToSharedContacts() }
+        var parked = false
+        for _ in 0..<50 {
+            if pause.isWaiting { parked = true; break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(parked, "the walk stops between contacts, where a second save can restart it")
+        self_.displayName = "Bob"
+        self_.markProfileEdited(now: Date().addingTimeInterval(5))
+        try context.save()
+        await vm.rebroadcastProfileToSharedContacts()
+        pause.resume()
+        await walk.value
+
+        XCTAssertEqual(names.filter { $0 == "Alice" }.count, 1, "the walk in progress stops at the next contact")
+        XCTAssertEqual(names.filter { $0 == "Bob" }.count, 3, "the restart sends the profile as it is now, once each")
+        XCTAssertEqual(names.count, 4, "one walk, restarted — not two walks side by side")
+    }
+
+    /// The Desktop name field writes on every change, including the reload after a sibling's
+    /// profile arrives. Writing the name we already hold must not publish a new version.
+    func testSavingTheNameWeAlreadyHoldIsNotAnEdit() throws {
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
+        let self_ = User(context: context)
+        self_.id = me
+        self_.username = "me"
+        self_.displayName = "Alice"
+        self_.profileEditedAtMs = 40
+        try context.save()
+
+        let settings = SettingsViewModel()
+        settings.setContext(context)
+        settings.userId = me
+        let auth = AuthViewModel(context: context, startRuntime: false)
+        settings.saveDisplayName("Alice", authViewModel: auth)
+        settings.saveDisplayName("  Alice  ", authViewModel: auth)
+
+        let held = try XCTUnwrap(try LocalRepositories.ownProfile.profile(accountId: me))
+        XCTAssertEqual(held.displayName, "Alice")
+        XCTAssertEqual(held.profileEditedAtMs, 40, "the same name is not an edit")
+    }
+
+    func testAnEmptyProfileIsNotSentToOurOtherDevices() {
+        XCTAssertFalse(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 0, lastSyncedEditedAtMs: nil, hasNameOrAvatar: false))
+        XCTAssertTrue(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 0, lastSyncedEditedAtMs: nil, hasNameOrAvatar: true))
+        XCTAssertTrue(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 100, lastSyncedEditedAtMs: nil, hasNameOrAvatar: true))
+        XCTAssertFalse(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 100, lastSyncedEditedAtMs: 100, hasNameOrAvatar: true))
+        XCTAssertTrue(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 100, lastSyncedEditedAtMs: 40, hasNameOrAvatar: true))
+        XCTAssertTrue(ProfileShareViewModel.siblingSyncIsDue(
+            editedAtMs: 80, lastSyncedEditedAtMs: nil, hasNameOrAvatar: false),
+            "a removal has no name and no photo, and our other devices still have to hear it")
+    }
+}
+
+/// The first wait parks the walk between two contacts. Later waits return, so the restarted
+/// walk can finish without anyone sitting on its pauses.
+private final class OnePause {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var opened = false
+
+    var isWaiting: Bool { continuation != nil }
+
+    func wait() async {
+        if opened { return }
+        opened = true
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            continuation = cont
+        }
+    }
+
+    func resume() {
+        let cont = continuation
+        continuation = nil
+        cont?.resume()
     }
 }

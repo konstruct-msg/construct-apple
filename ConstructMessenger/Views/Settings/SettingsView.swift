@@ -91,6 +91,9 @@ struct SettingsView: View {
                     viewModel.loadUserInfo(from: authViewModel)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .ownProfileDidChange)) { _ in
+                viewModel.loadUserInfo(from: authViewModel)
+            }
             .task { await recoveryVM.loadStatus() }
             .sheet(isPresented: $showingRecoverySetup) {
                 RecoverySetupView()

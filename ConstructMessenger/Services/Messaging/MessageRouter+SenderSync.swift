@@ -97,6 +97,18 @@ extension MessageRouter {
             }
             return
         }
+        // Our name and avatar from one of our own devices. A contact's profile arrives as their
+        // message and is applied to their row; this one was opened by a session with a device of
+        // ours, so it is our profile and belongs on our row. It is not a chat message.
+        if let frame = ChunkedMessageCodec.controlFrame(plaintext),
+           ContentTypeRouting.framedSideChannel(for: frame.contentType) == .profile {
+            if let profile = ProfileShare.read(frame.payload) {
+                ProfileSharingManager.shared.applyOwnProfile(profile, accountId: myUserId)
+            } else {
+                Log.error("SENDER_SYNC: own profile did not decode", category: "MessageRouter")
+            }
+            return
+        }
         switch chunkReassembler.assemble(data: plaintext, senderId: original.from) {
         case .incomplete:
             Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")

@@ -181,6 +181,9 @@ final class ProfileShareTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        if let id = row?.id {
+            ProfileShareViewModel.setAvatarRemoved(false, accountId: id)
+        }
         LocalRepositories.useContactsForTesting(nil)
         try await super.tearDown()
     }
@@ -274,5 +277,86 @@ final class ProfileShareTests: XCTestCase {
         XCTAssertEqual(row.resolvedDisplayName, "alice")
         row.username = ""
         XCTAssertEqual(row.resolvedDisplayName, DisplayNameGenerator.generate(from: row.id))
+    }
+
+    // MARK: - Our own profile, from one of our other devices
+
+    private var ownProfile: OwnProfileRecord? {
+        try? LocalRepositories.ownProfile.profile(accountId: row.id)
+    }
+
+    func testASiblingProfileKeepsOurUsernameAndTakesTheNewerName() {
+        let note = expectation(forNotification: .ownProfileDidChange, object: nil)
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Ada", editedAtMs: 100, avatar: .unchanged),
+            accountId: row.id
+        )
+        wait(for: [note], timeout: 1)
+        XCTAssertEqual(ownProfile?.username, "alice")
+        XCTAssertEqual(ownProfile?.displayName, "Ada")
+        XCTAssertEqual(ownProfile?.avatar, Data([1, 2, 3]))
+        XCTAssertEqual(ownProfile?.profileEditedAtMs, 100)
+    }
+
+    func testAnOlderSiblingProfileChangesNothing() {
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Ada", editedAtMs: 200, avatar: .unchanged), accountId: row.id)
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Old", editedAtMs: 100, avatar: .removed), accountId: row.id)
+        XCTAssertEqual(ownProfile?.username, "alice")
+        XCTAssertEqual(ownProfile?.displayName, "Ada")
+        XCTAssertEqual(ownProfile?.profileEditedAtMs, 200)
+        XCTAssertEqual(ownProfile?.avatar, Data([1, 2, 3]))
+    }
+
+    func testASiblingRemovalClearsOurAvatar() {
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Ada", editedAtMs: 100, avatar: .removed), accountId: row.id)
+        XCTAssertNil(ownProfile?.avatar)
+        XCTAssertEqual(ownProfile?.username, "alice")
+        XCTAssertTrue(ProfileShareViewModel.isAvatarRemoved(accountId: row.id))
+    }
+
+    func testASiblingAvatarArrivesOnlyWhileThatVersionIsStillHeld() {
+        var started: [Int64] = []
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Ada", editedAtMs: 100, avatar: .set(ref)),
+            accountId: row.id
+        ) { _, version in started.append(version) }
+        XCTAssertEqual(ownProfile?.avatar, Data([1, 2, 3]), "the photo we have stays until the new one arrives")
+        XCTAssertEqual(ownProfile?.displayName, "Ada")
+        XCTAssertEqual(ownProfile?.username, "alice")
+        XCTAssertEqual(started, [100])
+        XCTAssertFalse(ProfileShareViewModel.isAvatarRemoved(accountId: row.id))
+
+        ProfileSharingManager.shared.applyOwnProfile(
+            ProfileShare(displayName: "Ada Two", editedAtMs: 200, avatar: .unchanged), accountId: row.id)
+        ProfileSharingManager.shared.completeOwnAvatar(accountId: row.id, version: 100, data: Data([9]))
+        XCTAssertEqual(ownProfile?.avatar, Data([1, 2, 3]), "a download for the profile we have moved on from is dropped")
+        XCTAssertEqual(ownProfile?.profileEditedAtMs, 200)
+
+        ProfileSharingManager.shared.completeOwnAvatar(accountId: row.id, version: 200, data: Data([8]))
+        XCTAssertEqual(ownProfile?.avatar, Data([8]))
+        XCTAssertEqual(ownProfile?.username, "alice")
+    }
+
+    func testFillingAnEmptyUsernameDoesNotPublishAVersion() {
+        let current = OwnProfileRecord(
+            accountId: "a", username: "", displayName: "", avatar: nil, profileEditedAtMs: 0)
+        let filled = current.fillingUsername(from: "  alice  ", now: Date(timeIntervalSince1970: 50))
+        XCTAssertEqual(filled?.username, "alice")
+        XCTAssertEqual(filled?.displayName, "")
+        XCTAssertEqual(filled?.profileEditedAtMs, 0)
+        XCTAssertNil(filled?.fillingUsername(from: "alice"))
+    }
+
+    func testAUsernameRenameFollowsADisplayNameThatWasTheUsername() throws {
+        let current = OwnProfileRecord(
+            accountId: "a", username: "alice", displayName: "alice", avatar: Data([1]), profileEditedAtMs: 10)
+        let filled = try XCTUnwrap(current.fillingUsername(from: "bob", now: Date(timeIntervalSince1970: 50)))
+        XCTAssertEqual(filled.username, "bob")
+        XCTAssertEqual(filled.displayName, "bob")
+        XCTAssertEqual(filled.avatar, Data([1]))
+        XCTAssertEqual(filled.profileEditedAtMs, 50_000)
     }
 }

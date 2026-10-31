@@ -181,6 +181,90 @@ class ProfileSharingManager {
         }
     }
 
+    /// A profile opened from one of our own devices, onto our own row. Newer only, same rule as a
+    /// contact. The username stays: the profile does not carry one, and the account server does.
+    func applyOwnProfile(_ profile: ProfileShare, accountId: String) {
+        applyOwnProfile(profile, accountId: accountId) { ref, version in
+            Task {
+                do {
+                    let data = try await MediaManager.shared.downloadAndDecryptAvatar(
+                        mediaId: ref.mediaId, mediaUrl: ref.mediaUrl, mediaKey: ref.mediaKey
+                    )
+                    ProfileSharingManager.shared.completeOwnAvatar(accountId: accountId, version: version, data: data)
+                } catch {
+                    Log.info("Own avatar not downloaded (\(error.localizedDescription)) — the next profile from our other device names it again", category: "ProfileSharingManager")
+                }
+            }
+        }
+    }
+
+    /// `startDownload` is what happens to an avatar this profile names. A test records it; the
+    /// bytes land later through `completeOwnAvatar`, and only while `version` is still the one
+    /// held — our row has no place to keep a pending reference, so the check is the version.
+    func applyOwnProfile(
+        _ profile: ProfileShare,
+        accountId: String,
+        startDownload: (ProfileShare.AvatarRef, Int64) -> Void
+    ) {
+        let store = LocalRepositories.ownProfile
+        guard var me = try? store.profile(accountId: accountId) else {
+            Log.error("Own profile from another device, and this device has no row for \(accountId.prefix(8))…", category: "ProfileSharingManager")
+            return
+        }
+        guard let action = profile.decision(heldEditedAtMs: me.profileEditedAtMs) else {
+            Log.info("Own profile not newer than the one held — ignored", category: "ProfileSharingManager")
+            return
+        }
+        let version = Int64(clamping: profile.editedAtMs)
+        me.displayName = profile.chosenName(of: accountId) ?? ""
+        me.profileEditedAtMs = version
+        switch action {
+        case .clear:
+            me.avatar = nil
+            // This device may send the profile next. No bytes without this flag would leave the
+            // photo unchanged at every contact, so a removal our other device published would
+            // not travel any further.
+            ProfileShareViewModel.setAvatarRemoved(true, accountId: accountId)
+        case .download:
+            // Cleared before the bytes arrive. A name edited here in the meantime must say
+            // "unchanged", not "removed": the removal flag is this device's own tap.
+            ProfileShareViewModel.setAvatarRemoved(false, accountId: accountId)
+        case .keep:
+            break
+        }
+        do {
+            try store.save(me)
+        } catch {
+            Log.error("Own profile not saved: \(error)", category: "ProfileSharingManager")
+            return
+        }
+        Log.info("Own profile applied (editedAt=\(profile.editedAtMs))", category: "ProfileSharingManager")
+        NotificationCenter.default.post(name: .ownProfileDidChange, object: nil)
+        if case .download(let ref) = action {
+            startDownload(ref, version)
+        }
+    }
+
+    /// The avatar a sibling's profile named. Written only while `version` is still the one held:
+    /// a newer profile that arrived during the download wins, and these bytes are dropped.
+    func completeOwnAvatar(accountId: String, version: Int64, data: Data) {
+        let store = LocalRepositories.ownProfile
+        guard var me = try? store.profile(accountId: accountId), me.profileEditedAtMs == version else {
+            Log.info("Own avatar arrived after a newer profile — not used", category: "ProfileSharingManager")
+            return
+        }
+        me.avatar = data
+        do {
+            try store.save(me)
+        } catch {
+            Log.error("Own avatar not saved: \(error)", category: "ProfileSharingManager")
+            return
+        }
+        ProfileShareViewModel.setAvatarRemoved(false, accountId: accountId)
+        NotificationCenter.default.post(name: .ownProfileDidChange, object: nil)
+        Log.info("Own avatar saved", category: "ProfileSharingManager")
+    }
+
     /// How long a pending avatar is worth asking for: the media store deletes everything after
     /// `MEDIA_FILE_TTL_SECONDS` (7 days), and an avatar is media like any other.
     static let pendingAvatarLifetime: TimeInterval = 7 * 24 * 3600
