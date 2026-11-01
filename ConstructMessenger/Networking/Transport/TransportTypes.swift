@@ -107,7 +107,7 @@ enum TransportState: Equatable, Sendable {
     ///
     /// `softFails` counts consecutive foreground soft failures (stream timeout, unknown transport
     /// error) per channel; see `TransportConfig.veilSoftFailThreshold`.
-    case veilActive(relay: String, port: UInt16, since: Date, softFails: SoftFails = SoftFails())
+    case veilActive(relay: String, port: UInt16, since: Date, softFails: SoftFails = SoftFails(), method: VeilMethod? = nil)
 
     /// All probing attempts failed; suspended until `until`. Then we drop back to direct.
     case veilCooldown(until: Date)
@@ -125,7 +125,7 @@ enum TransportState: Equatable, Sendable {
     /// The current relay address, if any.
     var currentRelay: String? {
         switch self {
-        case .veilActive(let r, _, _, _):
+        case .veilActive(let r, _, _, _, _):
             return r
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
@@ -135,10 +135,36 @@ enum TransportState: Equatable, Sendable {
     /// The current VEIL proxy port, if any (nil when no proxy is running).
     var veilPort: UInt16? {
         switch self {
-        case .veilActive(_, let p, _, _):
+        case .veilActive(_, let p, _, _, _):
             return p
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
+        }
+    }
+
+    /// The actual probe winner, carried from the runtime rather than inferred from relay config.
+    var veilMethod: VeilMethod? {
+        guard case .veilActive(_, _, _, _, let method) = self else { return nil }
+        return method
+    }
+
+    var isOnVeilCooldown: Bool {
+        if case .veilCooldown = self { return true }
+        return false
+    }
+
+    var trafficPath: TrafficPath {
+        switch self {
+        case .veilActive(let relay, _, _, _, .webTunnel):
+            return .veilWebTunnel(relay: relay)
+        case .veilActive(let relay, _, _, _, _):
+            return .veilFront(relay: relay)
+        case .veilProbing:
+            return .veilConnecting
+        case .veilCooldown:
+            return .veilCooldown
+        case .offline, .direct:
+            return .direct
         }
     }
 
@@ -148,7 +174,7 @@ enum TransportState: Equatable, Sendable {
         case .offline:                              return "offline"
         case .direct(let f):                        return "direct(fails=\(f))"
         case .veilProbing:                           return "veil-probing"
-        case .veilActive(let r, _, _, _):            return "veil-active(\(r))"
+        case .veilActive(let r, _, _, _, _):         return "veil-active(\(r))"
         case .veilCooldown(let until):               return "veil-cooldown(until=\(Int(until.timeIntervalSinceNow))s)"
         }
     }
@@ -268,7 +294,7 @@ enum TransportEvent: Sendable, Equatable {
 
     /// Effector reports the proxy successfully bound a port for `relay`.
     /// `restarted` is true when a fresh proxy instance was started (port may be reused).
-    case proxyStarted(relay: String, port: UInt16, restarted: Bool)
+    case proxyStarted(relay: String, port: UInt16, restarted: Bool, method: VeilMethod? = nil)
 
     /// Effector reports proxy start failed. `relay` may be nil if no relay was selectable.
     case proxyStartFailed(relay: String?, reason: String)

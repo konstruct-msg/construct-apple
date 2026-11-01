@@ -865,7 +865,8 @@ final class MessageStreamManager {
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with VEIL") {
                     // Route the failure through the FSM so it decides VEIL escalation / relay rotation.
-                    let kind = RPCFailureClassifier.classify(rpcError)
+                    let method = routingKeyAtLoopStart.hasPrefix("veil:") ? routerSnapshot.state.veilMethod : nil
+                    let kind = RPCFailureClassifier.classify(rpcError, method: method)
                     let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
                         ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                                relay: routerSnapshot.state.currentRelay ?? "")
@@ -934,7 +935,8 @@ final class MessageStreamManager {
                     }
                 } else {
                     // Generic stream failure → feed to the FSM.
-                    let kind = RPCFailureClassifier.classify(error)
+                    let method = routingKeyAtLoopStart.hasPrefix("veil:") ? routerSnapshot.state.veilMethod : nil
+                    let kind = RPCFailureClassifier.classify(error, method: method)
                     let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
                         ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
                                relay: routerSnapshot.state.currentRelay ?? "")

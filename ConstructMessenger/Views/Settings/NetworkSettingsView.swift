@@ -221,18 +221,15 @@ struct NetworkSettingsView: View {
                                     .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                     .foregroundStyle(pathColor(veilManager.currentTrafficPath))
                                     .accessibilityHidden(true)
-                                Text(relay.address)
+                                Text(relay)
                                     .font(CTFont.mono(NetworkSettingsLayout.relayAddressFontSize))
                                     .foregroundColor(Color.CT.textDim)
                                     .textSelection(.enabled)
                                 Spacer()
-                                let quality = veilManager.qualityForRelay(relay.address)
+                                let quality = veilManager.qualityForRelay(relay)
                                 relayBadge(label: quality.badge, color: quality.badgeColor)
-                                if relay.tlsServerName != nil {
-                                    relayBadge(label: NetworkSettingsLabels.tls, color: Color.CT.accentDim)
-                                    relayBadge(label: NetworkSettingsLabels.obfs4, color: Color.CT.accentDim)
-                                } else {
-                                    relayBadge(label: NetworkSettingsLabels.obfs4, color: Color.CT.accentDim)
+                                if let method = veilManager.activeMethod {
+                                    relayBadge(label: method.label, color: Color.CT.accentDim)
                                 }
                             }
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -406,8 +403,7 @@ struct NetworkSettingsView: View {
         veilManager.mode = newMode
         switch newMode {
         case .off:
-            // didSet already stops + notifies the transport router.
-            veilManager.stop()
+            break // didSet stops discovery and notifies the transport router.
         case .auto, .on:
             // Fetch cert/relay addresses from the server, then connect if the mode requires it.
             // Fully automatic — no coordinates or errors surface in production UI.

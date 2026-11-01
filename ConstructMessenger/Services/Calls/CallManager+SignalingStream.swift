@@ -50,11 +50,6 @@ extension CallManager {
                 PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
                 Log.info("Signaling stream open timed out — attempting ICE fast-failover (call_id=\(metricsLabel)…)", category: "Calls")
 
-                // If ICE is running but on cooldown, clear cooldown: direct path is likely blocked.
-                if VeilProxyManager.shared.isRunning, VeilProxyManager.shared.isOnCooldown {
-                    VeilProxyManager.shared.clearCooldown()
-                }
-
                 // Only restart if this stream is still the active one.
                 guard self.active === active, active.stream === stream else { return }
                 active.stream?.close()

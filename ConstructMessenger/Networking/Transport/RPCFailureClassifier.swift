@@ -27,7 +27,7 @@ protocol ApplicationLayerError: Error {}
 
 enum RPCFailureClassifier {
     /// Classify any error thrown by a gRPC call.
-    static func classify(_ error: Error) -> RPCFailureKind {
+    static func classify(_ error: Error, method: VeilMethod? = nil) -> RPCFailureKind {
         if error is CancellationError { return .transientCancellation }
         // Our own deadline elapsed with no answer. Not "the connection is healthy": a relay that
         // accepts the connection and carries nothing looks exactly like this, and it is the case
@@ -42,7 +42,7 @@ enum RPCFailureClassifier {
         // `.transportUnknown`.
         if error is ApplicationLayerError { return .applicationError }
 
-        if let reason = VeilFailurePolicy.classify(error) {
+        if let reason = VeilFailurePolicy.classify(error, method: method) {
             return translate(reason)
         }
 

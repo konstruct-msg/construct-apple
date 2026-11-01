@@ -12,11 +12,6 @@ import GRPCCore
 
 final class VeilFailurePolicyTests: XCTestCase {
 
-    override func tearDown() {
-        VeilFailurePolicy.webTunnelActive = false
-        super.tearDown()
-    }
-    
     // MARK: - Helper
     
     private func makeRPCError(code: RPCError.Code, message: String) -> RPCError {
@@ -40,23 +35,20 @@ final class VeilFailurePolicyTests: XCTestCase {
     // MARK: - Classification: WebTunnel Blocked
     
     func testClassify_WebTunnelBlocked_NonHttpUpgrade() {
-        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found)")
-        let reason = VeilFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error, method: .webTunnel)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_HTTPStatusCode() {
-        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "HTTP Status Code: 403 Forbidden")
-        let reason = VeilFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error, method: .webTunnel)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_UnexpectedHttp() {
-        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "Unexpected HTTP response from upstream")
-        let reason = VeilFailurePolicy.classify(error)
+        let reason = VeilFailurePolicy.classify(error, method: .webTunnel)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
@@ -64,9 +56,8 @@ final class VeilFailurePolicyTests: XCTestCase {
     /// tunnel, and the tunnel was torn down as "WebTunnel blocked". Without WebTunnel a status
     /// code is the server's answer, and the transport is fine.
     func testA404OverVeilFrontIsTheServersAnswerNotABlock() {
-        VeilFailurePolicy.webTunnelActive = false
         let error = makeRPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found).")
-        XCTAssertNil(VeilFailurePolicy.classify(error))
+        XCTAssertNil(VeilFailurePolicy.classify(error, method: .veilFront))
         XCTAssertEqual(RPCFailureClassifier.classify(error), .applicationError, "neutral for transport health")
     }
 
