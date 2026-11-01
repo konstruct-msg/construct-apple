@@ -198,8 +198,7 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
         try run { context in
             guard let chat = try Self.row(id, in: context) else { return }
             // `messages` cascades and `otherUser` nullifies: the transcript goes, the contact stays.
-            context.delete(chat)
-            try context.saveOrThrow(category: "Chats")
+            try CoreDataMessageDeletion.delete([chat], in: context, category: "Chats")
         }
     }
 
