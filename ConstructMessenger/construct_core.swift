@@ -3641,6 +3641,13 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func openReceiving(device: String)  -> ReceivingOpenResult
     
     /**
+     * Open a sealed delivery (`SealedInner`) and return who wrote it and what it carries. The
+     * route is decided here, not by the platform. Changes nothing — the platform then opens the
+     * session or hands the body over as before.
+     */
+    func openSealed(sealedInner: Data) throws  -> OpenedSealed
+    
+    /**
      * Open a box sealed to this device's X25519 identity key (`sealed_seal_sender_cert`,
      * `seal_to_device_key`): a sender certificate, a sibling's device metadata. A box sealed to
      * another key fails with DecryptionFailed, which is how a caller finds its own copy.
@@ -4355,6 +4362,20 @@ open func openReceiving(device: String) -> ReceivingOpenResult  {
     uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(device),$0
+    )
+})
+}
+    
+    /**
+     * Open a sealed delivery (`SealedInner`) and return who wrote it and what it carries. The
+     * route is decided here, not by the platform. Changes nothing — the platform then opens the
+     * session or hands the body over as before.
+     */
+open func openSealed(sealedInner: Data)throws  -> OpenedSealed  {
+    return try  FfiConverterTypeOpenedSealed_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_sealed(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(sealedInner),$0
     )
 })
 }
@@ -11201,6 +11222,109 @@ public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OpenedSealed: Equatable, Hashable {
+    
+    /**
+     * A session envelope named the writer; `kind` 1 = ratchet wire payload, 2 = DECRYPTION_ERROR.
+     */
+    case sessionEnvelope(writerDevice: String, sessionId: String, body: Data, kind: UInt8, retired: Bool
+    )
+    /**
+     * A first flight sealed whole; `content_type` is `SealedInner.content_type`.
+     */
+    case firstFlight(writerAccount: String, writerDevice: String, certificate: SenderCertificate, trust: CertificateVerdict, firstFlightPayload: Data, contentType: UInt8
+    )
+    /**
+     * A sender certificate sealed to this device; the wire payload sits in `SealedInner.encrypted_payload`.
+     */
+    case certSealed(writerAccount: String, writerDevice: String, certificate: SenderCertificate, trust: CertificateVerdict, contentType: UInt8
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension OpenedSealed: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpenedSealed: FfiConverterRustBuffer {
+    typealias SwiftType = OpenedSealed
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpenedSealed {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .sessionEnvelope(writerDevice: try FfiConverterString.read(from: &buf), sessionId: try FfiConverterString.read(from: &buf), body: try FfiConverterData.read(from: &buf), kind: try FfiConverterUInt8.read(from: &buf), retired: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 2: return .firstFlight(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), firstFlightPayload: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        )
+        
+        case 3: return .certSealed(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OpenedSealed, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .sessionEnvelope(writerDevice,sessionId,body,kind,retired):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(writerDevice, into: &buf)
+            FfiConverterString.write(sessionId, into: &buf)
+            FfiConverterData.write(body, into: &buf)
+            FfiConverterUInt8.write(kind, into: &buf)
+            FfiConverterBool.write(retired, into: &buf)
+            
+        
+        case let .firstFlight(writerAccount,writerDevice,certificate,trust,firstFlightPayload,contentType):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(writerAccount, into: &buf)
+            FfiConverterString.write(writerDevice, into: &buf)
+            FfiConverterTypeSenderCertificate.write(certificate, into: &buf)
+            FfiConverterTypeCertificateVerdict.write(trust, into: &buf)
+            FfiConverterData.write(firstFlightPayload, into: &buf)
+            FfiConverterUInt8.write(contentType, into: &buf)
+            
+        
+        case let .certSealed(writerAccount,writerDevice,certificate,trust,contentType):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(writerAccount, into: &buf)
+            FfiConverterString.write(writerDevice, into: &buf)
+            FfiConverterTypeSenderCertificate.write(certificate, into: &buf)
+            FfiConverterTypeCertificateVerdict.write(trust, into: &buf)
+            FfiConverterUInt8.write(contentType, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpenedSealed_lift(_ buf: RustBuffer) throws -> OpenedSealed {
+    return try FfiConverterTypeOpenedSealed.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpenedSealed_lower(_ value: OpenedSealed) -> RustBuffer {
+    return FfiConverterTypeOpenedSealed.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * What a sealed delivery is, decided without acting on it.
  */
@@ -14847,6 +14971,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 32397) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_sealed() != 64134) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_sealed_to_device() != 63797) {

@@ -22,7 +22,6 @@
 
 import XCTest
 import CoreData
-import CryptoKit
 @testable import Construct_Messenger
 
 @MainActor
@@ -39,12 +38,9 @@ final class IdentityKeyRetentionTests: XCTestCase {
         try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
-        // The certificate verdict is the core's; unit tests do not start CryptoManager's.
-        StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
     }
 
     override func tearDown() async throws {
-        StealthSenderService.shared.verdictCoreForTesting = nil
         LocalRepositories.useContactsForTesting(nil)
         container = nil
         try await super.tearDown()
@@ -234,32 +230,24 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId)
         XCTAssertNil(storedKey(for: peerId))
 
-        let signingKey = Curve25519.Signing.PrivateKey()
-        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
-        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
-
-        var cert = Shared_Proto_Core_V1_SenderCertificate()
-        cert.senderUserID = peerId
-        cert.senderDomain = "construct.example"
-        cert.senderIdentityKey = fetchedKey
-        cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
-        let now = Int64(Date().timeIntervalSince1970)
-        // Expired past what the relay holds a message for (7 days), so the core calls it expired
-        // rather than still openable.
-        cert.issuedAt = now - 9 * 86_400
-        cert.expiresAt = now - 8 * 86_400
-        let payload = legacyCertPayload(
-            userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
-            deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
+        let cert = SenderCertificate(
+            userId: peerId,
+            domain: "construct.example",
+            identityKey: fetchedKey,
+            deviceId: deriveDeviceId(identityPublicKey: fetchedKey),
+            issuedAt: 0,
+            expiresAt: 0,
+            signature: Data(),
+            serverKid: Data(),
+            serverSignatureHybrid: Data()
         )
-        cert.serverSignature = try! signingKey.signature(for: payload)
 
         XCTAssertEqual(
-            StealthSenderService.shared.attest(cert),
+            StealthSenderService.shared.attest(cert, verdict: .expired),
             .unvouched(.expired),
             "expiry still governs delivery trust — we are only pinning the key"
         )
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, verdict: .expired)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
@@ -268,11 +256,19 @@ final class IdentityKeyRetentionTests: XCTestCase {
     func testUnsignedCert_DoesNotPin() {
         makeUser(id: peerId)
 
-        var cert = Shared_Proto_Core_V1_SenderCertificate()
-        cert.senderUserID = peerId
-        cert.senderIdentityKey = fetchedKey
+        let cert = SenderCertificate(
+            userId: peerId,
+            domain: "",
+            identityKey: fetchedKey,
+            deviceId: "",
+            issuedAt: 0,
+            expiresAt: 0,
+            signature: Data(),
+            serverKid: Data(),
+            serverSignatureHybrid: Data()
+        )
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, verdict: .badSignature)
 
         XCTAssertNil(storedKey(for: peerId), "an unvouched identity key is not TOFU")
     }
@@ -285,28 +281,22 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId)
         XCTAssertNil(storedKey(for: peerId))
 
-        let signingKey = Curve25519.Signing.PrivateKey()
-        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
-        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
-
-        var cert = Shared_Proto_Core_V1_SenderCertificate()
-        cert.senderUserID = peerId
-        cert.senderDomain = "construct.example"
-        cert.senderIdentityKey = fetchedKey
-        cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
-        let now = Int64(Date().timeIntervalSince1970)
-        cert.issuedAt = now - 60
-        cert.expiresAt = now + 86_400
-        let payload = legacyCertPayload(
-            userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
-            deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
+        let cert = SenderCertificate(
+            userId: peerId,
+            domain: "construct.example",
+            identityKey: fetchedKey,
+            deviceId: deriveDeviceId(identityPublicKey: fetchedKey),
+            issuedAt: 0,
+            expiresAt: 0,
+            signature: Data(),
+            serverKid: Data(),
+            serverSignatureHybrid: Data()
         )
-        cert.serverSignature = try! signingKey.signature(for: payload)
 
-        // The precondition of the shortcut in `resolveSender`.
-        XCTAssertEqual(StealthSenderService.shared.attest(cert), .vouched(.signature))
+        // The precondition of the pin in `resolveSender`.
+        XCTAssertEqual(StealthSenderService.shared.attest(cert, verdict: .vouched), .vouched(.signature))
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert, verdict: .vouched)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
     }
@@ -318,33 +308,25 @@ final class IdentityKeyRetentionTests: XCTestCase {
     func testASecondCertDoesNotOverwriteAPinnedKey() {
         makeUser(id: peerId)
 
-        let signingKey = Curve25519.Signing.PrivateKey()
-        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signingKey.publicKey.rawRepresentation]
-        defer { StealthSenderService.shared.extraTrustedBundleKeysForTesting = [] }
-
-        func signedCert(identityKey: Data) -> Shared_Proto_Core_V1_SenderCertificate {
-            var cert = Shared_Proto_Core_V1_SenderCertificate()
-            cert.senderUserID = peerId
-            cert.senderDomain = "construct.example"
-            cert.senderIdentityKey = identityKey
-            cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
-            let now = Int64(Date().timeIntervalSince1970)
-            cert.issuedAt = now - 60
-            cert.expiresAt = now + 86_400
-            cert.serverSignature = try! signingKey.signature(
-                for: legacyCertPayload(
-                    userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
-                    deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
-                )
+        func cert(identityKey: Data) -> SenderCertificate {
+            SenderCertificate(
+                userId: peerId,
+                domain: "construct.example",
+                identityKey: identityKey,
+                deviceId: deriveDeviceId(identityPublicKey: identityKey),
+                issuedAt: 0,
+                expiresAt: 0,
+                signature: Data(),
+                serverKid: Data(),
+                serverSignatureHybrid: Data()
             )
-            return cert
         }
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: fetchedKey))
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert(identityKey: fetchedKey), verdict: .vouched)
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
 
         let impostor = Data(repeating: 0xAB, count: 32)
-        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: impostor))
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert(identityKey: impostor), verdict: .vouched)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey, "first key wins — this is TOFU, not TOEU")
     }

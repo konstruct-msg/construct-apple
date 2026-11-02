@@ -57,7 +57,7 @@ struct ChatMessage: Codable, Identifiable {
     /// core). Not persisted — see `CodingKeys`.
     var senderCertificate: SenderCertificate? = nil
 
-    /// The session whose envelope this message came in (`CryptoManager.openEnvelope`) — set
+    /// The session whose envelope this message came in (`CryptoManager.openSealed`) — set
     /// instead of `senderCertificate`, and handed to the core so an unreadable message is
     /// answered along the same pair. Not persisted, for the same reason as the certificate.
     var envelopeSession: String? = nil

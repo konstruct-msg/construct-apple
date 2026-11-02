@@ -2,67 +2,28 @@
 //  StealthSenderService+Unseal.swift
 //  Construct Messenger
 //
-//  Seal/unseal of the sender certificate and verify/attest (trust label).
+//  Seal of the sender certificate, and the trust label layered over the core's verdict.
 //
-//  Moved verbatim out of StealthSenderService.swift (TODO 184); behaviour unchanged.
+//  The open half moved into the core: `open_sealed` (TODO 140) unseals the certificate and
+//  returns its `CertificateVerdict`. What stays here is the seal (send path) and the trust
+//  label that layers the local KT anchor over that verdict.
 //
 
 import CoreData
 import Foundation
-import SwiftProtobuf
 
 extension StealthSenderService {
 
-    // MARK: - Seal / unseal
+    // MARK: - Seal
     //
-    // The box is the core's (`sealed_seal_sender_cert`, `OrchestratorCore.open_sealed_to_device`).
-    // Until 2026-09-29 this file carried its own CryptoKit copy of it, and opening needed our
-    // identity private key read from the Keychain on every sealed message.
+    // The box is the core's (`sealed_seal_sender_cert`). Until 2026-09-29 this file carried its
+    // own CryptoKit copy of it, and opening needed our identity private key read from the
+    // Keychain on every sealed message.
 
     /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
     /// X25519 identity key.
     func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
         try sealedSealSenderCert(certBytes: certBytes, recipientIdentityKey: recipientIdentityKey)
-    }
-
-    /// Opens a sealed sender certificate with this device's identity key, inside the core.
-    func unsealSenderCert(_ sealedBox: Data) throws -> Shared_Proto_Core_V1_SenderCertificate {
-        let certBytes = try CryptoManager.shared.openSealedToDevice(sealedBox)
-        return try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certBytes)
-    }
-
-
-
-    /// The core's verdict on the certificate, as this app's label. Until 2026-10-03 this was an
-    /// Ed25519 check written here, beside the one the core makes before opening a session from the
-    /// same certificate; the two disagreed on age (the core allows the relay's 7 days) and on the
-    /// device (the core checks the key derives to it). One check now, the core's, which also knows
-    /// the delegated hybrid keys (`decisions/server-keys-rooted-offline-and-hybrid.md`).
-    ///
-    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check with"
-    /// apart from "signature genuinely bad" (the 2026-07-05 nil-key failure was mislogged as
-    /// `signature invalid` when they were conflated).
-    func coreVerdict(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> CertificateVerdict {
-        #if DEBUG
-        let extra = extraTrustedBundleKeysForTesting
-        if let core = verdictCoreForTesting {
-            core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes() + extra)
-            return core.certificateVerdict(certificate: SenderCertificate(proto: cert))
-        }
-        #else
-        let extra: [Data] = []
-        #endif
-        return CryptoManager.shared.certificateVerdict(SenderCertificate(proto: cert), extraKeys: extra)
-            ?? .noKey
-    }
-
-    /// The signature half of the label: what the core says, expiry aside.
-    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        switch coreVerdict(cert) {
-        case .vouched, .expired: return .vouched(.signature)
-        case .noKey: return .unvouched(.noKey)
-        case .badSignature: return .unvouched(.badSignature)
-        }
     }
 
     /// The recipient's locally stored, previously-KT-verified identity key for `userId`
@@ -77,22 +38,23 @@ extension StealthSenderService {
         return (key, contact.ktStatus)
     }
 
-    /// The full attestation verdict for an unsealed certificate. Never gates delivery —
-    /// only labels trust. Ladder, strongest-first (sealed-sender-resilience §2 lever C):
+    /// The trust label for an opened certificate. `verdict` is the core's (`open_sealed`,
+    /// `certificate_verdict`); this only layers the local KT anchor on top of it. Never gates
+    /// delivery — only labels trust. Ladder, strongest-first (sealed-sender-resilience §2
+    /// lever C):
     ///  1. Expiry: an expired cert is `.unvouched(.expired)` regardless of KT match — the
     ///     cert TTL bounds replay of an old sealed message (delivery still proceeds).
     ///  2. KT: cert identity key == our KT-`.verified` `knownIdentityKey` for the sender →
     ///     `.vouched(.kt)`, no bundle key involved at all. A `.keyChanged`/`.failed`/
     ///     `.unverified` status does NOT vouch even on a key match (that is exactly the
     ///     MITM-suspicion case KT exists to catch).
-    ///  3. Signature (lever B): fall back to the bundle-key check for a first contact.
-    func attest(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        let verdict = coreVerdict(cert)
+    ///  3. Signature (lever B): fall back to the core's signature verdict for a first contact.
+    func attest(_ cert: SenderCertificate, verdict: CertificateVerdict) -> SenderTrust {
         if verdict == .expired { return .unvouched(.expired) }
 
-        if let kt = ktVerifiedIdentity(for: cert.senderUserID),
+        if let kt = ktVerifiedIdentity(for: cert.userId),
            kt.status == .verified,
-           kt.key == cert.senderIdentityKey {
+           kt.key == cert.identityKey {
             return .vouched(.kt)
         }
 

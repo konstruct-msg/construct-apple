@@ -94,14 +94,6 @@ extension CryptoManager {
         return core.sealEnvelope(contactId: contactId, wirePayload: wirePayload)
     }
 
-    /// Who wrote a session envelope, found by its tag, and its opened body; `nil` when no pair this
-    /// device holds matches.
-    func openEnvelope(_ envelope: Data) -> EnvelopeOpened? {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        return orchestratorCore?.openEnvelope(envelope: envelope)
-    }
-
     /// Seal a first flight — a wire payload written on a session `deviceId` has not answered yet —
     /// whole, with the sender certificate, under the handshake's hybrid key
     /// (`decisions/first-flight-sealed-whole.md`). `nil` when the payload is not a first flight: it
@@ -127,13 +119,15 @@ extension CryptoManager {
         )
     }
 
-    /// Open a `SealedInner.first_flight` sealed to this device: the certificate and the wire
-    /// payload, as a first message always carried them.
-    func openFirstFlight(_ sealed: Data) throws -> FirstFlightOpened {
+    /// Open a sealed delivery (`SealedInner`) and return who wrote it and what it carries. The
+    /// route and the certificate verdict are the core's (`open_sealed`); the verdict needs the
+    /// server keys, so they are handed over first, as every verdict does.
+    func openSealed(sealedInner: Data) throws -> OpenedSealed {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        return try core.openFirstFlight(sealed: sealed)
+        handOverTrustedServerKeys(to: core)
+        return try core.openSealed(sealedInner: sealedInner)
     }
 
     /// How late messages have arrived since launch (PQR-4) — `nil` before the core is up.
@@ -185,18 +179,6 @@ extension CryptoManager {
         // Delegations of the server's hybrid keys. The core keeps only those a root pinned in this
         // build signed, so where they came from does not matter; one it already holds is kept once.
         _ = core.admitServerDelegations(delegations: ServerKeyManager.cachedServerDelegations())
-    }
-
-    /// The core's verdict on a sender certificate — signature, device and age, judged as an open
-    /// would (`decisions/server-keys-rooted-offline-and-hybrid.md`). Until 2026-10-03 this app
-    /// checked the Ed25519 signature itself, beside the core's check, and the two disagreed on age
-    /// and on the device. `nil` only when there is no core to ask. `extraKeys` is a test seam.
-    func certificateVerdict(_ certificate: SenderCertificate, extraKeys: [Data] = []) -> CertificateVerdict? {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return nil }
-        handOverTrustedServerKeys(to: core, extraKeys: extraKeys)
-        return core.certificateVerdict(certificate: certificate)
     }
 
     /// The core's verdicts on a bundle's KT proofs. `nil` only when there is no core to ask.
