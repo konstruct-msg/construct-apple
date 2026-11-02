@@ -369,11 +369,7 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
             req.predicate = NSPredicate(format: "id IN %@", Set(ids.map { $0.lowercased() }).union(ids))
             let rows = try context.fetch(req)
             guard !rows.isEmpty else { return }
-            for row in rows {
-                MessageDisplayCache.shared.evict(messageId: row.id)
-                context.delete(row)
-            }
-            try context.saveOrThrow(category: "Messages")
+            try CoreDataMessageDeletion.delete(rows, in: context, category: "Messages")
         }
     }
 

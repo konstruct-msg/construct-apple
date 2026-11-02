@@ -321,8 +321,7 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
             req.fetchLimit = 1
             guard let user = try context.fetch(req).first else { return false }
             // `chats` cascades, and each chat's `messages` with it.
-            context.delete(user)
-            try context.saveOrThrow(category: "Contacts")
+            try CoreDataMessageDeletion.delete([user], in: context, category: "Contacts")
             return true
         }
     }

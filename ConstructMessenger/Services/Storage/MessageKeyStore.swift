@@ -61,7 +61,7 @@ final class MessageKeyStore: @unchecked Sendable {
     /// - Parameters:
     ///   - messageId: Unique message identifier (UUID string).
     ///   - key:       32-byte storage key (from `DecryptedMessageResult.storageKey`).
-    ///   - contactId: Contact/user identifier — used for bulk-delete on contact removal.
+    ///   - contactId: Contact/user identifier retained in the legacy backup schema.
     func store(messageId: String, key: Data, contactId: String) {
         guard !key.isEmpty else { return }
         queue.async { [weak self] in
@@ -86,21 +86,46 @@ final class MessageKeyStore: @unchecked Sendable {
         queue.sync { self.executeFetch(messageId: messageId) }
     }
 
-    /// Delete the storage key for a single message (forward-secret deletion).
+    /// Single-key convenience for cleanup. Production deletion passes the saved row references
+    /// to the throwing batch operation, so failure cannot be mistaken for a completed deletion.
     func delete(messageId: String) {
-        queue.async { [weak self] in
-            self?.executeDelete(messageId: messageId)
+        do {
+            try delete(messageIds: [messageId])
+        } catch {
+            Log.error("MessageKeyStore: deletion failed: \(error)", category: "MessageKeyStore")
         }
     }
 
-    /// Delete all storage keys for a contact (e.g. on contact removal or chat wipe).
-    func deleteAll(for contactId: String) {
-        queue.async { [weak self] in
-            self?.executeDeleteAll(contactId: contactId)
+    /// Only the keys of rows actually deleted, synchronously and in one SQLite transaction.
+    /// A chat/peer id is not a key reference: another chat of the same peer may still use keys.
+    func delete(messageIds: Set<String>) throws {
+        guard !messageIds.isEmpty else { return }
+        try queue.sync {
+            guard let db = database() else { throw DeletionError.databaseUnavailable }
+            func check(_ result: Int32, expected: Int32 = SQLITE_OK) throws {
+                guard result == expected else { throw DeletionError.sqlite(code: result) }
+            }
+            try check(sqlite3_exec(db, "BEGIN IMMEDIATE;", nil, nil, nil))
+            var committed = false
+            defer { if !committed { sqlite3_exec(db, "ROLLBACK;", nil, nil, nil) } }
+            var statement: OpaquePointer?
+            try check(sqlite3_prepare_v2(db, "DELETE FROM message_keys WHERE message_id = ?;", -1, &statement, nil))
+            defer { sqlite3_finalize(statement) }
+            for id in messageIds {
+                try check(sqlite3_reset(statement))
+                try check(sqlite3_bind_text(statement, 1, id, -1, SQLITE_TRANSIENT))
+                try check(sqlite3_step(statement), expected: SQLITE_DONE)
+            }
+            try check(sqlite3_exec(db, "COMMIT;", nil, nil, nil))
+            committed = true
         }
     }
 
-    /// VACUUM the database. Call periodically (e.g. on app backgrounding) after large deletions.
+    enum DeletionError: Error {
+        case databaseUnavailable
+        case sqlite(code: Int32)
+    }
+
     /// Close the database so its file can be removed with the account; the next call opens a
     /// fresh, empty one (`database()`). `LocalDataWipe` only.
     func close() {
@@ -353,26 +378,6 @@ final class MessageKeyStore: @unchecked Sendable {
         }
     }
     #endif
-
-    private func executeDelete(messageId: String) {
-        guard let db = database() else { return }
-        let sql = "DELETE FROM message_keys WHERE message_id = ?;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, messageId, -1, SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
-    }
-
-    private func executeDeleteAll(contactId: String) {
-        guard let db = database() else { return }
-        let sql = "DELETE FROM message_keys WHERE contact_id = ?;"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, contactId, -1, SQLITE_TRANSIENT)
-        sqlite3_step(stmt)
-    }
 
     // MARK: - Helpers
 
