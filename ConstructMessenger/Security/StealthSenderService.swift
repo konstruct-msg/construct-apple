@@ -105,19 +105,6 @@ final class StealthSenderService: SealedSenderResolving {
     // MARK: - Verify / attest (stored state and test seams)
 
     #if DEBUG
-    /// Test seam: additional trusted bundle keys (raw 32-byte) handed to the core beside the real
-    /// ones, to exercise the pin/rotation path without shipping a private key for a real pin.
-    /// Empty in production paths.
-    var extraTrustedBundleKeysForTesting: [Data] = []
-    #endif
-
-    #if DEBUG
-    /// Test seam: the core to ask instead of `CryptoManager.shared`'s, which unit tests do not
-    /// start. A real core either way — the verdict is never stubbed.
-    var verdictCoreForTesting: OrchestratorCore?
-    #endif
-
-    #if DEBUG
     /// Test seam: overrides the KT-verified-identity lookup so unit tests exercise the KT
     /// cross-check without a Core Data stack. `nil` (default) uses the real `User` store.
     var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
@@ -239,7 +226,7 @@ struct ResolvedSender: Equatable {
     }
 }
 
-/// What `CryptoManager.openEnvelope` gave back, as the receive path needs it.
+/// A session envelope opened by `CryptoManager.openSealed`, as the receive path needs it.
 struct OpenedSessionEnvelope: Equatable {
     let sessionId: String
     let body: Data
