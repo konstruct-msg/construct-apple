@@ -47,6 +47,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         // bearer ticket above when both are present. Empty until bootstrap completes.
         let capabilityV2 = (VeilProxyStore.veilFrontEnabled ? relay.veilCapabilityV2 : nil) ?? ""
         let veilSkHex = (VeilProxyStore.veilFrontEnabled ? relay.veilSkHex : nil) ?? ""
+        let scoringKey = VeilScoringKeyStore.shared.scoringKey
 
         // Diagnose veil_start=-1 failures by logging what we hand to Rust.
         // Empty bundle/SPKI/SNI are the most common causes of fail-before-network
@@ -86,24 +87,29 @@ final class NativeVeilRuntime: VeilProxyRuntime {
                                     capabilityV2.withCString { capV2Ptr in
                                         veilSkHex.withCString { skPtr in
                                             withScoresPath(scoresPath) { scoresPtr in
-                                                fingerprint.withUnsafeBytes { fpBuf -> Int32 in
-                                                    let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
-                                                    let req = VeilStartRequest(
-                                                        relay_addr: addrPtr,
-                                                        bundle: bundlePtr,
-                                                        tls_sni: sniPtr,
-                                                        spki_hex: spkiPtr,
-                                                        host_header: hostPtr,
-                                                        wt_base_path: wtPathPtr,
-                                                        network_fingerprint: fpBase,
-                                                        network_fingerprint_len: fingerprint.count,
-                                                        allowed_methods: Self.allowedMethodsBitmask,
-                                                        scores_path: scoresPtr,
-                                                        veil_front_ticket_b64: ticketPtr,
-                                                        veil_capability_v2_b64: capV2Ptr,
-                                                        veil_sk_hex: skPtr
-                                                    )
-                                                    return veil_start(req, &out)
+                                                scoringKey.withUnsafeBytes { scoreKeyBuf -> Int32 in
+                                                    fingerprint.withUnsafeBytes { fpBuf -> Int32 in
+                                                        let fpBase = fpBuf.bindMemory(to: UInt8.self).baseAddress
+                                                        let scoreKeyBase = scoreKeyBuf.bindMemory(to: UInt8.self).baseAddress
+                                                        let req = VeilStartRequest(
+                                                            relay_addr: addrPtr,
+                                                            bundle: bundlePtr,
+                                                            tls_sni: sniPtr,
+                                                            spki_hex: spkiPtr,
+                                                            host_header: hostPtr,
+                                                            wt_base_path: wtPathPtr,
+                                                            network_fingerprint: fpBase,
+                                                            network_fingerprint_len: fingerprint.count,
+                                                            allowed_methods: Self.allowedMethodsBitmask,
+                                                            scores_path: scoresPtr,
+                                                            veil_front_ticket_b64: ticketPtr,
+                                                            veil_capability_v2_b64: capV2Ptr,
+                                                            veil_sk_hex: skPtr,
+                                                            scoring_key: scoreKeyBase,
+                                                            scoring_key_len: scoringKey.count
+                                                        )
+                                                        return veil_start(req, &out)
+                                                    }
                                                 }
                                             }
                                         }
