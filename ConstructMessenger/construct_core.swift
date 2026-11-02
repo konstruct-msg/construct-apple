@@ -11238,7 +11238,7 @@ public enum OpenedSealed: Equatable, Hashable {
     /**
      * A sender certificate sealed to this device; the wire payload sits in `SealedInner.encrypted_payload`.
      */
-    case certSealed(writerAccount: String, writerDevice: String, certificate: SenderCertificate, trust: CertificateVerdict, contentType: UInt8
+    case certSealed(writerAccount: String, writerDevice: String, certificate: SenderCertificate, trust: CertificateVerdict, contentType: UInt8, encryptedPayload: Data
     )
 
 
@@ -11265,7 +11265,7 @@ public struct FfiConverterTypeOpenedSealed: FfiConverterRustBuffer {
         case 2: return .firstFlight(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), firstFlightPayload: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 3: return .certSealed(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 3: return .certSealed(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), encryptedPayload: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -11295,13 +11295,14 @@ public struct FfiConverterTypeOpenedSealed: FfiConverterRustBuffer {
             FfiConverterUInt8.write(contentType, into: &buf)
             
         
-        case let .certSealed(writerAccount,writerDevice,certificate,trust,contentType):
+        case let .certSealed(writerAccount,writerDevice,certificate,trust,contentType,encryptedPayload):
             writeInt(&buf, Int32(3))
             FfiConverterString.write(writerAccount, into: &buf)
             FfiConverterString.write(writerDevice, into: &buf)
             FfiConverterTypeSenderCertificate.write(certificate, into: &buf)
             FfiConverterTypeCertificateVerdict.write(trust, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
+            FfiConverterData.write(encryptedPayload, into: &buf)
             
         }
     }

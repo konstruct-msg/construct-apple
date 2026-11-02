@@ -153,7 +153,7 @@ extension StealthSenderService {
                     contentType: contentType,
                     firstFlightPayload: firstFlightPayload
                 )
-            case .certSealed(let writerAccount, let writerDevice, let certificate, let verdict, let contentType):
+            case .certSealed(let writerAccount, let writerDevice, let certificate, let verdict, let contentType, _):
                 return certResolved(
                     account: writerAccount,
                     device: writerDevice,
