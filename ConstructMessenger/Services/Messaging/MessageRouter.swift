@@ -608,7 +608,7 @@ final class MessageRouter {
 
         // 3. END_SESSION (21) from a build before 2026-09-27: acknowledged and nothing else. It
         //    named no state, so nothing here could tell whether it was about the one we hold — the
-        //    decryption error below does.
+        //    decryption error below does. Receive guard until `RetiredSessionControl.removeAfter`.
         if message.isEndSession {
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             Log.info("END_SESSION from \(otherUserId.prefix(8))… — retired message type, acknowledged and ignored", category: "MessageRouter")
@@ -1119,7 +1119,7 @@ final class MessageRouter {
                 // the handshake header, and its payload is a control string. Its type rides on the
                 // unsealed content type, not in the plaintext frame, so nothing below would
                 // recognise it — a stand run on 2026-09-26 showed it landing in the transcript as a
-                // "$<uuid>" bubble.
+                // "$<uuid>" bubble. Receive guard until `RetiredSessionControl.removeAfter`.
                 if message.isSessionResetInit {
                     Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24) — \(message.id.prefix(8))…", category: "MessageRouter")
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)

@@ -102,6 +102,7 @@ extension MessageRouter {
             case Shared_Proto_Core_V1_ContentType.sessionPing.byte, Shared_Proto_Core_V1_ContentType.sessionReady.byte:
                 // Ping / ready from a build before 2026-09-27: they closed a confirm window that
                 // no longer exists.
+                // Receive guard until `RetiredSessionControl.removeAfter`.
                 Log.info("Session control ct=\(contentType) from \(otherUserId.prefix(8))… discarded — nothing waits for it", category: "MessageRouter")
             default:
                 Log.error("Control frame ct=\(contentType) from \(otherUserId.prefix(8))… has no handler — dropped", category: "MessageRouter")

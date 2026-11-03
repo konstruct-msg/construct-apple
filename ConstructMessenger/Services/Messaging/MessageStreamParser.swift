@@ -35,6 +35,9 @@ enum MessageStreamParser {
             // SESSION_RESET_INIT: atomic END_SESSION + new X3DH session init in one delivery.
             // Identified path only — sealed deliveries carry a generic outer content_type and
             // are handled below (real type recovered post-unseal via ContentTypeRouting).
+            // Receive guard until `RetiredSessionControl.removeAfter`: without it an identified
+            // END_SESSION falls to the generic guard below, is never yielded, and the cursor does
+            // not pass it.
             if envelope.contentType == .sessionResetInit {
                 let message = ChatMessage(
                     id: envelope.messageID,

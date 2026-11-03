@@ -81,8 +81,7 @@ extension Chat {
         guard let content = content else { return "" }
         
         // Never show session-handshake control signals as chat preview text.
-        if content.hasPrefix("__session_ready") || content.hasPrefix("session_ready_") ||
-           content.hasPrefix("__session_ping") || content.hasPrefix("__END_SESSION") {
+        if MessageContentType.isControlPayload(content) {
             return ""
         }
         

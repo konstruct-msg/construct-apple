@@ -504,6 +504,7 @@ final class MessagingServiceClient: Sendable {
                 )
             }()
             // SESSION_RESET_INIT: identified path — sealed deliveries use the generic path below.
+            // Receive guard (with END_SESSION below) until `RetiredSessionControl.removeAfter`.
             if msg.contentType == .sessionResetInit {
                 let message = ChatMessage(
                     id: msg.messageID,
