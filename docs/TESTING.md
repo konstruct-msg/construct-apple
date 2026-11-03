@@ -15,12 +15,23 @@ they lived anywhere but next to the scripts.
 scripts/test_run.sh ConstructMessengerTests/FooTests
 ```
 
-Scoped, no simulator clones (~40s vs ~65s). It separates "build did not complete" from "no test
-failed", and if the build wedges it writes a diagnosis (last command, disk, process list, `sample`
-of the build service) instead of dying silently at your timeout.
+Scoped, no simulator clones (~40s vs ~65s). Several ids are separate arguments. The last line is
+always `VERDICT: …` and the exit code follows it — read the verdict, not xcodebuild's status (the
+script kills xcodebuild after the result line, because xcodebuild can finish and not exit):
 
-Six such wedges between 2026-08-08 and 2026-08-10 cost two mutations their verification; the cause
-is not yet known, so the script captures evidence for the next one.
+| exit | verdict | meaning |
+|---|---|---|
+| 0 | `PASS n` | every test passed and every id asked for ran at least one |
+| 1 | `FAIL n` | a test failed, or the run said TEST FAILED (a crash with no failed case says so) |
+| 2 | `STALL` | no result within `STALL_SECONDS`; a diagnosis file is written |
+| 3 | `NO-BUILD` | the build did not complete — **not** a passing mutation |
+| 4 | `NO-TESTS` | zero tests ran, or a named id ran none: a misspelt class runs 0 tests and xcodebuild says TEST SUCCEEDED |
+| 5 | `USAGE` | an id with whitespace — a list that arrived as one word (zsh does not split `$TESTS`) |
+
+`scripts/test_run.sh --from-log FILE [ids…]` judges an existing log without running anything.
+
+The stall that motivated the script was found 2026-08-11 (see its header): xcodebuild finishes a
+failing run and then does not exit. The stall capture stays for whatever comes next.
 
 ## Running a mutation battery
 
@@ -56,24 +67,23 @@ Mutate the branch the tests actually execute, and record that the shadowed line 
 
 ## Counting tests
 
-`xcodebuild … test` prints a line per test, and a retried clone prints some twice. Count
-**unique**:
+`scripts/test_run.sh` counts for you (unique, case-insensitive) — prefer it. By hand, a retried
+clone prints some lines twice, so count **unique**:
 
 ```bash
-xcodebuild -scheme ConstructMessenger -destination 'platform=iOS Simulator,name=iPhone 17' test \
-  2>&1 | grep -oiE "^Test case '[^']+' passed" | sort -u | wc -l
+grep -oiE "^Test case '[^']+' passed" "$LOG" | sort -u | wc -l
 ```
 
 **`-i` is not optional.** The two run modes print different text: parallel clones print
-`Test case 'FooTests.testBar()' passed`, a `-parallel-testing-enabled NO` run prints
-`Test Case '-[ConstructMessengerTests.FooTests testBar]' passed`. Case-sensitively this command
-answers **0** for a run where everything passed — the same shape of lie as a build failure reading
-like "no test failed".
+`Test case 'FooTests.testBar()' passed`, a `-parallel-testing-enabled NO` run (the default here,
+AGENTS.md) prints `Test Case '-[ConstructMessengerTests.FooTests testBar]' passed`.
+Case-sensitively this answers **0** for a run where everything passed — the same shape of lie as
+a build failure reading like "no test failed".
 
 ## The scheme matters
 
-`ConstructMessenger` is the only scheme with the test target attached. `Construct Messenger Beta`
-also carries it; a scheme that builds the app alone would run zero tests and report success.
+`ConstructMessenger` and `Construct Messenger Beta` are the schemes with the test target attached;
+use `ConstructMessenger`. A scheme that builds the app alone would run zero tests and report success.
 
 ## What CI does and does not cover
 
