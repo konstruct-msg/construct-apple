@@ -109,8 +109,8 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
     // MARK: - An incoming envelope must not mint a row
 
-    /// The resurrection. Delete a contact, and the server keeps replaying their backlog
-    /// (`since_cursor` is not honoured); every replayed sealed envelope reached this method
+    /// The resurrection. Delete a contact, and their backlog came back on every reconnect (a
+    /// stalled cursor — decisions/stream-cursor-stall-anatomy); every replayed sealed envelope reached this method
     /// through `pinIdentity`, and each one put the row back. `IK_PIN[row_created] …
     /// source=sealed_cert` on device, 2026-08-19 — the user deleted the same contact repeatedly
     /// and it returned every time.

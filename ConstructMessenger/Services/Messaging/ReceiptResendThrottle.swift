@@ -13,8 +13,9 @@
 //    encrypt + ratchet advance + RPC. The device ran hot and the UI stalled.
 //
 //  It is worse than a linear cost, because our receipts are themselves messages: they enter the
-//  peer's stream, the server replays those too (see decisions/diagnose-redelivery-before-fixing-it
-//  — `since_cursor` is not honoured), and the peer answers them. Two clients can hold each other
+//  peer's stream, any redelivery brings those back too (in 2026-08 a server ignoring `since_cursor`,
+//  fixed 2026-08-04; a stalled cursor does the same — decisions/stream-cursor-stall-anatomy), and the
+//  peer answers them. Two clients can hold each other
 //  at full tilt with no user doing anything.
 //
 //  The window is deliberately long. A receipt exists to move a checkmark, not to stop redelivery

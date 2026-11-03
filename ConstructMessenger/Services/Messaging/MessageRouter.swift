@@ -341,8 +341,11 @@ final class MessageRouter {
 
         // Redelivery fast path — **before** the unseal, which is the whole point.
         //
-        // The server ignores `since_cursor` and replays below the watermark, so the stream is
-        // mostly messages we have already handled. Build 584, four minutes on one device:
+        // Redeliveries are normal traffic, not only a defect: the resume is inclusive at the
+        // cursor, and a cursor stalled behind an unresolved entry (decisions/stream-cursor-stall-
+        // anatomy) resends everything after it on every reconnect. When this was written the
+        // server also ignored `since_cursor` (fixed 2026-08-04, vault backend/MESSAGING_INITIAL_POLL_
+        // IGNORES_SINCE_CURSOR.md), and the stream was mostly messages already handled. Build 584, four minutes on one device:
         //
         //     12 252  incoming            (51/s)
         //     12 204  "already-processed"  (99.6 %)
@@ -648,9 +651,10 @@ final class MessageRouter {
         //
         //    This condition used to be `messageNumber == 0`, which is not what it was reading as.
         //    A DH sending chain also starts at 0, so a mid-session leftover from the deleted
-        //    contact's replayed backlog satisfied it — and the server replays that backlog on
-        //    every reconnect (`since_cursor` is not honoured). The contact came back after every
-        //    single deletion, reported on device 2026-08-19. Same misreading as the RESPONDER init
+        //    contact's replayed backlog satisfied it, and a backlog is replayed on every reconnect
+        //    while the cursor is stalled (decisions/stream-cursor-stall-anatomy — on 2026-08-19 it
+        //    was, and the server was not at fault). The contact came back after every single
+        //    deletion, reported on device 2026-08-19. Same misreading as the RESPONDER init
         //    guard; same classifier fixes both.
         if DeletedContactsStore.shared.isDeleted(otherUserId) {
             let kind = message.initKind
