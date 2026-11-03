@@ -90,6 +90,20 @@ There is **no build or test job**, because the app links `ConstructCore.xcframew
 repositories. A green CI badge therefore says nothing about whether the app compiles or the suite
 passes — those are local, via `test_run.sh` or a full `xcodebuild test`.
 
+## Both targets build
+
+```bash
+scripts/build_all.sh                       # iOS (simulator) + Construct Desktop, signing off
+scripts/build_all.sh --frameworks-from ../construct-messenger   # in a worktree
+```
+
+`ConstructMessenger/` is compiled into Construct Desktop too, except the files its
+`membershipExceptions` name. The script first checks that every xcframework slice `Info.plist`
+names is on disk (exit 3 otherwise), then prints `BUILD ios: OK|FAILED` and
+`BUILD desktop: OK|FAILED` with the first errors. The textual half of this —
+`scripts/check_desktop_sources.py`, in `check_all.sh` — fails on an iOS-only import (UIKit, CallKit,
+BackgroundTasks) in a file Desktop compiles, or AppKit in one iOS compiles, outside a platform guard.
+
 ## Localization
 
 ```bash
