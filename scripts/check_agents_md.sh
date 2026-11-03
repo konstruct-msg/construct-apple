@@ -143,6 +143,26 @@ while IFS= read -r p; do
     fi
 done <<< "$paths"
 
+# ── Symbols ───────────────────────────────────────────────────────────────────────────────────
+# A rule names types and functions as often as paths — `sessionPhases`, `pinnedDevice(ofPeer:)`,
+# `SessionAddressing` — and a renamed symbol leaves the rule as unreachable as a moved file. On
+# 2026-11-03 an audit found `sessionPhases` described with a keying it had lost and a split-view
+# type that no longer existed; nothing had noticed. So every identifier-shaped token in backticks
+# must occur, as a word, in a tracked file other than the agent docs. `Name*` means a prefix.
+# `f(label:)` checks `f` and each label. snake_case belongs to construct-core's UDL and is checked
+# there when that repository is present.
+#
+# Named as absent, deliberately (the file mentions them *because* they were removed). Fails if
+# one comes back.
+KNOWN_ABSENT_SYMBOLS="EngineAdapter session_ready"
+
+symbol_report=$(KNOWN_ABSENT_SYMBOLS="$KNOWN_ABSENT_SYMBOLS" python3 -I scripts/agents_md_symbols.py "$DOC"
+) || { c_red "  ✗ symbol check did not run"; fail=1; }
+if [ -n "$symbol_report" ]; then
+    while IFS= read -r s; do c_red "  ✗ symbol: $s"; done <<< "$symbol_report"
+    fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
     if [ "$check_vault" -eq 1 ] && [ "$skipped_siblings" -eq 0 ]; then
         c_grn "AGENTS.md: every referenced path exists"
