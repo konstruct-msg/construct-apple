@@ -32,6 +32,7 @@ CHECKS=(
   "build-versions|-|./scripts/check_build_versions.sh"
   "forks|python3|python3 -I scripts/check_forks.py self-test && python3 -I scripts/check_forks.py pins"
   "agents-md|-|./scripts/check_agents_md.sh"
+  "desktop-sources|python3|python3 -I scripts/check_desktop_sources.py self-test && python3 -I scripts/check_desktop_sources.py"
   "privacy-manifest|plutil|./scripts/check_privacy_manifest.sh"
 )
 
