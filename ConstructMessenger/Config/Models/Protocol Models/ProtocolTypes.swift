@@ -34,7 +34,7 @@ struct ChatMessage: Codable, Identifiable {
     /// **The** content type. Sole routing authority — there is no second representation.
     /// Identified path: outer envelope. Sealed path: recovered from SealedInner after unseal.
     /// Early-exit predicates (`isEndSession` / `isSessionResetInit` / `isSenderSync`) read this.
-    var contentType: UInt8 = 0
+    var contentType: UInt8 = Shared_Proto_Core_V1_ContentType.unspecified.byte
 
     /// Device ID of the sending device.
     ///
@@ -93,13 +93,13 @@ struct ChatMessage: Codable, Identifiable {
     /// END_SESSION (21) — retired 2026-09-27. One from an older build is acknowledged and
     /// nothing else; routes off the post-unseal / identified `contentType`.
     var isEndSession: Bool {
-        contentType == 21
+        contentType == Shared_Proto_Core_V1_ContentType.sessionReset.byte
     }
 
     /// DECRYPTION_ERROR (28) — the peer could not read something we sent it. For the core to
     /// answer (`CfeIncomingEvent.decryptionErrorReceived`).
     var isDecryptionError: Bool {
-        contentType == 28
+        contentType == Shared_Proto_Core_V1_ContentType.decryptionError.byte
     }
 
     /// SENDER_SYNC — copy of own outgoing message for other devices.
@@ -130,7 +130,7 @@ struct ChatMessage: Codable, Identifiable {
         to: String,
         timestamp: UInt64,
         serverOrderKey: String? = nil,
-        contentType: UInt8 = 0,
+        contentType: UInt8 = Shared_Proto_Core_V1_ContentType.unspecified.byte,
         senderDeviceId: String = "",
         senderCertificate: SenderCertificate? = nil,
         conversationId: String = "",

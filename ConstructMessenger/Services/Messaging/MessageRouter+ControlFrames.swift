@@ -99,7 +99,7 @@ extension MessageRouter {
             case WireMessageKind.heartbeatContentType:
                 // A liveness probe: decrypting it exercised the ratchet, which was the point.
                 Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
-            case 25, 26:
+            case Shared_Proto_Core_V1_ContentType.sessionPing.byte, Shared_Proto_Core_V1_ContentType.sessionReady.byte:
                 // Ping / ready from a build before 2026-09-27: they closed a confirm window that
                 // no longer exists.
                 Log.info("Session control ct=\(contentType) from \(otherUserId.prefix(8))… discarded — nothing waits for it", category: "MessageRouter")

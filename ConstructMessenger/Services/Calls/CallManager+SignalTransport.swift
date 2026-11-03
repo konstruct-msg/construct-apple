@@ -105,7 +105,7 @@ extension CallManager {
             contactId: peerContactId,
             messageId: messageId,
             protoBytes: ChunkedMessageCodec.frameWhole(
-                protoData, contentType: 12, messageId: UUID(uuidString: messageId) ?? UUID()
+                protoData, contentType: Shared_Proto_Core_V1_ContentType.callSignal.byte, messageId: UUID(uuidString: messageId) ?? UUID()
             )
         )
         do {

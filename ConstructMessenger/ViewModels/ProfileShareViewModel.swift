@@ -276,7 +276,7 @@ class ProfileShareViewModel {
             return (false, error.userFacingMessage)
         }
         let messageId = UUID().uuidString.lowercased()
-        let plan: ChunkedMessagePlan = .whole(payload, contentType: 29, messageId: UUID(uuidString: messageId) ?? UUID())
+        let plan: ChunkedMessagePlan = .whole(payload, contentType: Shared_Proto_Core_V1_ContentType.profile.byte, messageId: UUID(uuidString: messageId) ?? UUID())
 
         do {
             // Every device of theirs. Until 2026-09-22 this reached the pinned one only, so a
