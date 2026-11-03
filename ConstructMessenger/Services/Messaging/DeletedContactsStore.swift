@@ -7,8 +7,10 @@
 //
 //  # What it is for
 //
-//  The server replays a conversation's backlog on every reconnect (`since_cursor` is not honoured
-//  — see `backend/MESSAGING_INITIAL_POLL_IGNORES_SINCE_CURSOR.md`). Without this store,
+//  A conversation's backlog can be delivered again — an offline backlog, an inclusive resume, a
+//  cursor stalled behind an unresolved entry (decisions/stream-cursor-stall-anatomy). In 2026-08 the
+//  server also ignored `since_cursor` (fixed 2026-08-04,
+//  `backend/MESSAGING_INITIAL_POLL_IGNORES_SINCE_CURSOR.md`). Without this store,
 //  `MessageRouter` re-created the User and Chat rows from that replay and the contact came back
 //  after every single deletion — reported on device 2026-08-19.
 //

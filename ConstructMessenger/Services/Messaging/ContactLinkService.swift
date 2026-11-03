@@ -173,8 +173,9 @@ final class ContactLinkService {
     ///
     ///   False for anything driven by an **incoming** envelope. A sender we have never heard of —
     ///   or have deliberately deleted — must not be able to put a row in our store by sending to
-    ///   us. Device logs 2026-08-19: a deleted contact came back after every deletion, because the
-    ///   server keeps replaying their backlog (`since_cursor` is not honoured) and each replayed
+    ///   us. Device logs 2026-08-19: a deleted contact came back after every deletion, because their
+    ///   backlog was replayed on every reconnect (a stalled cursor — decisions/stream-cursor-stall-
+    ///   anatomy; any redelivery does the same) and each replayed
     ///   sealed envelope re-created the row through this method. `IK_PIN[row_created] … source=
     ///   sealed_cert` is that happening. Pinning a key for someone we do not have is also pointless
     ///   on its own terms: the key exists to let a sealed *send* proceed, and there is nobody to

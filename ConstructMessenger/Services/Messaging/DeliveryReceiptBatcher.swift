@@ -9,8 +9,10 @@
 //  *different* messages arriving at once, because per-message that is the correct answer — each id
 //  is legitimately owed exactly one receipt, and each one passes the throttle first and only time.
 //
-//  On 2026-08-19 the server replayed 4211 distinct messages in 65 seconds (`since_cursor` still
-//  not honoured — decisions/diagnose-redelivery-before-fixing-it). 549 of them had a live session,
+//  On 2026-08-19 4211 distinct messages were redelivered in 65 seconds — blamed on the server at
+//  the time; the next day's analysis found the server honouring `since_cursor` and the stall ours
+//  (decisions/stream-cursor-stall-anatomy). A legitimate backlog — a device offline for a day —
+//  arrives the same way. 549 of them had a live session,
 //  so 549 receipts went out in 15 seconds: 549 encrypts, 549 ratchet advances, 549 RPCs and 549
 //  keychain writes of ~2 KB each, for information that fits in one message.
 //

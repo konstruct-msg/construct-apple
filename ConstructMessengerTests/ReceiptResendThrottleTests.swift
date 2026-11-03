@@ -7,8 +7,8 @@
 //  Measured 2026-08-04: 6236 already-processed duplicates produced 3754 outgoing sends in minutes
 //  — each a full encrypt, ratchet advance and RPC. The phone ran hot and the UI stalled. It
 //  compounds rather than merely repeating, because a receipt is itself a message: it lands in the
-//  peer's stream, the server replays it back (`since_cursor` is not honoured), and it is answered
-//  again.
+//  peer's stream, comes back on any redelivery (then: a server ignoring `since_cursor`, fixed
+//  2026-08-04; still: a stalled cursor, an offline backlog), and it is answered again.
 //
 //  What must survive the fix: a genuinely lost receipt is still re-sent, because it is the only
 //  thing that moves the sender's checkmark off "sent".
@@ -169,5 +169,32 @@ final class ReceiptResendThrottleTests: XCTestCase {
                 )
             )
         }
+    }
+
+    /// The decision above is only worth anything at its position: **before** the unseal. Moved
+    /// below `resolveSender`, every redelivery would pay the Ed25519 verification again and the
+    /// tests above would still pass. Read from the source, so a refactor that reorders
+    /// `routeIncomingMessage` is caught here.
+    func testRedeliverySkipRunsBeforeTheUnseal() throws {
+        let router = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift")
+        let text = try String(contentsOf: router, encoding: .utf8)
+        // Code only — a comment naming either call must not decide the order.
+        let code = text.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        guard let start = code.range(of: "func routeIncomingMessage(") else {
+            return XCTFail("routeIncomingMessage not found in MessageRouter.swift — update this test")
+        }
+        let body = code[start.upperBound...]
+        guard let skip = body.range(of: "Self.canSkipRedeliveryBeforeUnseal("),
+              let unseal = body.range(of: ".resolveSender(") else {
+            return XCTFail("routeIncomingMessage no longer calls canSkipRedeliveryBeforeUnseal and resolveSender")
+        }
+        XCTAssertLessThan(
+            skip.lowerBound, unseal.lowerBound,
+            "the redelivery skip must run before resolveSender — after it, it saves nothing"
+        )
     }
 }
