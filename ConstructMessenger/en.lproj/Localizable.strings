@@ -634,6 +634,11 @@
 "sticker_pack_remove" = "Remove pack";
 "sticker_pack_add" = "Add pack";
 "sticker_pack_unavailable" = "This pack is not available right now.";
+"sticker_packs_add" = "Add stickers";
+"sticker_packs_title" = "Sticker packs";
+"sticker_packs_mine" = "My packs";
+"sticker_packs_all_added" = "Every pack is already added.";
+"sticker_packs_remove_short" = "Remove";
 
 // MARK: - Attachments
 "attach" = "Attach";

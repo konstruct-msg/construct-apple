@@ -635,6 +635,11 @@
 "sticker_pack_remove" = "Убрать набор";
 "sticker_pack_add" = "Добавить набор";
 "sticker_pack_unavailable" = "Этот набор сейчас недоступен.";
+"sticker_packs_add" = "Добавить стикеры";
+"sticker_packs_title" = "Наборы стикеров";
+"sticker_packs_mine" = "Мои наборы";
+"sticker_packs_all_added" = "Все наборы уже добавлены.";
+"sticker_packs_remove_short" = "Убрать";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";

@@ -604,6 +604,11 @@
 "sticker_pack_remove" = "Retirer le pack";
 "sticker_pack_add" = "Ajouter le pack";
 "sticker_pack_unavailable" = "Ce pack n’est pas disponible pour le moment.";
+"sticker_packs_add" = "Ajouter des stickers";
+"sticker_packs_title" = "Packs de stickers";
+"sticker_packs_mine" = "Mes packs";
+"sticker_packs_all_added" = "Tous les packs sont déjà ajoutés.";
+"sticker_packs_remove_short" = "Retirer";
 
 // MARK: - Attachments
 "attach" = "Joindre";

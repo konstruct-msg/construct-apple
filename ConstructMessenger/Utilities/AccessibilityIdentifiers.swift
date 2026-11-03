@@ -110,6 +110,8 @@ enum A11y {
         static let catalogRetry = "mediaPicker.catalog.retry"
         static func catalogPack(_ id: StickerPackID) -> String { "mediaPicker.catalog.\(id.hex.prefix(16))" }
         static func installPack(_ id: StickerPackID) -> String { "mediaPicker.catalog.\(id.hex.prefix(16)).get" }
+        static func removePack(_ id: StickerPackID) -> String { "mediaPicker.catalog.\(id.hex.prefix(16)).remove" }
+        static let addStickers = "mediaPicker.stickers.add"
     }
 
     // MARK: - Pairing
