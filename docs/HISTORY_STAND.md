@@ -7,10 +7,12 @@ vault; this file documents the script, and the two change together.
 
 ## Which builds offer it
 
-History follows linking: `DeviceLinkHistorySyncPolicy.isOffered` is true wherever
-`DeviceLinkOfferPolicy.isLinkingOffered` is — Debug and Beta, so TestFlight too — and Release
-waits for `isPostLinkEnabled`, which turns on when this stand passes. Both devices ask it, so any
-two Debug or Beta builds agree; the script builds both sides in Debug and passes no flag.
+Every build, Release included, since 2026-11-03 (owner): linking and the history offer with it
+are no longer gated, so any two builds agree. The script builds both sides in Debug for the
+debug-level log and the link token it prints.
+
+Until 2026-11-03 two compile-time policies (`DeviceLinkOfferPolicy`, `DeviceLinkHistorySyncPolicy`)
+offered both in Debug and Beta only, and Release waited for this stand.
 
 Until 2026-10-13 the stand build needed `-DHISTORY_STAND`, which no configuration defined, so
 that TestFlight would not offer the transfer. A phone run from Xcode (Debug, no flag) then linked

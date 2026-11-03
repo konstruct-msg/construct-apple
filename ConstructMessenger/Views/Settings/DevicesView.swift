@@ -77,51 +77,47 @@ struct DevicesView: View {
                     }
 
                     // MARK: - Link / Approve
-                    if DeviceLinkOfferPolicy.isLinkingOffered {
-                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
-                            CTSectionGroup {
-                                DeviceLinkActions { showingQRSheet = true }
-                            }
-                            Text(LocalizedStringKey("linked_devices_hint"))
-                                .font(CTFont.secondary)
-                                .foregroundStyle(Color.CT.textDim)
-                                .settingsSectionHintInsets()
+                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                        CTSectionGroup {
+                            DeviceLinkActions { showingQRSheet = true }
                         }
+                        Text(LocalizedStringKey("linked_devices_hint"))
+                            .font(CTFont.secondary)
+                            .foregroundStyle(Color.CT.textDim)
+                            .settingsSectionHintInsets()
                     }
 
-                    // MARK: - History retry (stand build or enabled flag)
-                    if DeviceLinkHistorySyncPolicy.isOffered {
-                        VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
-                            CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))
-                            CTSectionGroup {
-                                ConstructButtonRow(
-                                    systemImage: "bubble.left.and.bubble.right",
-                                    title: LocalizedStringKey("history_sync_settings_chats")
-                                ) {
-                                    historyRetryKind = .chatsOnly
-                                }
-                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                                ConstructButtonRow(
-                                    systemImage: "photo.on.rectangle",
-                                    title: LocalizedStringKey("history_sync_settings_media")
-                                ) {
-                                    historyRetryKind = .mediaOnly
-                                }
-                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                                // The other half of a retry: the device that is to receive
-                                // listens here while the offering device picks Chats / Media only.
-                                ConstructButtonRow(
-                                    systemImage: "wifi",
-                                    title: LocalizedStringKey("history_sync_receive_wifi")
-                                ) {
-                                    showHistoryReceive = true
-                                }
+                    // MARK: - History retry
+                    VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
+                        CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))
+                        CTSectionGroup {
+                            ConstructButtonRow(
+                                systemImage: "bubble.left.and.bubble.right",
+                                title: LocalizedStringKey("history_sync_settings_chats")
+                            ) {
+                                historyRetryKind = .chatsOnly
                             }
-                            Text(LocalizedStringKey("history_sync_settings_hint"))
-                                .font(CTFont.secondary)
-                                .foregroundStyle(Color.CT.textDim)
-                                .settingsSectionHintInsets()
+                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                            ConstructButtonRow(
+                                systemImage: "photo.on.rectangle",
+                                title: LocalizedStringKey("history_sync_settings_media")
+                            ) {
+                                historyRetryKind = .mediaOnly
+                            }
+                            ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
+                            // The other half of a retry: the device that is to receive
+                            // listens here while the offering device picks Chats / Media only.
+                            ConstructButtonRow(
+                                systemImage: "wifi",
+                                title: LocalizedStringKey("history_sync_receive_wifi")
+                            ) {
+                                showHistoryReceive = true
+                            }
                         }
+                        Text(LocalizedStringKey("history_sync_settings_hint"))
+                            .font(CTFont.secondary)
+                            .foregroundStyle(Color.CT.textDim)
+                            .settingsSectionHintInsets()
                     }
 
                     // MARK: - Session management

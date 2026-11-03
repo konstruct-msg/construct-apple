@@ -187,9 +187,9 @@ private final class KeychainSessions: PeekSessionSource, @unchecked Sendable {
 
 /// The decision on the banner itself, on a build installed from Xcode: there the result can be
 /// read off the screen, where the extension's log is visible only to a Console stream already
-/// running when the push lands. Two conditions, because `DEBUG` alone also covers the Beta
-/// configuration TestFlight ships: an Xcode install carries `embedded.mobileprovision`, and
-/// TestFlight and the App Store strip it. Neither carries the subtitle.
+/// running when the push lands. Two conditions: `DEBUG`, and an Xcode install, which carries
+/// `embedded.mobileprovision` (TestFlight and the App Store strip it). Neither carries the
+/// subtitle.
 private enum ProbeBanner {
     static func marked(_ content: UNNotificationContent, _ text: String) -> UNNotificationContent {
         #if DEBUG

@@ -1,5 +1,7 @@
-// Beta configuration — same server settings as Release, but with DEBUG flag
-// so #if DEBUG sections remain visible in TestFlight builds.
+// Beta configuration — TestFlight (iOS) and the Desktop Beta DMG. The same server settings and
+// behaviour as Release; the one thing testers get on top is the log file and its export
+// (`INTERNAL_TOOLS`). Never `DEBUG`: until 2026-11-03 this file added it, and every developer
+// screen, override and test seam shipped to testers with it (`scripts/check_build_conditions.py`).
 #include "Release.xcconfig"
 
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG $(inherited)
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = INTERNAL_TOOLS $(inherited)

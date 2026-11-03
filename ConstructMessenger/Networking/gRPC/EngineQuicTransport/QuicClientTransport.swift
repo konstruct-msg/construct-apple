@@ -251,8 +251,8 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
     private func startReceivePump(on stream: QuicStream) {
         let continuation = self.continuation
         let path = self.path
-        // Poll live quinn connection stats so on-device keep-alive is observable on internal
-        // (DEBUG / TestFlight) builds — `ping_tx` MUST grow (keep-alive firing) and `rx_pkts` MUST
+        // Poll live quinn connection stats so on-device keep-alive is observable in the log of
+        // Debug and Beta builds — `ping_tx` MUST grow (keep-alive firing) and `rx_pkts` MUST
         // grow (acks arriving); if either stalls while the stream is parked on recv, the connection
         // idle-dies at ~30s (the driver-starvation class in construct-transport `ffi.rs`). Gated to
         // internal so the external release carries no per-10s stats log (silent-transport-ui).

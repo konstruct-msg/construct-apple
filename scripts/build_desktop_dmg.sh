@@ -10,14 +10,10 @@
 #   ./scripts/build_desktop_dmg.sh --notarize --publish
 #                                                 plus a GitHub release and the update feeds
 #
-# Beta by default — what TestFlight gets on iOS: Release plus DEBUG
-# (Config/Beta.xcconfig), against the production server. DEBUG is what offers
-# linking another device at onboarding (DeviceLinkOfferPolicy) and the debug
-# surfaces; a Release DMG has neither, so a tester can only restore from a phrase.
-#
-# History after linking follows the link (DeviceLinkHistorySyncPolicy): a Beta DMG
-# offers both, a Release one neither. Both devices ask, so the phone needs a Debug or
-# Beta build too (docs/HISTORY_STAND.md).
+# Beta by default — what TestFlight gets on iOS: Release plus the log file and its
+# export (INTERNAL_TOOLS, Config/Beta.xcconfig), against the production server. No
+# DEBUG since 2026-11-03 (scripts/check_build_conditions.py). Linking another device
+# and the history transfer are in every build, Release included.
 #
 # Result: build/desktop/Construct Desktop <version> (<build>) <configuration> <arch>.dmg
 #

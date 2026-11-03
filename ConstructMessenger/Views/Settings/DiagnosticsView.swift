@@ -99,6 +99,9 @@ struct DiagnosticsView: View {
             VStack(spacing: SettingsLayout.sectionSpacing) {
                 
 
+                // Push state and developer tools are Debug only: a Beta build gives testers the
+                // log and nothing else (owner, 2026-11-03).
+                #if DEBUG
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -131,8 +134,7 @@ struct DiagnosticsView: View {
                     }
                 }
                 
-                #if DEBUG
-                // MARK: - Dev Tools (Debug only)
+                // MARK: - Dev Tools
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""), color: .orange)

@@ -31,7 +31,7 @@ enum TrafficPath: Equatable {
     }
 
     var displayDetail: String {
-        #if DEBUG || INTERNAL_TOOLS
+        #if DEBUG
         // Internal builds: full transport detail for diagnostics.
         switch self {
         case .direct:                  return "TLS 1.3 ams.konstruct.cc:443"

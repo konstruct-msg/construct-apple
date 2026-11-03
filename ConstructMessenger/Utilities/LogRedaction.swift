@@ -21,8 +21,8 @@ import Foundation
 enum LogRedaction {
 
     /// Names in the clear only where the person reading the log is the one who built the app: a
-    /// build installed from Xcode, the simulator, a Mac app run from DerivedData. Not `DEBUG`:
-    /// TestFlight builds are the Beta configuration, which compiles with it.
+    /// build installed from Xcode, the simulator, a Mac app run from DerivedData. Decided by the
+    /// install, not by `DEBUG`, which TestFlight builds also carried until 2026-11-03.
     static let showsNames: Bool = {
         #if targetEnvironment(simulator)
         return true

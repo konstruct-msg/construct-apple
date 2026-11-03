@@ -30,42 +30,9 @@ enum DeviceLinkPhase: Equatable {
     case historySyncSend(pendingDeviceId: String)
 }
 
-/// Whether a link offers to transfer history — asked on both devices, the one that sends and the
-/// one that receives.
-///
-/// History follows linking: a build that offers a link offers the history with it, which is
-/// Debug and Beta (TestFlight) until `DEVICE_LINK_HISTORY_TRANSFER_PLAN` stage 8 passes and
-/// `isPostLinkEnabled` turns it on in Release.
-///
-/// Until 2026-10-13 a second flag, `-DHISTORY_STAND`, gated it apart from the link, and no
-/// configuration defined it. A phone run from Xcode (Debug) linked a Mac built with it and
-/// offered nothing, and neither side said why: one decision, two carriers, and the devices
-/// disagreed. Both devices now read the same condition from the same kind of build.
-enum DeviceLinkHistorySyncPolicy {
-    static let isPostLinkEnabled = false
-
-    static var isOffered: Bool { isPostLinkEnabled || DeviceLinkOfferPolicy.isLinkingOffered }
-}
-
-/// Whether the UI offers to link a second device at all.
-///
-/// Multi-device is not a feature this app switches on: a user who links an iPad has it. Until the
-/// three-device gate in `MULTIDEVICE_PROTOCOL_PLAN` (прогон 2) reads zero, a linked second device
-/// damages the *peer's* single-device clients (`decisions/multidevice-gate-three-asymmetries.md`),
-/// and `RecoverAccount` revokes every device before registering the new one, so the link flow is
-/// the only door to a second device. Closing it in Release closes the scenario.
-///
-/// Compile-time, like every other internal surface: `Beta.xcconfig` keeps `DEBUG` so TestFlight
-/// stays internal. Not `DeveloperMode.isEnabled` — nothing calls `registerVersionTap`, so that is
-/// `false` in every build. The device list and revoke stay reachable regardless: that is how a
-/// ghost device is removed, and testers who linked before this gate need it.
-enum DeviceLinkOfferPolicy {
-    #if DEBUG || INTERNAL_TOOLS
-    static let isLinkingOffered = true
-    #else
-    static let isLinkingOffered = false
-    #endif
-}
+// Linking and the history offer with it are in every build since 2026-11-03 (owner). Two
+// compile-time policies (`DeviceLinkOfferPolicy`, `DeviceLinkHistorySyncPolicy`) closed both in
+// Release until then — see `decisions/device-link-ships-in-release.md` in the vault.
 
 /// Cursor policy for account-only links when history transfer is intentionally skipped.
 enum DeviceLinkStreamCursorPolicy {
