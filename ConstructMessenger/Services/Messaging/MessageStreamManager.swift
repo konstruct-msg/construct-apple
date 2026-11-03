@@ -83,13 +83,13 @@ final class MessageStreamManager {
     var isConnected = false
     /// Set to the current time whenever a heartbeat ack is received from the server.
     var lastHeartbeatDate: Date?
-    /// Transport protocol of the active stream connection ("H3" = QUIC, "H2" = HTTP/2, "" = not connected).
+    /// Transport protocol of the active stream connection ("QUIC" = construct-transport QUIC, "H2" = HTTP/2, "" = not connected).
     var activeTransport: String = ""
     /// Last transport that was successfully used; persists across disconnects for display purposes.
     var lastActiveTransport: String = ""
-    /// Routing key (`direct:host:port` / `ice:PORT`) of the stream that last reached `onAccepted`.
+    /// Routing key (`TransportRoutingKey`) of the stream that last reached `onAccepted`.
     /// Used to skip `serverChanged` reconnects when the live stream already rides the new route
-    /// (VEIL failover storm: connectLoop opens ice:port, then debounced reconnect tears it down).
+    /// (VEIL failover storm: connectLoop opens veil:port, then debounced reconnect tears it down).
     /// Writable from `MessageStreamTransport` (same type, other file).
     var activeRoutingKey: String = ""
 
@@ -393,7 +393,7 @@ final class MessageStreamManager {
             return
         }
         // VEIL probe → setVeilPort posts grpcServerChanged even when connectLoop already
-        // opened (or is opening) on the new ice:port. Tearing that stream down for a
+        // opened (or is opening) on the new veil:port. Tearing that stream down for a
         // second connect is the dual-accept / receipt storm seen in device logs.
         let currentKey = GRPCChannelManager.shared.currentRoutingKey
         if isConnected, !activeRoutingKey.isEmpty, activeRoutingKey == currentKey {
@@ -832,7 +832,7 @@ final class MessageStreamManager {
                         // On VEIL: rotate the relay and retry; if the rejection is real it will
                         // surface again on a clean relay (or on direct) and be honored there.
                         let streamWentThroughVEIL = GRPCChannelManager.shared.veilProxyPort() != nil
-                            || routingKeyAtLoopStart.hasPrefix("ice:")
+                            || TransportRoutingKey.isVeil(routingKeyAtLoopStart)
                         if streamWentThroughVEIL {
                             let snap = await TransportRouter.shared.snapshot()
                             let relayAddr = snap.state.currentRelay
@@ -865,12 +865,12 @@ final class MessageStreamManager {
                    rpcError.code == .unavailable,
                    rpcError.message.contains("retrying with VEIL") {
                     // Route the failure through the FSM so it decides VEIL escalation / relay rotation.
-                    let method = routingKeyAtLoopStart.hasPrefix("veil:") ? routerSnapshot.state.veilMethod : nil
+                    let (failTarget, method) = TransportRoutingKey.failureRoute(
+                        key: routingKeyAtLoopStart,
+                        veilPort: GRPCChannelManager.shared.veilProxyPort(),
+                        state: routerSnapshot.state
+                    )
                     let kind = RPCFailureClassifier.classify(rpcError, method: method)
-                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
-                        ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
-                               relay: routerSnapshot.state.currentRelay ?? "")
-                        : .direct(.h2)
                     await reportStreamTransportFailureIfNeeded(
                         kind: kind,
                         via: failTarget,
@@ -886,7 +886,7 @@ final class MessageStreamManager {
                         lastTransportWasFastUdp: lastStreamTransportWasFastUdp,
                         prefersVEIL: nowUsingVEIL,
                         routingKeyUnchanged: routingKeyNow == routingKeyAtLoopStart,
-                        wasDirectRouting: routingKeyAtLoopStart.hasPrefix("direct:")
+                        wasDirectRouting: TransportRoutingKey.isDirect(routingKeyAtLoopStart)
                     )
                     switch disposition {
                     case .immediateTransportFailover:
@@ -905,7 +905,7 @@ final class MessageStreamManager {
                             break
                         }
                         // VEIL probe in flight: wait for active (or timeout) so the next
-                        // openStream uses ice:port instead of racing a doomed direct open.
+                        // openStream uses veil:port instead of racing a doomed direct open.
                         if case .veilProbing = await TransportRouter.shared.snapshot().state {
                             let becameActive = await waitWhileVeilProbing(timeoutSeconds: 8)
                             if routingReconnectDebounce != nil {
@@ -935,12 +935,12 @@ final class MessageStreamManager {
                     }
                 } else {
                     // Generic stream failure → feed to the FSM.
-                    let method = routingKeyAtLoopStart.hasPrefix("veil:") ? routerSnapshot.state.veilMethod : nil
+                    let (failTarget, method) = TransportRoutingKey.failureRoute(
+                        key: routingKeyAtLoopStart,
+                        veilPort: GRPCChannelManager.shared.veilProxyPort(),
+                        state: routerSnapshot.state
+                    )
                     let kind = RPCFailureClassifier.classify(error, method: method)
-                    let failTarget: TransportTarget = routingKeyAtLoopStart.hasPrefix("veil:")
-                        ? .veil(port: GRPCChannelManager.shared.veilProxyPort() ?? 0,
-                               relay: routerSnapshot.state.currentRelay ?? "")
-                        : .direct(.h2)
                     await reportStreamTransportFailureIfNeeded(
                         kind: kind,
                         via: failTarget,
@@ -1144,12 +1144,12 @@ final class MessageStreamManager {
             routingKey: routingKeyAtLoopStart,
             via: via
         )
-        // Prefer .direct(.h3) when the failed stream was QUIC so diagnostics match reality.
+        // Prefer .direct(.quic) when the failed stream was QUIC so diagnostics match reality.
         let reportVia: TransportTarget
         if case .veil = via {
             reportVia = via
         } else if method == .quic {
-            reportVia = .direct(.h3)
+            reportVia = .direct(.quic)
         } else {
             reportVia = via
         }
@@ -1171,7 +1171,7 @@ final class MessageStreamManager {
     }
 
     private func streamMethod(wasH3: Bool, routingKey: String, via: TransportTarget) -> StreamMethod {
-        if via.isVEIL || routingKey.hasPrefix("veil:") || routingKey.hasPrefix("ice:") {
+        if via.isVEIL || TransportRoutingKey.isVeil(routingKey) {
             return .veil
         }
         if wasH3 {
@@ -1211,16 +1211,16 @@ final class MessageStreamManager {
     func reportStreamOpenedToRouter(transportLabel: String, metricsLabel: String) {
         let method: StreamMethod
         let via: TransportTarget
-        if metricsLabel.hasPrefix("veil:") || metricsLabel.hasPrefix("ice:")
+        if TransportRoutingKey.isVeil(metricsLabel)
             || GRPCChannelManager.shared.veilProxyPort() != nil {
             method = .veil
             let port = GRPCChannelManager.shared.veilProxyPort() ?? 0
             // currentRelay may be nil briefly; empty string is still tagged veil for the FSM.
             let relay = TransportRouterMirror.shared.state.currentRelay ?? ""
             via = .veil(port: port, relay: relay)
-        } else if transportLabel == "QUIC" || transportLabel == "H3" {
+        } else if transportLabel == "QUIC" {
             method = .quic
-            via = .direct(.h3)
+            via = .direct(.quic)
         } else {
             method = .h2
             via = .direct(.h2)
@@ -1234,7 +1234,7 @@ final class MessageStreamManager {
     func reportStreamHealthyToRouter() {
         let method: StreamMethod
         switch activeTransport {
-        case "QUIC", "H3": method = .quic
+        case "QUIC": method = .quic
         case "H2": method = .h2
         default:
             method = GRPCChannelManager.shared.veilProxyPort() != nil ? .veil : .h2

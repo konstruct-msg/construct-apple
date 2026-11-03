@@ -123,7 +123,7 @@ final class GRPCChannelManager: Sendable {
     private struct PersistentConn: @unchecked Sendable {
         let client: GRPCClient<HTTP2ClientTransport.TransportServices>
         let task:   Task<Void, Never>
-        let key:    String   // routing identity — "ice:<port>" or "direct:<host>:<port>"
+        let key:    String   // routing identity — `TransportRoutingKey`
     }
 
     // nonisolated(unsafe) is correct here: all mutations are serialised through _connLock.
@@ -160,7 +160,7 @@ final class GRPCChannelManager: Sendable {
     private let _overrideProxyPortLock = NSLock()
 
     // Last routing key we posted `.grpcServerChanged` for. Lets the routing-changed
-    // notification fire on every real route change (direct ⇄ ice:port) independent of
+    // notification fire on every real route change (direct ⇄ veil:port) independent of
     // whether a live `_conn` existed to tear down, while deduping repeat invalidations of
     // the same route. See `invalidatePersistentClientIfRoutingChanged()`.
     private nonisolated(unsafe) var _lastNotifiedRoutingKey: String = ""
@@ -177,8 +177,8 @@ final class GRPCChannelManager: Sendable {
     private let _sealedConnLock = NSLock()
 
     private func routingKey() -> String {
-        if let veilPort = veilProxyPort() { return "ice:\(veilPort)" }
-        return "direct:\(currentHost):\(currentPort)"
+        if let veilPort = veilProxyPort() { return TransportRoutingKey.veil(port: veilPort) }
+        return TransportRoutingKey.direct(host: currentHost, port: currentPort)
     }
 
     /// Exposes the current routing key for debug metrics and logging.
@@ -246,11 +246,11 @@ final class GRPCChannelManager: Sendable {
     /// there is nothing to invalidate and calling this is a no-op.
     ///
     /// Only tears down the connection when the new routing key differs from the key the connection
-    /// was created with (e.g. "ice:1234" → "direct:host:443"). Avoids the cascade where an VEIL
+    /// was created with (e.g. "veil:1234" → "direct:host:443"). Avoids the cascade where an VEIL
     /// failure disrupts a working direct connection.
     func invalidatePersistentClientIfRoutingChanged() {
-        // Compute routing key outside the lock — routingKey() acquires _iceModeLock and
-        // _iceStandbyLock but never _connLock, so this ordering is safe.
+        // Compute routing key outside the lock — routingKey() acquires _overrideProxyPortLock
+        // but never _connLock, so this ordering is safe.
         let newKey = routingKey()
         var didInvalidate = false
         var oldKey = ""

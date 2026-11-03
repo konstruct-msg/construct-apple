@@ -92,7 +92,7 @@ final class MidSessionDeathEscalationTests: XCTestCase {
         // successful open, so one is not evidence about the path.
         let (afterFirst, effects): (TransportState, [TransportEffect]) = reduce(
             .direct(consecutiveFails: 0),
-            .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.h3))
+            .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.quic))
         )
         XCTAssertEqual(afterFirst, .direct(consecutiveFails: 1))
         XCTAssertTrue(effects.isEmpty)

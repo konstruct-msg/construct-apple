@@ -31,7 +31,39 @@ enum TransportTarget: Equatable, Sendable {
 
 enum DirectProtocol: Equatable, Sendable {
     case h2
-    case h3
+    /// The construct-transport QUIC stream (`StreamMethod.quic`). There is no HTTP/3 client.
+    case quic
+}
+
+// MARK: - Routing key
+
+/// The string naming the path a gRPC connection was opened on: `veil:<port>` or
+/// `direct:<host>:<port>`. The connection is reused while the key stays the same, and the stream
+/// loop reads it to tell which path a failure happened on.
+///
+/// One spelling, written and read here only. Until 2026-11-03 the writer said `ice:<port>`
+/// while the stream-failure readers checked `veil:` (the 2026-05-30 rename changed one side), so
+/// every VEIL stream failure reached the router as a direct one.
+enum TransportRoutingKey {
+    private static let veilPrefix = "veil:"
+    private static let directPrefix = "direct:"
+
+    static func veil(port: UInt16) -> String { "\(veilPrefix)\(port)" }
+    static func direct(host: String, port: Int) -> String { "\(directPrefix)\(host):\(port)" }
+
+    static func isVeil(_ key: String) -> Bool { key.hasPrefix(veilPrefix) }
+    static func isDirect(_ key: String) -> Bool { key.hasPrefix(directPrefix) }
+
+    /// Where a stream opened on `key` failed, for `streamFailed` / `RPCFailureClassifier`: the
+    /// VEIL target and its probe winner, or the direct path with no VEIL method.
+    static func failureRoute(
+        key: String,
+        veilPort: UInt16?,
+        state: TransportState
+    ) -> (via: TransportTarget, veilMethod: VeilMethod?) {
+        guard isVeil(key) else { return (.direct(.h2), nil) }
+        return (.veil(port: veilPort ?? 0, relay: state.currentRelay ?? ""), state.veilMethod)
+    }
 }
 
 // MARK: - Stream (data plane) method

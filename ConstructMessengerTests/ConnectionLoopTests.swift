@@ -248,7 +248,7 @@ final class ConnectionLoopTests: XCTestCase {
             event: .streamFailed(
                 method: .quic,
                 kind: .openTimeout,
-                via: .direct(.h3)
+                via: .direct(.quic)
             ),
             config: .default,
             now: Date()
@@ -266,7 +266,7 @@ final class ConnectionLoopTests: XCTestCase {
     func testTransportReducer_StreamDiedMidSession_EscalatesOnTheFirstOne() {
         let outcome = TransportReducer.reduce(
             state: .direct(consecutiveFails: 0),
-            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+            event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.quic)),
             config: .default,
             now: Date()
         )
@@ -280,7 +280,7 @@ final class ConnectionLoopTests: XCTestCase {
     func testTransportReducer_StreamFailedTwice_EscalatesToVeilProbing() {
         let first = TransportReducer.reduce(
             state: .direct(consecutiveFails: 0),
-            event: .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.h3)),
+            event: .streamFailed(method: .quic, kind: .openTimeout, via: .direct(.quic)),
             config: .default,
             now: Date()
         )
@@ -317,7 +317,7 @@ final class ConnectionLoopTests: XCTestCase {
     func testTransportReducer_StreamOpened_ResetsDirectFails() {
         let outcome = TransportReducer.reduce(
             state: .direct(consecutiveFails: 2),
-            event: .streamOpened(method: .quic, via: .direct(.h3)),
+            event: .streamOpened(method: .quic, via: .direct(.quic)),
             config: .default,
             now: Date()
         )
@@ -333,7 +333,7 @@ final class ConnectionLoopTests: XCTestCase {
         for _ in 0..<2 {
             let o = TransportReducer.reduce(
                 state: state,
-                event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.h3)),
+                event: .streamFailed(method: .quic, kind: .midSessionTimeout, via: .direct(.quic)),
                 config: .default,
                 now: Date()
             )
@@ -346,7 +346,7 @@ final class ConnectionLoopTests: XCTestCase {
         let fail = TransportEvent.streamFailed(
             method: .quic,
             kind: .midSessionTimeout,
-            via: .direct(.h3)
+            via: .direct(.quic)
         )
         XCTAssertTrue(fail.shortLabel.contains("stream-fail"))
         XCTAssertTrue(fail.shortLabel.contains("quic"))
