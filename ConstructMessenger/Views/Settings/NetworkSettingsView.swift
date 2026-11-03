@@ -99,8 +99,7 @@ struct NetworkSettingsView: View {
                             : streamManager.activeTransport
                         let isLive = !streamManager.activeTransport.isEmpty
                         if !displayTransport.isEmpty {
-                            // "H3" = legacy native stack; "QUIC" = engine QUIC (construct-transport).
-                            let isQUIC = displayTransport == "H3" || displayTransport == "QUIC"
+                            let isQUIC = displayTransport == "QUIC"
                             // Lock when the live transport is obfuscated QUIC — at-a-glance proof
                             // the direct traffic is DPI-obfuscated. Production ships plain QUIC, so
                             // this only ever shows in DEBUG when obfuscation is explicitly enabled.
@@ -590,8 +589,8 @@ struct NetworkSettingsView: View {
             #if DEBUG
             if FeatureFlags.engineQuicExperimental && FeatureFlags.engineQuicObfuscated {
                 let live = streamManager.activeTransport
-                // "QUIC"/"H3" live → obfuscated right now; otherwise on the H2 fallback/connecting.
-                return (live == "QUIC" || live == "H3")
+                // "QUIC" live → obfuscated right now; otherwise on the H2 fallback/connecting.
+                return live == "QUIC"
                     ? "veil_footer_off_obf_active"
                     : "veil_footer_off_obf_fallback"
             }
