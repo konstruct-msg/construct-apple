@@ -29,7 +29,7 @@ CHECKS=(
   "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|0"
   "colour literal — use Color.CT|(foregroundStyle|foregroundColor|background|fill|stroke|tint)\(\.?(Color\.)?(white|black|gray|red|green|blue|orange|yellow)\b|0"
   "padding by number — use CTSpace|\.padding\((\.[a-zA-Z]+, *|\[[^]]*\], *)?[0-9]|316"
-  "stack spacing by number — use CTSpace|spacing: *[0-9]|329"
+  "stack spacing by number — use CTSpace|spacing: *[0-9]|328"
 )
 
 failed=0

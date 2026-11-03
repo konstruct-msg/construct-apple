@@ -2,11 +2,10 @@
 //  StickerPickerView.swift
 //  Construct Messenger
 //
-//  The Stickers tab of the media picker: recents, then each installed pack, four across, then
-//  the catalog — what can be installed — as rows with a cover and a Get button. A tap on a
-//  sticker sends; stickers are not "add to composer" attachments and carry no caption, and the
-//  sheet closes at once (decisions/stickers-fourth-picker-tab.md). A tap on Get installs in
-//  place; the pack's grid appears above and the row leaves.
+//  The Stickers tab of the media picker: "Add stickers", recents, then each installed pack, four
+//  across. A tap on a sticker sends; stickers are not "add to composer" attachments and carry no
+//  caption, and the sheet closes at once (decisions/stickers-fourth-picker-tab.md). "Add
+//  stickers" opens `StickerPacksView`, where packs are added from the catalog and removed.
 //
 
 import SwiftUI
@@ -15,21 +14,18 @@ struct StickerPickerView: View {
     let library: StickerLibrary
     let onSend: (StickerReference) -> Void
     @State private var catalog = StickerCatalog()
+    @State private var showPacks = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: StickerPickerLayout.gap), count: StickerPickerLayout.columns)
 
-    /// Catalog rows for packs the picker does not already show.
-    private var available: [StickerCatalog.Summary] {
-        catalog.available(excluding: library.packs.map(\.id))
-    }
-
     var body: some View {
         Group {
-            if library.isEmpty && available.isEmpty && catalog.state != .failed {
+            if library.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: StickerPickerLayout.sectionGap) {
+                        addStickersButton
                         let recent = library.sendableRecent
                         if !recent.isEmpty {
                             section(titleKey: "sticker_picker_recent", refs: recent)
@@ -49,7 +45,6 @@ struct StickerPickerView: View {
                                 }
                             }
                         }
-                        catalogSection
                     }
                     .padding(.horizontal, CTLayout.edgePad)
                     .padding(.bottom, CTLayout.inlinePad)
@@ -58,47 +53,30 @@ struct StickerPickerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { library.reload() }
-        .task { await catalog.refresh() }
+        .sheet(isPresented: $showPacks, onDismiss: { library.reload() }) {
+            StickerPacksView(library: library, catalog: catalog)
+                .sheetNavigation()
+                #if os(macOS)
+                .frame(minWidth: StickerPickerLayout.packsSheetWidth, minHeight: StickerPickerLayout.packsSheetHeight)
+                #endif
+        }
     }
 
-    // MARK: - Catalog
+    // MARK: - Packs
 
-    @ViewBuilder
-    private var catalogSection: some View {
-        let rows = available
-        if !rows.isEmpty || catalog.state == .failed {
-            VStack(alignment: .leading, spacing: CTLayout.inlinePad) {
-                sectionTitle(NSLocalizedString("sticker_picker_more_packs", comment: ""))
-                if catalog.state == .failed && rows.isEmpty {
-                    HStack(spacing: CTLayout.inlinePad) {
-                        Text(LocalizedStringKey("sticker_catalog_failed"))
-                            .font(CTFont.secondary)
-                            .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                        Button {
-                            Task { await catalog.refresh() }
-                        } label: {
-                            Text(LocalizedStringKey("sticker_catalog_retry"))
-                                .font(CTFont.bodyEmphasis)
-                        }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.small)
-                        .tint(Color.CT.accent)
-                        .accessibilityIdentifier(A11y.MediaPicker.catalogRetry)
-                    }
-                    .padding(.vertical, StickerPickerLayout.cellPad)
-                } else {
-                    ForEach(rows) { summary in
-                        CatalogRow(summary: summary, catalog: catalog) {
-                            Task {
-                                if await catalog.install(summary.id) { library.reload() }
-                            }
-                        }
-                    }
-                }
-            }
+    /// Opens every pack — installed and in the catalog — in one sheet.
+    private var addStickersButton: some View {
+        Button {
+            showPacks = true
+        } label: {
+            Label(NSLocalizedString("sticker_packs_add", comment: ""), systemImage: "plus")
+                .font(CTFont.bodyEmphasis)
         }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .tint(Color.CT.accent)
+        .accessibilityIdentifier(A11y.MediaPicker.addStickers)
     }
 
     private func section(titleKey: String, refs: [StickerReference]) -> some View {
@@ -111,7 +89,7 @@ struct StickerPickerView: View {
         @ViewBuilder menu: () -> Menu = { EmptyView() }
     ) -> some View {
         VStack(alignment: .leading, spacing: CTLayout.inlinePad) {
-            sectionTitle(title)
+            StickerSectionTitle(title: title)
                 .contextMenu { menu() }
             LazyVGrid(columns: columns, spacing: StickerPickerLayout.gap) {
                 ForEach(refs, id: \.self) { ref in
@@ -119,13 +97,6 @@ struct StickerPickerView: View {
                 }
             }
         }
-    }
-
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(CTFont.caption)
-            .foregroundStyle(Color.CT.textDim)
-            .tracking(2)
     }
 
     private var emptyState: some View {
@@ -139,6 +110,7 @@ struct StickerPickerView: View {
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
+            addStickersButton
             #if DEBUG
             Button {
                 library.installFixture()
@@ -189,83 +161,6 @@ private struct StickerCell: View {
     }
 }
 
-/// One pack that can be installed: cover, title, publisher · count · size, and Get.
-private struct CatalogRow: View {
-    let summary: StickerCatalog.Summary
-    let catalog: StickerCatalog
-    let onInstall: () -> Void
-
-    @State private var cover: PlatformImage?
-
-    private static let sizeFormatter: ByteCountFormatter = {
-        let f = ByteCountFormatter()
-        f.allowedUnits = [.useKB, .useMB]
-        f.countStyle = .file
-        return f
-    }()
-
-    private var installing: Bool { catalog.installing.contains(summary.id) }
-    private var failed: Bool { catalog.failed.contains(summary.id) }
-
-    var body: some View {
-        HStack(spacing: CTLayout.inlinePad) {
-            Group {
-                if let cover {
-                    Image(platformImage: cover)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    Color.CT.bgMsg
-                }
-            }
-            .frame(width: StickerPickerLayout.coverSide, height: StickerPickerLayout.coverSide)
-            .clipShape(CTShape.card())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(summary.title)
-                    .font(CTFont.bodyEmphasis)
-                    .foregroundStyle(Color.CT.text)
-                    .lineLimit(1)
-                Text(meta)
-                    .font(CTFont.caption)
-                    .foregroundStyle(failed ? Color.CT.danger : Color.CT.textDim)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: CTLayout.inlinePad)
-
-            if installing {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(minWidth: StickerPickerLayout.getButtonMinWidth)
-            } else {
-                Button(action: onInstall) {
-                    Text(LocalizedStringKey(failed ? "sticker_catalog_retry" : "sticker_get"))
-                        .font(CTFont.bodyEmphasis)
-                        .frame(minWidth: StickerPickerLayout.getButtonMinWidth)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .controlSize(.small)
-                .tint(Color.CT.accent)
-                .accessibilityIdentifier(A11y.MediaPicker.installPack(summary.id))
-            }
-        }
-        .padding(.vertical, StickerPickerLayout.cellPad)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(A11y.MediaPicker.catalogPack(summary.id))
-        .task(id: summary.coverSHA256) {
-            cover = await catalog.cover(for: summary, side: StickerPickerLayout.coverSide)
-        }
-    }
-
-    private var meta: String {
-        if failed { return NSLocalizedString("sticker_install_failed", comment: "") }
-        let count = String(format: NSLocalizedString("sticker_pack_count", comment: ""), summary.stickerCount)
-        let size = Self.sizeFormatter.string(fromByteCount: Int64(summary.totalBytes))
-        return "\(summary.publisher) · \(count) · \(size)"
-    }
-}
-
 enum StickerPickerLayout {
     static let columns = 4
     static let gap: CGFloat = CTLayout.inlinePad
@@ -278,4 +173,7 @@ enum StickerPickerLayout {
     /// "one of the stickers" rather than an icon.
     static let coverSide: CGFloat = 56
     static let getButtonMinWidth: CGFloat = 44
+    /// The packs sheet on macOS, where a sheet takes the size of its content.
+    static let packsSheetWidth: CGFloat = 420
+    static let packsSheetHeight: CGFloat = 480
 }

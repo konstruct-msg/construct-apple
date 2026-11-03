@@ -634,6 +634,11 @@
 "sticker_pack_remove" = "Հեռացնել փաթեթը";
 "sticker_pack_add" = "Ավելացնել փաթեթը";
 "sticker_pack_unavailable" = "Այս փաթեթը հիմա հասանելի չէ։";
+"sticker_packs_add" = "Ավելացնել կպչուններ";
+"sticker_packs_title" = "Կպչունների փաթեթներ";
+"sticker_packs_mine" = "Իմ փաթեթները";
+"sticker_packs_all_added" = "Բոլոր փաթեթներն արդեն ավելացված են։";
+"sticker_packs_remove_short" = "Հեռացնել";
 
 // MARK: - Attachments
 "attach" = "Կցել";

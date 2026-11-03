@@ -576,6 +576,11 @@
 "sticker_pack_remove" = "パックを削除";
 "sticker_pack_add" = "パックを追加";
 "sticker_pack_unavailable" = "このパックは現在利用できません。";
+"sticker_packs_add" = "ステッカーを追加";
+"sticker_packs_title" = "ステッカーパック";
+"sticker_packs_mine" = "マイパック";
+"sticker_packs_all_added" = "すべてのパックを追加済みです。";
+"sticker_packs_remove_short" = "削除";
 
 // MARK: - Attachments
 "attach" = "添付";
