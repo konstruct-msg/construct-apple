@@ -35,6 +35,30 @@ failing run and then does not exit. The stall capture stays for whatever comes n
 
 ## Running a mutation battery
 
+```bash
+python3 -I scripts/mutation_battery.py SPEC [--expect-survivor NAME …]
+```
+
+The rules below are implemented there; the script's header lists which check covers which rule.
+A spec is one block per mutation:
+
+```
+name: deliveryReceipt routes as a call signal
+file: ConstructMessenger/Services/Messaging/ContentTypeRouting.swift
+tests: ConstructMessengerTests/ContentTypeConformanceTests
+find: case 14: return .deliveryReceipt
+replace: case 14: return .callSignal
+```
+
+It runs the baseline first, refuses a `find` that does not occur exactly once, restores each file
+from the bytes it read at start and proves the hash, aborts if any other app or test Swift file
+changes mid-run, counts a kill only with a named failing test, and ends with a run on the restored
+tree. Exit 0 = every mutation killed (or an expected survivor), 1 = a survivor, an inconclusive
+run or a mutation that did not compile, 2 = aborted. Commit the files you mutate first: a dirty
+target is refused, so a restore can never lose work.
+
+The rules, for the record and for a battery the script cannot express:
+
 A scripted battery — apply mutation, build, run, restore, repeat — lied three different ways in one
 session on 2026-08-28, every time in the direction of "all killed". None of the three resembled the
 others, so the rules below are mechanical rather than a matter of care.
