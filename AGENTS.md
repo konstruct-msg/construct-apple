@@ -81,7 +81,7 @@ Silence is the worst failure: a message that never appears raises no error.
 
 9. **A test must be able to fail.** Put the decision in a pure function, test that, and
    mutation-check every new test: one mutation at a time, an unapplied mutation is fatal, restore
-   by shasum, rerun the baseline. A test that cannot fail occupies the place where someone would
+   by shasum, rerun the baseline — `scripts/mutation_battery.py` does all of it. A test that cannot fail occupies the place where someone would
    otherwise have looked.
 10. **Depth before breadth.** A new surface (groups, rooms, Studio to release) starts when the
     last one is boring on the stand and with testers. Testers who stop testing is a P0.
