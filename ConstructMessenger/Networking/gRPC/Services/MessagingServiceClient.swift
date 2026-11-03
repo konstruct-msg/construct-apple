@@ -511,7 +511,7 @@ final class MessagingServiceClient: Sendable {
                     to: "",
                     timestamp: UInt64(msg.timestamp),
                     serverOrderKey: serverOrderKey,
-                    contentType: 24,
+                    contentType: Shared_Proto_Core_V1_ContentType.sessionResetInit.byte,
                     rawPayload: msg.encryptedPayload
                 )
                 guard message.wire != nil else {
@@ -531,7 +531,7 @@ final class MessagingServiceClient: Sendable {
                     to: "",
                     timestamp: UInt64(msg.timestamp),
                     serverOrderKey: serverOrderKey,
-                    contentType: 21,
+                    contentType: Shared_Proto_Core_V1_ContentType.sessionReset.byte,
                     rawPayload: msg.encryptedPayload
                 )
             }

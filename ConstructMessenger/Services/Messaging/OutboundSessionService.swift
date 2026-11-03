@@ -91,7 +91,7 @@ final class OutboundSessionService {
         plaintext: Data,
         messageId: String,
         toDevice recipientDeviceId: String,
-        contentType: UInt8 = 0
+        contentType: UInt8 = Shared_Proto_Core_V1_ContentType.unspecified.byte
     ) throws -> Data {
         guard let contactId = SessionAddressing.asDevice(recipientDeviceId) else {
             throw CryptoManagerError.sessionNotFound
@@ -172,7 +172,7 @@ final class OutboundSessionService {
             plaintext: plaintext,
             messageId: messageId,
             toDevice: recipientDeviceId,
-            contentType: 0
+            contentType: Shared_Proto_Core_V1_ContentType.unspecified.byte
         )
     }
 
@@ -414,7 +414,7 @@ final class OutboundSessionService {
             // One copy per device of theirs that we hold a session with: the key is the account's,
             // but each of their devices seals to us on its own and needs it in hand.
             let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                plan: .whole(card, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()),
+                plan: .whole(card, contentType: Shared_Proto_Core_V1_ContentType.contactCard.byte, messageId: UUID(uuidString: frameId) ?? UUID()),
                 baseMessageId: frameId,
                 senderId: myId,
                 recipientId: contactId,
@@ -475,7 +475,7 @@ final class OutboundSessionService {
             // decisions/sealed-sender-anti-abuse-economics.md) — and N copies to one account ride
             // on one spend unit.
             let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                plan: .whole(payloadData, contentType: 14, messageId: UUID(uuidString: receiptId) ?? UUID()),
+                plan: .whole(payloadData, contentType: Shared_Proto_Core_V1_ContentType.deliveryReceipt.byte, messageId: UUID(uuidString: receiptId) ?? UUID()),
                 baseMessageId: receiptId,
                 senderId: myId,
                 recipientId: contactId,

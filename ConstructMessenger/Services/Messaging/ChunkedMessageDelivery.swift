@@ -22,7 +22,7 @@ final class ChunkedMessageSender: Sendable {
 
     private init() {}
 
-    func buildPlan(plaintext: Data, messageId: UUID, contentType: UInt8 = 1) -> ChunkedMessagePlan {
+    func buildPlan(plaintext: Data, messageId: UUID, contentType: UInt8 = Shared_Proto_Core_V1_ContentType.e2EeSignal.byte) -> ChunkedMessagePlan {
         let payloads = ChunkedMessageCodec.encodeChunks(
             plaintext: plaintext, messageId: messageId, contentType: contentType
         )

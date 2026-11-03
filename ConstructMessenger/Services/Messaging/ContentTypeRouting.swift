@@ -25,16 +25,18 @@ enum WireMessageKind: String, Codable, Equatable, CaseIterable {
     /// never a routing *kind* — the receiver discards it — and it has no counterpart on the outer
     /// envelope any more, so there is nothing for `kind(for:)` to map. Named here because two
     /// files need the same byte and neither should spell it `13`.
-    static let heartbeatContentType: UInt8 = 13
+    static let heartbeatContentType = Shared_Proto_Core_V1_ContentType.heartbeat.byte
 
     /// Canonical proto content-type byte for this kind (0 = regular / non-control).
     var canonicalContentType: UInt8 {
+        let type: Shared_Proto_Core_V1_ContentType
         switch self {
-        case .direct:            return 0
-        case .control:           return 28  // CONTENT_TYPE_DECRYPTION_ERROR
-        case .senderSync:        return 23  // CONTENT_TYPE_SENDER_SYNC
-        case .sessionResetInit:  return 24  // CONTENT_TYPE_SESSION_RESET_INIT
+        case .direct:            type = .unspecified
+        case .control:           type = .decryptionError
+        case .senderSync:        type = .senderSync
+        case .sessionResetInit:  type = .sessionResetInit
         }
+        return type.byte
     }
 }
 
@@ -120,18 +122,29 @@ enum FramedSideChannel: String, Equatable {
     case readSync = "read_sync"
 }
 
+extension Shared_Proto_Core_V1_ContentType {
+    /// The generated case for a wire byte; one this build does not know is `.UNRECOGNIZED`.
+    init(byte: UInt8) {
+        self = Self(rawValue: Int(byte)) ?? .UNRECOGNIZED(Int(byte))
+    }
+
+    /// The wire byte (KNST byte 5, `ChatMessage.contentType`).
+    var byte: UInt8 { UInt8(clamping: rawValue) }
+}
+
 /// Named mapping used at the unseal boundary and by ingest parsers.
 /// Phase-1 hotfix + Phase-2 sole classifier — do not duplicate these cases inline.
 enum ContentTypeRouting {
 
     /// Classification of a KNST byte-5 value. One table, checked against the cross-client vectors.
     static func disposition(forFrameContentType contentType: UInt8) -> FrameDisposition {
-        switch contentType {
-        case 1:                  return .transcriptIncoming
-        case 23:                 return .transcriptOwnDevice
-        case 12, 13, 14, 21, 24, 25, 26, 27, 28, 29, 30:
-                                 return .silentControl
-        default:                 return .notCarried
+        switch Shared_Proto_Core_V1_ContentType(byte: contentType) {
+        case .e2EeSignal:  return .transcriptIncoming
+        case .senderSync:  return .transcriptOwnDevice
+        case .callSignal, .heartbeat, .deliveryReceipt, .sessionReset, .sessionResetInit,
+             .sessionPing, .sessionReady, .contactCard, .decryptionError, .profile, .readSync:
+                           return .silentControl
+        default:           return .notCarried
         }
     }
 
@@ -141,13 +154,13 @@ enum ContentTypeRouting {
     /// object a test can reach, per the rule about naming boundaries. The switch there now asks
     /// this rather than repeating `case 12` / `case 14`.
     static func framedSideChannel(for contentType: UInt8) -> FramedSideChannel? {
-        switch contentType {
-        case 12: return .callSignal
-        case 14: return .deliveryReceipt
-        case 27: return .contactCard
-        case 29: return .profile
-        case 30: return .readSync
-        default: return nil
+        switch Shared_Proto_Core_V1_ContentType(byte: contentType) {
+        case .callSignal:      return .callSignal
+        case .deliveryReceipt: return .deliveryReceipt
+        case .contactCard:     return .contactCard
+        case .profile:         return .profile
+        case .readSync:        return .readSync
+        default:               return nil
         }
     }
 
@@ -155,16 +168,19 @@ enum ContentTypeRouting {
     /// contact (`own_devices_only` in the cross-client table). A frame of one of these that
     /// arrives from a contact is dropped: a contact could otherwise clear our unread counts.
     static func isOwnDevicesOnly(_ contentType: UInt8) -> Bool {
-        contentType == 23 || contentType == 30
+        switch Shared_Proto_Core_V1_ContentType(byte: contentType) {
+        case .senderSync, .readSync: return true
+        default:                     return false
+        }
     }
 
     /// Derive routing kind from an authoritative `contentType` (post-unseal or identified outer).
     static func kind(for contentType: UInt8) -> WireMessageKind {
-        switch contentType {
-        case 21, 28: return .control
-        case 23, 30: return .senderSync
-        case 24: return .sessionResetInit
-        default: return .direct
+        switch Shared_Proto_Core_V1_ContentType(byte: contentType) {
+        case .sessionReset, .decryptionError: return .control
+        case .senderSync, .readSync:          return .senderSync
+        case .sessionResetInit:               return .sessionResetInit
+        default:                              return .direct
         }
     }
 
@@ -185,9 +201,11 @@ enum ContentTypeRouting {
     /// Includes session-control ops plus late-routed signal types (call, receipt).
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
-        switch contentType {
-        case 12, 14, 23, 27, 28, 29, 30: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError, profile, readSync
-        default: return false
+        switch Shared_Proto_Core_V1_ContentType(byte: contentType) {
+        case .callSignal, .deliveryReceipt, .senderSync, .contactCard, .decryptionError, .profile, .readSync:
+            return true
+        default:
+            return false
         }
     }
 

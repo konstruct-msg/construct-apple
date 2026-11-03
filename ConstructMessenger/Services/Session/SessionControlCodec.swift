@@ -22,12 +22,12 @@ enum SessionControlCodec {
     /// Map an Envelope `content_type` to the control op it represents (typed producers).
     /// Returns nil for non-control content types.
     static func op(forContentType contentType: Int) -> Op? {
-        switch contentType {
-        case 25: return .ping        // CONTENT_TYPE_SESSION_PING
-        case 26: return .ready       // CONTENT_TYPE_SESSION_READY
-        case 24: return .resetInit   // CONTENT_TYPE_SESSION_RESET_INIT
-        case 21: return .end         // CONTENT_TYPE_SESSION_RESET (END_SESSION)
-        default: return nil
+        switch Shared_Proto_Core_V1_ContentType(rawValue: contentType) ?? .UNRECOGNIZED(contentType) {
+        case .sessionPing:      return .ping
+        case .sessionReady:     return .ready
+        case .sessionResetInit: return .resetInit
+        case .sessionReset:     return .end     // END_SESSION
+        default:                return nil
         }
     }
 
@@ -41,8 +41,8 @@ enum SessionControlCodec {
     /// decisions/sealed-content-type-inside-the-plaintext-frame.md.
     static func frameContentType(for op: Op) -> UInt8? {
         switch op {
-        case .ping:  return 25
-        case .ready: return 26
+        case .ping:  return Shared_Proto_Core_V1_ContentType.sessionPing.byte
+        case .ready: return Shared_Proto_Core_V1_ContentType.sessionReady.byte
         default:     return nil
         }
     }
