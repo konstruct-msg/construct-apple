@@ -57,7 +57,8 @@ Silence is the worst failure: a message that never appears raises no error.
    app does network, Core Data, Keychain, UI, and the account → device-set mapping. Before
    writing a session or crypto decision in Swift, open `construct_core.udl`: it is already there
    more often than not. Known exceptions still in Swift, with their destination (the core
-   machine): the account-keyed `sessionPhases` and the per-scope init locks — do not extend them.
+   machine): `sessionPhases` (keyed by `SessionScope`) and the account-keyed `proactiveInitTasks`
+   init lock — do not extend them.
 3. **A control message names the state it refers to** (epoch, ratchet key, number), so the
    receiver tells current from stale exactly. A fix that adds a timer, cooldown, window,
    tie-break or retry budget means the message has no address — stop and give it one.
@@ -156,7 +157,7 @@ the same change, or is removed; a handler no producer reaches is wired up or del
 - The UniFFI boundary passes `bytes` (Swift `Data`), never `sequence<u8>` or `String`
   (`construct-core/tests/udl_bytes_test.rs` fails on a new one). A value from the core is already
   `Data`: do not wrap it in `Data(…)`.
-- Session state persists as CFE from `export_session_bytes_for`, never the JSON export.
+- Session state persists as CFE from `export_session` (`exportSession`), never the JSON export.
 - `Codable` `Data` in UserDefaults is fine; never hand-roll base64 around a typed `Data`.
 - Core Data `encryptedContent` is Binary Data; `ChatMessage.content` is `Data`, control
   messages use `Data()`.
