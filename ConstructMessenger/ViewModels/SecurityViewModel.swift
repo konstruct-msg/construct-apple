@@ -33,6 +33,7 @@ enum LockDelay: Int, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 @Observable
 final class SecurityViewModel {
     private(set) var isPinEnabled: Bool

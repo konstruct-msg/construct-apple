@@ -158,7 +158,10 @@ ELAPSED=$(( $(date +%s) - START ))
 
 # A build failure looks exactly like "no test failed" if you only grep for failures, which has
 # nearly cost this repo a correct test before. Report the build verdict separately.
-if ! grep -qE "\*\* TEST (SUCCEEDED|FAILED)" "$LOG"; then
+# `xcodebuild test` whose build fails still ends with `** TEST FAILED **`, after "Testing cancelled
+# because the build failed." Read as a test verdict it was a FAIL with no failing test — a "crash"
+# to the battery — when the mutation simply did not compile (2026-11-03).
+if ! grep -qE "\*\* TEST (SUCCEEDED|FAILED)" "$LOG" || grep -q "Testing cancelled because the build failed" "$LOG"; then
     echo "✗ build did not complete — NOT a passing mutation. Log: $LOG"
     grep -E "error: " "$LOG" | head -5
     echo "VERDICT: NO-BUILD"
