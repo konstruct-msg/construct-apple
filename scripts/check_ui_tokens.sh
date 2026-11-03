@@ -6,8 +6,8 @@
 # literals — the screen built that day added more. The colour count is coarse on purpose: it also
 # catches `.orange` on debug-only surfaces (the AGENTS.md rule) and the white behind a QR code,
 # which are correct; it guards the trend, not each site. Each count below has a baseline; the check fails
-# when a count rises above it. When a migration lowers a count, lower its baseline in the same
-# commit, so the ratchet holds what was won.
+# when a count rises above it, and also when it falls below: a migration that lowers a count lowers
+# its baseline in the same commit, so the ratchet holds what was won.
 #
 # No build needed; runs on CI.
 
@@ -28,8 +28,8 @@ CHECKS=(
   "text style past CTFont — use a CTFont role|\.font\(\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\b|7"
   "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|0"
   "colour literal — use Color.CT|(foregroundStyle|foregroundColor|background|fill|stroke|tint)\(\.?(Color\.)?(white|black|gray|red|green|blue|orange|yellow)\b|0"
-  "padding by number — use CTSpace|\.padding\((\.[a-zA-Z]+, *|\[[^]]*\], *)?[0-9]|324"
-  "stack spacing by number — use CTSpace|spacing: *[0-9]|333"
+  "padding by number — use CTSpace|\.padding\((\.[a-zA-Z]+, *|\[[^]]*\], *)?[0-9]|316"
+  "stack spacing by number — use CTSpace|spacing: *[0-9]|329"
 )
 
 failed=0
@@ -42,7 +42,10 @@ for entry in "${CHECKS[@]}"; do
     grep -rnE "$pattern" --include='*.swift' . | grep -v "$THEME" | head -20 || true
     failed=1
   elif (( n < baseline )); then
-    echo "✓ $name: $n — below baseline $baseline; lower it in this script"
+    # A baseline above the count lets that much debt come back unnoticed. It used to print a
+    # reminder; by 2026-11-03 two baselines sat 8 and 4 above the count, so it is now a failure.
+    echo "✗ $name: $n — below baseline $baseline. Lower the baseline to $n in this script, in this commit."
+    failed=1
   else
     echo "✓ $name: $n"
   fi
