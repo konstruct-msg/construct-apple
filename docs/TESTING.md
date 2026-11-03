@@ -77,8 +77,13 @@ also carries it; a scheme that builds the app alone would run zero tests and rep
 
 ## What CI does and does not cover
 
-`.github/workflows/checks.yml` runs `check_localization.sh` (ubuntu) and
-`check_privacy_manifest.sh` (macOS, needs `plutil`). That is all of it.
+Every textual check is listed once, in `scripts/check_all.sh` (`--list` prints them):
+localization, UI tokens, App Store metadata, build versions, fork pins, AGENTS.md paths, the
+privacy manifest. The pre-push hook runs it — install it once per clone with
+`scripts/install_hooks.sh` — and `.github/workflows/checks.yml` calls the same script (ubuntu), plus
+`--only privacy-manifest` on macOS for `plutil`. CI is the backstop for a push that skipped the
+hook; it never runs a check the hook does not. A new `scripts/check_*` file that `check_all.sh`
+does not list fails `check_all.sh`.
 
 There is **no build or test job**, because the app links `ConstructCore.xcframework` and
 `ConstructTransport.xcframework`, which are not in git and come from cross-compiling sibling Rust

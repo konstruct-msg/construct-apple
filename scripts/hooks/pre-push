@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# pre-push — the same checks CI runs (scripts/check_all.sh), before the push leaves the machine.
+# Installed by scripts/install_hooks.sh. Skip once with `git push --no-verify`; CI still runs them.
+#
+# The checks read the working tree, not the commits being pushed. Uncommitted edits can therefore
+# hide a red commit or redden a green one, so a dirty tree is named in the output.
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "pre-push: note — uncommitted changes; checks run on the working tree, not on what is pushed"
+fi
+
+exec ./scripts/check_all.sh

@@ -172,8 +172,10 @@ the same change, or is removed; a handler no producer reaches is wired up or del
 
 - **`--all`, always.** Without it the macOS slice is missing and `Construct Desktop/` fails to
   link against an xcframework that looks fine. The binaries are not in git; `Info.plist` is.
-- **CI cannot build the app.** It checks localization, the privacy manifest, versions, forks and
-  this file. Build and test locally — and build `Construct Desktop` after any shared change.
+- **CI cannot build the app.** It runs `scripts/check_all.sh` (localization, tokens, metadata,
+  versions, forks, this file, privacy manifest) — the same script as the pre-push hook
+  (`scripts/install_hooks.sh`, once per clone); a new check goes into that script, not into CI.
+  Build and test locally — and build `Construct Desktop` after any shared change.
 - **`ConstructMessenger` is the scheme with the tests.** One that builds the app alone runs zero
   tests and reports success. Tests run serially (`-parallel-testing-enabled NO`).
 - **Never pin `OS=` in a `-destination`**; check `xcrun simctl list devices available`.
