@@ -21,8 +21,11 @@
 # wrong on ruling out test execution; it is kept because the reasoning from it (a stall is 600s+
 # against a 45-75s healthy run) is what made the capture worth writing.
 #
-# So the loop now waits for the verdict line, not for the process. The stall capture stays for
-# whatever comes next.
+# So the loop now waits for the verdict line, not for the process. That was half of it. The
+# other half, found 2026-11-03 in this script's capture (`simctl diagnose` alive 2:18 into a
+# stall): on a failure xcodebuild collects a simulator sysdiagnose *before* printing the verdict,
+# with a 600s timeout. `-collect-test-diagnostics never` below turns that off. The stall capture
+# stays for whatever comes next.
 #
 # Usage:
 #   scripts/test_run.sh                                  # whole test target
@@ -90,7 +93,11 @@ run_tests() {
           -destination "platform=iOS Simulator,name=$DEVICE"
           # No clones: the base simulator is reused. Not a fix for the stall (which happens before
           # any clone exists) — it just removes a minute of boot from every mutation run.
-          -parallel-testing-enabled NO)
+          -parallel-testing-enabled NO
+          # The stall itself (2026-11-03): on a failing test xcodebuild runs `simctl diagnose
+          # --timeout=600` — a sysdiagnose of the simulator — *before* it prints the result line.
+          # A mutation run fails by design, so the watchdog fired on it whenever that took >180s.
+          -collect-test-diagnostics never)
     for id in ${IDS[@]+"${IDS[@]}"}; do ARGS+=(-only-testing:"$id"); done
 
     echo "→ xcodebuild ${ONLY:-<all tests>} on $DEVICE (stall watchdog at ${STALL_SECONDS}s)"
