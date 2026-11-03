@@ -12,6 +12,11 @@
 # the far end of the process — at upload, or on a user's screen — where it is most
 # expensive to find.
 
+# The list of checks lives in scripts/check_all.sh, which the pre-push hook runs too
+# (scripts/install_hooks.sh). This file only calls it, so CI never shows a red the author could not
+# have seen locally — it is the backstop for a push that skipped the hook. A check is added there,
+# not here. What each check guards is written in its own script's header.
+
 name: checks
 
 on:
@@ -20,71 +25,19 @@ on:
   pull_request:
 
 jobs:
-  localization:
-    # Pure grep — no Xcode, no macOS runner needed.
+  checks:
+    # Pure text — no Xcode. privacy-manifest needs plutil and reports SKIP here; the job below runs it.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Locale parity, duplicates, unresolved keys, format specifiers
-        run: ./scripts/check_localization.sh
-
-  ui-tokens:
-    # The design-token debt may shrink, never grow (vault TODO 122). Pure grep.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: No new hand-sized symbols, text styles or colour literals past the tokens
-        run: ./scripts/check_ui_tokens.sh
-
-  appstore-metadata:
-    # Apple reports an over-length field at upload, once the copy has already been
-    # written, reviewed and translated four times. Counting characters here costs a
-    # second and moves that discovery to the commit that caused it.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Store listing fields fit Apple's limits, in every locale
-        run: ./scripts/check_appstore_metadata.sh
-
-  build-versions:
-    # The app and its notification extension must carry one version; App Store Connect rejects
-    # the pair at upload when they differ. Both inherit it from the project, and a build number
-    # typed on a target's General tab quietly breaks that. Pure text, no Xcode.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: The app and its extension inherit one version from the project
-        run: ./scripts/check_build_versions.sh
-
-  forks:
-    # The SPM pin of every fork is the one .github/forks.json records, cut from its base — so the
-    # weekly upstream check (fork-upstreams.yml) asks about the version actually shipped.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Fork pins match .github/forks.json
-        run: python3 -I scripts/check_forks.py self-test && python3 -I scripts/check_forks.py pins
-
-  agents-md:
-    # AGENTS.md is the one file every agent reads, and it was the one file nothing checked.
-    # Four of its facts had rotted by 2026-08-22, including a rule whose trigger directory had
-    # been deleted three months earlier — unreachable, and indistinguishable from live.
-    #
-    # The vault is not checked out here, so vault links go unverified on CI and are covered by
-    # the local run. Repo-local paths are the ones that break in a rename, and those are checked.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Every path AGENTS.md names exists
-        run: ./scripts/check_agents_md.sh
+      - name: scripts/check_all.sh
+        run: ./scripts/check_all.sh
 
   privacy-manifest:
-    # Needs macOS: the script reads PrivacyInfo.xcprivacy with plutil.
-    #
-    # Apple validates this manifest on the binary at upload (ITMS-91053), so without
-    # this job a gap surfaces after the build, after the archive, at the worst moment.
+    # Needs macOS: the script reads PrivacyInfo.xcprivacy with plutil. Apple validates this manifest
+    # on the binary at upload (ITMS-91053), so without it a gap surfaces at the worst moment.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Required-reason APIs are declared
-        run: ./scripts/check_privacy_manifest.sh
+      - name: scripts/check_all.sh --only privacy-manifest
+        run: ./scripts/check_all.sh --only privacy-manifest
