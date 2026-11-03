@@ -214,9 +214,9 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         // Do not make any session-missing decisions before the crypto core is built and
         // sessions have had a chance to restore from Keychain. While the core is nil,
-        // hasSession returns false for every contact — prewarming here would send a
-        // destructive END_SESSION + fresh re-init over a perfectly healthy session that
-        // simply hasn't been imported yet (startup race, esp. with delayed auth refresh).
+        // hasSession returns false for every contact — prewarming here would decide about a
+        // perfectly healthy session that simply hasn't been imported yet (startup race, esp.
+        // with delayed auth refresh). Until 2026-09-27 that decision sent END_SESSION.
         // A later forceReconnect/network event re-triggers prewarm once the core is ready.
         let coreReady = CryptoManager.shared.isCoreReady
         guard coreReady else {

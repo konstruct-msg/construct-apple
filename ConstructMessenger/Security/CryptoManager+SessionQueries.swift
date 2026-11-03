@@ -55,10 +55,10 @@ extension CryptoManager {
     }
 
     /// True once the OrchestratorCore exists. Before this, `hasSession(for:)` returns
-    /// false for *every* contact, so any "session missing → END_SESSION / re-init"
-    /// decision (e.g. prewarm) MUST be gated on this. Otherwise, during the startup
-    /// window — especially when auth is delayed by a token refresh — a healthy session
-    /// that simply hasn't been restored yet looks missing and gets destroyed.
+    /// false for *every* contact, so any "session missing" decision (e.g. prewarm) MUST be
+    /// gated on this. Otherwise, during the startup window — especially when auth is delayed
+    /// by a token refresh — a healthy session that simply hasn't been restored yet looks
+    /// missing. Until 2026-09-27 that sent END_SESSION and destroyed it.
     var isCoreReady: Bool {
         return orchestratorCore != nil
     }
@@ -67,8 +67,8 @@ extension CryptoManager {
     /// `userId`, it attempts a lazy import from Keychain before answering. This closes a
     /// startup race where prewarm runs after the core is created but before
     /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
-    /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
-    /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
+    /// like a missing session (until 2026-09-27: a destructive END_SESSION + re-init that
+    /// broke decryption of the peer's in-flight messages).
     func hasOrRestoreSession(for deviceId: String) -> Bool {
         guard isCoreReady else { return false }
         return restoreSession(for: deviceId)
