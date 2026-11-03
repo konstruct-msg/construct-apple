@@ -91,8 +91,14 @@ typedef struct VeilStartRequest {
     const char *veil_capability_v2_b64;
     // Hex-encoded 32-byte Ed25519 veil_sk seed — generated and stored locally
     // (Keychain). Never derived from or sent to the relay. NULL/empty = AUTH v3
-    // not configured. MUST be the last field — Rust struct layout depends on it.
+    // not configured.
     const char *veil_sk_hex;
+    // 32-byte device key (Keychain) that keys the scores fingerprint hash
+    // (HMAC-SHA256). NULL / scoring_key_len != 32 = no key (bare SHA-256, which is
+    // only acceptable for the in-memory path). MUST be the last fields — Rust
+    // struct layout depends on them.
+    const uint8_t *scoring_key;
+    size_t scoring_key_len;
 } VeilStartRequest;
 
 typedef struct VeilStartResult {
