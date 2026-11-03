@@ -74,7 +74,7 @@ struct ContentView: View {
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 // Authenticated OR definitively registered — main app or first-run orientation.
                 // Checking isAuthenticated here prevents a flash to OnboardingView when
-                // Keychain is temporarily unavailable (WhenUnlockedThisDeviceOnly) but
+                // Keychain is temporarily unavailable (before the first unlock) but
                 // the user's session is still valid in memory.
                 //
                 // Orientation is product education (not identity init). Skip always available.
@@ -127,8 +127,8 @@ struct ContentView: View {
             // (Control Center, alerts, biometrics). scenePhase == .active would fire for all of those.
             //
             // Also retry if the crypto core was never initialized — happens when the app was
-            // woken in background while the device was locked (WhenUnlockedThisDeviceOnly keys
-            // temporarily unavailable). Now that the user is bringing the app to foreground,
+            // woken in background before the first unlock (keys temporarily unavailable). Now
+            // that the user is bringing the app to foreground,
             // the device is unlocked and Keychain items are accessible.
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {

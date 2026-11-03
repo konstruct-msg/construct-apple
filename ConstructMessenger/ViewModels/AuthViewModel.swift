@@ -43,17 +43,17 @@ class AuthViewModel {
 
     func refreshDeviceKeyState() {
         // If already authenticated, don't re-read Keychain — it may be temporarily
-        // inaccessible (WhenUnlockedThisDeviceOnly items while device is locked via
-        // SecurityGateView / biometrics). Returning false here would incorrectly
-        // show OnboardingView for an authenticated user.
+        // inaccessible (before the first unlock after a restart, or an item an older build
+        // wrote under WhenUnlocked that `migrateCryptoKeysAccessibility` has not moved yet).
+        // Returning false here would incorrectly show OnboardingView for an authenticated user.
         if isAuthenticated {
             hasRegisteredDeviceKeys = true
             return
         }
-        // Use only deviceId (kSecAttrAccessibleAfterFirstUnlock) as the routing signal.
-        // signingKey / identityKey use kSecAttrAccessibleWhenUnlockedThisDeviceOnly and
-        // are unavailable when the app is woken in the background (notifications, background
-        // fetch) while the device is locked — causing a spurious flash to OnboardingView.
+        // Use only deviceId as the routing signal. The device keys are AfterFirstUnlock too
+        // (`KeychainManager.cryptoKeyAccessible`), but one written by an older build under
+        // WhenUnlocked stays unreadable while locked until it is migrated, and a background
+        // wake (notification, fetch) reading it would flash OnboardingView.
         // Crypto key health is verified by restoreOrAuthenticateDevice(); if keys are missing
         // or corrupted it sets deviceKeysUnavailable = true and shows KeysRecoveryView.
         hasRegisteredDeviceKeys = KeychainManager.shared.loadDeviceID() != nil
@@ -470,9 +470,9 @@ class AuthViewModel {
     ///   3. Create new account — explicit user choice, then we wipe and re-register
     private func handleLostDeviceKeys(userId: String, reason: String) {
         Log.error("[Auth] Device keys unavailable — showing recovery screen. Reason: \(reason). userId: \(userId.prefix(8))", category: "Auth")
-        // kSecAttrAccessibleWhenUnlockedThisDeviceOnly items are inaccessible when the
-        // device is locked and the app is woken by a push notification. This is a transient
-        // condition — the keys haven't been wiped; they just can't be read right now.
+        // Keys can be unreadable to an app woken in the background: before the first unlock
+        // after a restart, or under the WhenUnlocked class an older build wrote them with. This
+        // is a transient condition — the keys haven't been wiped; they just can't be read now.
         // Skip the recovery screen in this case; restoreOrAuthenticateDevice() will be
         // retried when the user brings the app to the foreground.
         #if canImport(UIKit)

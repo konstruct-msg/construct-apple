@@ -298,45 +298,6 @@ extension CryptoManager {
         Log.info("Removed session from Keychain: \(contactId)", category: "CryptoManager")
     }
 
-    // MARK: - Archive Restore
-
-    /// Used for tie-breaking when we are the INITIATOR in a dual-INITIATOR clash:
-    /// after a failed decrypt the INITIATOR session was just moved to archives —
-    /// this undoes that and makes it active again so we keep the INITIATOR role.
-    @discardableResult
-    func restoreLatestArchive(for deviceId: String) -> Bool {
-        // Resolved once and used for every store below. It was resolved once and used for the
-        // core only: the archives, the suite id and the re-save were all read and written under
-        // the caller's id, so an account id read an archive list nothing had written under.
-        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore,
-              let archives = archiveManager.loadArchives(for: contactId),
-              !archives.isEmpty else { return false }
-        let idx = archives.count - 1
-        let latest = archives[idx]
-        do {
-            let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
-            _ = try core.importSession(contactId: contactId, data: latest.sessionData)
-            // Use typed accessor — no JSON round-trip needed.
-            let suiteId = core.getSessionSuiteId(contactId: contactId)
-            if suiteId > 0 {
-                KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: suiteId)
-                Log.info("SESSION_STATE[restore_suite_id]: device=\(contactId.prefix(8))… suiteId \(suiteIdBefore) → \(suiteId)", category: "SessionInit")
-            } else {
-                Log.error("SESSION_STATE[restore_suite_id_failed]: device=\(contactId.prefix(8))… suiteId_before=\(suiteIdBefore) — getSessionSuiteId returned 0 after import; remote decrypt will likely fail", category: "CryptoManager")
-            }
-            saveSessionToKeychain(forDevice: contactId)
-            archiveManager.restoreArchiveToCurrent(for: contactId, index: idx)
-            Log.info("Restored INITIATOR session from archive for \(contactId.prefix(8))… (tie-break)", category: "CryptoManager")
-            return true
-        } catch {
-            Log.error("restoreLatestArchive failed for \(contactId.prefix(8))…: \(error)", category: "CryptoManager")
-            return false
-        }
-    }
-
     // MARK: - Fallback Decrypt
 
     /// Try to decrypt message with archived sessions.

@@ -88,9 +88,9 @@ struct PeerAddress: Equatable, Sendable, CustomStringConvertible {
 
     /// The device this address names, or the peer's pinned device when it names none.
     ///
-    /// For the device-keyed stores — the END_SESSION cooldown, the session suite id, the
-    /// tie-break — which have no account-keyed meaning at all. `nil` when the peer has no pinned
-    /// key, which is the state in which no session with them exists.
+    /// For the device-keyed stores — the session suite id, `SessionScope` — which have no
+    /// account-keyed meaning at all. `nil` when the peer has no pinned key, which is the state in
+    /// which no session with them exists.
     func deviceOrPinned() -> String? {
         device ?? SessionAddressing.pinnedDevice(ofPeer: account)
     }
