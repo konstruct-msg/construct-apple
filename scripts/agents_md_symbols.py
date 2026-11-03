@@ -30,6 +30,10 @@ for tok in sorted(set(re.findall(r"`([^`\n]+)`", inline_text))):
         checks[w] = checks.get(w, False) or prefix
 
 EXCLUDE = [":!AGENTS.md", ":!CLAUDE.md", ":!docs/"]
+# Inside a git hook GIT_DIR (and friends) are set and beat `git -C`: the construct-core search then
+# read this repository and reported every core name missing — found when the pre-push hook refused
+# the push that introduced this check. A sibling repo is searched without them.
+SIBLING_ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 CORE = Path.home() / "Code/construct-core"
 
 
@@ -41,7 +45,7 @@ def grep(word, prefix, repo=None):
     else:
         cmd += ["-w", "-F", word]
     cmd += ["--"] + ([] if repo else EXCLUDE)
-    return subprocess.run(cmd, capture_output=True).returncode == 0
+    return subprocess.run(cmd, capture_output=True, env=SIBLING_ENV if repo else None).returncode == 0
 
 
 def declared(word, repo=None):
@@ -51,7 +55,7 @@ def declared(word, repo=None):
     cmd = ["git"] + (["-C", str(repo)] if repo else []) + ["grep", "-qE",
            rf"(^|[^A-Za-z0-9_])({kw})[[:space:]]+{re.escape(word)}([^A-Za-z0-9_]|$)", "--",
            "*.swift", "*.rs", "*.udl", "*.kt", "*.proto"]
-    return subprocess.run(cmd, capture_output=True).returncode == 0
+    return subprocess.run(cmd, capture_output=True, env=SIBLING_ENV if repo else None).returncode == 0
 
 
 bad = []

@@ -165,14 +165,14 @@ fi
 
 if [ "$fail" -eq 0 ]; then
     if [ "$check_vault" -eq 1 ] && [ "$skipped_siblings" -eq 0 ]; then
-        c_grn "AGENTS.md: every referenced path exists"
+        c_grn "AGENTS.md: every referenced path and symbol exists"
     else
-        c_grn "AGENTS.md: every repo-local path exists"
+        c_grn "AGENTS.md: every repo-local path and symbol exists"
         c_dim "sibling repositories not checked out here — their links unchecked"
     fi
 else
     echo
-    c_red "AGENTS.md references paths that do not exist."
-    c_dim "Fix the path, or delete the rule — a rule nothing can trigger is not a rule."
+    c_red "AGENTS.md references paths or symbols that do not exist."
+    c_dim "Fix the name, or delete the rule — a rule nothing can trigger is not a rule."
     exit 1
 fi
