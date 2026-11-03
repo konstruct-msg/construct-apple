@@ -36,7 +36,7 @@ class DeveloperMode {
     private init() {
         // PRIVACY: Developer Mode must be impossible to enable in App Store Release —
         // no debug UI, no log export, no session-debug surface in production.
-        #if DEBUG || INTERNAL_TOOLS
+        #if DEBUG
         self.isEnabled = UserDefaults.standard.bool(forKey: "developerModeEnabled")
         #else
         self.isEnabled = false
@@ -49,7 +49,7 @@ class DeveloperMode {
     /// Activation is a DEBUG/internal-only affordance — in Release the whole body is compiled
     /// out, so Developer Mode can never be turned on in production.
     func registerVersionTap() {
-        #if DEBUG || INTERNAL_TOOLS
+        #if DEBUG
         let now = Date()
 
         // Reset counter if too much time passed
@@ -120,7 +120,7 @@ class DeveloperMode {
     var showSessionDebugInfo: Bool { debugGated }
 
     private var debugGated: Bool {
-        #if DEBUG || INTERNAL_TOOLS
+        #if DEBUG
         return isEnabled
         #else
         return false

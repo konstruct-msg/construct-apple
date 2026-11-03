@@ -35,12 +35,6 @@ extension AuthViewModel {
         await refreshUserProfileFromServer(userId: outcome.userId)
         finishAuthenticatedSession(userId: outcome.userId, reason: "device_link")
 
-        guard DeviceLinkHistorySyncPolicy.isOffered else {
-            deviceLinkPhase = .idle
-            Log.info("Post-link history sync disabled — continuing with account only", category: "DeviceLink")
-            return
-        }
-
         Log.info("Post-link history sync offered role=\(outcome.role)", category: "DeviceLink")
         switch outcome.role {
         case .linkedNewDevice:

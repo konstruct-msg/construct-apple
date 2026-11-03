@@ -112,8 +112,8 @@ use `ConstructMessenger`. A scheme that builds the app alone would run zero test
 ## What CI does and does not cover
 
 Every textual check is listed once, in `scripts/check_all.sh` (`--list` prints them):
-localization, UI tokens, App Store metadata, build versions, fork pins, AGENTS.md paths, the
-privacy manifest. The pre-push hook runs it — install it once per clone with
+localization, UI tokens, App Store metadata, build versions, fork pins, AGENTS.md paths and
+symbols, platform imports in shared files, Beta build conditions, the privacy manifest. The pre-push hook runs it — install it once per clone with
 `scripts/install_hooks.sh` — and `.github/workflows/checks.yml` calls the same script (ubuntu), plus
 `--only privacy-manifest` on macOS for `plutil`. CI is the backstop for a push that skipped the
 hook; it never runs a check the hook does not. A new `scripts/check_*` file that `check_all.sh`
@@ -129,7 +129,12 @@ passes — those are local, via `test_run.sh` or a full `xcodebuild test`.
 ```bash
 scripts/build_all.sh                       # iOS (simulator) + Construct Desktop, signing off
 scripts/build_all.sh --frameworks-from ../construct-messenger   # in a worktree
+scripts/build_all.sh --configuration Beta  # what TestFlight and the Desktop DMG compile
 ```
+
+Beta compiles without `DEBUG` (`scripts/check_build_conditions.py`), so code that reaches a
+`#if DEBUG` test seam or screen builds in Debug and fails only in Beta — build it after touching
+one.
 
 `ConstructMessenger/` is compiled into Construct Desktop too, except the files its
 `membershipExceptions` name. The script first checks that every xcframework slice `Info.plist`

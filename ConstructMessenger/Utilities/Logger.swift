@@ -32,10 +32,12 @@ struct Log {
 
     /// Debug diagnostics. **No-op in Release**: message is not evaluated (`@autoclosure`),
     /// so hex previews / string builds on encrypt-decrypt paths cost nothing in App Store builds.
+    /// Beta (`INTERNAL_TOOLS`) keeps them: the log a tester exports is the reason that build
+    /// differs from Release, and it carried these lines while Beta compiled with `DEBUG`.
     /// Only `debug` uses `@autoclosure` — `info`/`error` stay eager so actor-isolated
     /// interpolations (e.g. `TransportRouter.state`) keep valid isolation.
     static func debug(_ message: @autoclosure () -> String, category: String = "Default") {
-        #if DEBUG
+        #if DEBUG || INTERNAL_TOOLS
         log(level: .debug, category: category, message: message())
         #endif
     }

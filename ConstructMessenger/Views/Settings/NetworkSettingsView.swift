@@ -34,7 +34,7 @@ struct NetworkSettingsView: View {
     /// server reports the flow disabled — read once per appearance, not per redraw.
     @State private var showingVeilVoucher = false
     @State private var veilVoucherOffered = VeilVoucherAvailability.isOffered
-    #if DEBUG || INTERNAL_TOOLS
+    #if DEBUG
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
     #endif
     #if DEBUG
@@ -73,7 +73,7 @@ struct NetworkSettingsView: View {
                             Text(connectionManager.connectionStatus.text(localized: true))
                                 .font(CTFont.ui(14))
                                 .foregroundStyle(Color.CT.text)
-                            #if DEBUG || INTERNAL_TOOLS
+                            #if DEBUG
                             if connectionManager.connectionStatus != .connected,
                                let phase = connectionManager.connectingPhase {
                                 Text(phase)
@@ -93,7 +93,7 @@ struct NetworkSettingsView: View {
 
                         Spacer()
 
-                        #if DEBUG || INTERNAL_TOOLS
+                        #if DEBUG
                         let displayTransport = streamManager.activeTransport.isEmpty
                             ? streamManager.lastActiveTransport
                             : streamManager.activeTransport
@@ -147,7 +147,7 @@ struct NetworkSettingsView: View {
                         .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     }
 
-                    #if DEBUG || INTERNAL_TOOLS
+                    #if DEBUG
                     if let error = connectionManager.lastError {
                         ConstructRowDivider(indent: CTLayout.edgePad)
                         Text(error)
@@ -170,15 +170,15 @@ struct NetworkSettingsView: View {
                 // Product-facing control: off / auto / on. No VEIL name, no relay coords, no
                 // path detail. Enabling auto/on silently fetches signed relay config from the
                 // server then starts if the mode requires it. Technical diagnostics stay under
-                // DEBUG || INTERNAL_TOOLS below (silent-transport-ui).
-                #if !DEBUG && !INTERNAL_TOOLS
+                // DEBUG below (silent-transport-ui); Beta shows what Release shows.
+                #if !DEBUG
                 censorshipProtectionSection
                 #endif
 
                 // Silent-transport (decisions/silent-transport-ui): the external build discloses
                 // NO reachability data — no relay address, path, transport badges, or manual
                 // import. Technical VEIL controls live only on internal builds.
-                #if DEBUG || INTERNAL_TOOLS
+                #if DEBUG
                 // MARK: - Traffic Protection (VEIL) — internal
                 CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: ""))
                 CTSectionGroup {
@@ -254,13 +254,11 @@ struct NetworkSettingsView: View {
                 // user-facing toggle — confirm it's live via the transport badge in the STATUS
                 // section above ("QUIC" when active, "H2" otherwise).
                 //
-                // The QUIC kill-switch below is visible in DEBUG and on internal TestFlight builds
-                // (INTERNAL_TOOLS) so we can A/B QUIC vs H2 across networks; it is compiled out for
-                // the external release. The Salamander obfuscation toggle stays DEBUG-only: the
-                // production gateway is plain, so enabling obf on a TestFlight build would just get
-                // datagrams dropped (invalid CID) and fall back to H2. Direct path only — ignored
-                // when VEIL is active.
-                #if DEBUG || INTERNAL_TOOLS
+                // The QUIC kill-switch and the Salamander obfuscation toggle below are DEBUG only;
+                // Beta and Release have neither. Obfuscation against the plain production gateway
+                // just gets datagrams dropped (invalid CID) and falls back to H2. Direct path
+                // only — ignored when VEIL is active.
+                #if DEBUG
                 CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
                 CTSectionGroup {
                     Toggle(isOn: $engineQuicOn) {
@@ -310,7 +308,7 @@ struct NetworkSettingsView: View {
                 }
                 #endif
 
-                #if DEBUG || INTERNAL_TOOLS
+                #if DEBUG
                 // Live FSM diagnostics (internal builds only). Every transport routing decision
                 // flows through one place; this screen is that place.
                 CTSettingsSectionHeader(title: "DIAGNOSTICS (INTERNAL)", color: .orange)

@@ -8,8 +8,8 @@
 //
 
 #if DEBUG
-// TestFlight builds compile with DEBUG and show this screen: every line of it passes the same
-// front-name rule as the log (`LogRedaction`, TODO 135) — a screenshot travels as a log does.
+// Debug only. Every line passes the same front-name rule as the log (`LogRedaction`, TODO 135):
+// a screenshot travels as a log does.
 
 import SwiftUI
 import Combine

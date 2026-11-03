@@ -824,7 +824,7 @@ struct CTStatusBadge: View {
     }
 }
 
-/// Compact orange **BETA** chip for Debug / Beta / INTERNAL_TOOLS builds.
+/// Compact orange **BETA** chip for Debug and Beta (`INTERNAL_TOOLS`) builds.
 /// Renders nothing on App Store Release so production stays clean.
 struct CTBetaBadge: View {
     var compact: Bool = false

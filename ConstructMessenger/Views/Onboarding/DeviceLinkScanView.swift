@@ -129,10 +129,6 @@ struct DeviceLinkScanView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
-                guard DeviceLinkHistorySyncPolicy.isOffered else {
-                    dismiss()
-                    return
-                }
 
                 switch outcome.role {
                 case .linkedNewDevice:

@@ -57,11 +57,6 @@ struct DeviceLinkShowQRView: View {
             guard let outcome else { return }
             Task {
                 await authViewModel.completeDeviceLink(outcome)
-                guard DeviceLinkHistorySyncPolicy.isOffered else {
-                    dismiss()
-                    return
-                }
-
                 receiveUserId = outcome.userId
                 showReceiveHistorySync = true
             }

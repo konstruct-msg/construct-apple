@@ -276,8 +276,8 @@ struct AppConstants {
     // Debug Settings
     static let enableDebugLogging = BuildConfiguration.current == .debug
 
-    /// True for local Debug and Beta archives (`SWIFT_ACTIVE_COMPILATION_CONDITIONS`
-    /// includes `DEBUG`) and future `INTERNAL_TOOLS` TestFlight. False for App Store Release.
+    /// True for Debug and Beta (TestFlight, Desktop Beta DMG — `INTERNAL_TOOLS`). False for
+    /// App Store Release.
     static var isNonProductionBuild: Bool {
         #if DEBUG || INTERNAL_TOOLS
         true
@@ -332,24 +332,21 @@ struct FeatureFlags {
     /// from an older build can never disable it. **DEBUG:** `UserDefaults`-backed (default `true`),
     /// so the DEBUG-only toggle in `NetworkSettingsView` can force it on/off for testing. Read fresh
     /// on every stream open, so toggling + a stream reconnect switches transport live (DEBUG only).
-    /// `INTERNAL_TOOLS` is an opt-in compilation condition for internal TestFlight builds (which
-    /// are Release config but need the QUIC kill-switch visible). Define it in the app target's
-    /// Release Active Compilation Conditions for the internal round; remove it for the external
-    /// round so QUIC is force-on with no toggle.
+    /// Beta (`INTERNAL_TOOLS`) is Release here: testers get the log, not the switch.
     static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
     static var engineQuicExperimental: Bool {
         get {
             // These conditionals were commented out from 2026-06-25 to 2026-10-20 by accident
             // (TODO 178): a release build read the stored value, so a `false` left by a test build
             // turned QUIC off for good.
-            #if DEBUG || INTERNAL_TOOLS
+            #if DEBUG
             UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true
             #else
             true  // forced on in external release — no kill-switch, stale stored value ignored
             #endif
         }
         set {
-            #if DEBUG || INTERNAL_TOOLS
+            #if DEBUG
             UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey)
             #endif
         }

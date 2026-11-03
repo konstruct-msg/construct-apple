@@ -18,6 +18,10 @@
 #   scripts/build_all.sh --frameworks-from DIR   first fill missing slices from another clone
 #                                                (APFS clone copy, no extra disk), e.g. a worktree
 #                                                from the main checkout
+#   scripts/build_all.sh --configuration Beta    build a configuration other than the scheme's
+#                                                (Debug). Beta compiles without DEBUG since
+#                                                2026-11-03, so code that reaches a DEBUG-only
+#                                                seam builds in Debug and fails only here
 #
 # Prints one line per target, `BUILD <target>: OK|FAILED`, and exits non-zero if any failed. Logs
 # are kept in $TMPDIR/construct-build-all/.
@@ -30,13 +34,14 @@ cd "$ROOT" || exit 1
 LOG_DIR="${TMPDIR:-/tmp}/construct-build-all"
 mkdir -p "$LOG_DIR"
 
-DO_IOS=1; DO_DESKTOP=1; FROM=""
+DO_IOS=1; DO_DESKTOP=1; FROM=""; CONFIG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ios) DO_DESKTOP=0 ;;
     --desktop) DO_IOS=0 ;;
     --frameworks-from) FROM="${2:?--frameworks-from needs a directory}"; shift ;;
-    *) echo "usage: $0 [--ios|--desktop] [--frameworks-from DIR]" >&2; exit 2 ;;
+    --configuration) CONFIG="${2:?--configuration needs a name}"; shift ;;
+    *) echo "usage: $0 [--ios|--desktop] [--frameworks-from DIR] [--configuration NAME]" >&2; exit 2 ;;
   esac
   shift
 done
@@ -69,10 +74,11 @@ fi
 # ── build ─────────────────────────────────────────────────────────────────────────────────────
 STATUS=0
 build() {  # name scheme destination
-  local name="$1" scheme="$2" dest="$3" log="$LOG_DIR/$1.log"
+  local name="$1${CONFIG:+-$CONFIG}" scheme="$2" dest="$3"
+  local log="$LOG_DIR/$name.log"
   echo "── building $name ($scheme) → $log"
   xcodebuild build -project ConstructMessenger.xcodeproj -scheme "$scheme" -destination "$dest" \
-    CODE_SIGNING_ALLOWED=NO > "$log" 2>&1
+    ${CONFIG:+-configuration "$CONFIG"} CODE_SIGNING_ALLOWED=NO > "$log" 2>&1
   local rc=$?
   # The exit code alone has lied before; the result line is the proof.
   if [ $rc -eq 0 ] && grep -q '\*\* BUILD SUCCEEDED \*\*' "$log"; then
