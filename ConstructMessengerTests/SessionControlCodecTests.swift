@@ -41,16 +41,6 @@ final class SessionControlCodecTests: XCTestCase {
         }
     }
 
-    /// END_SESSION keeps its marker, and it must stay recognisable: it is the one control payload
-    /// with no ciphertext to hold a frame, so the string is the only thing identifying it.
-    func testEndSessionMarkerStillRecognised() {
-        XCTAssertTrue(SessionControlCodec.isEndSessionMarker(Data("__END_SESSION__".utf8)))
-        XCTAssertTrue(SessionControlCodec.isEndSessionMarker(Data("__END_SESSION__trailing".utf8)))
-        XCTAssertFalse(SessionControlCodec.isEndSessionMarker(Data("__session_ping_N__".utf8)),
-                       "a retired control string must not be mistaken for END_SESSION")
-        XCTAssertFalse(SessionControlCodec.isEndSessionMarker(Data("hello".utf8)))
-    }
-
     /// The content-type table and the op enum must agree in both directions, since routing now
     /// crosses between them (frame byte → op → handler).
     func testContentTypeTableRoundTrips() {

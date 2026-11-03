@@ -8,11 +8,9 @@
 import Foundation
 import SwiftProtobuf
 
-/// Decodes session-handshake control signals from an incoming message, recognising both
-/// the typed wire form (Envelope `content_type` + `SessionControl` payload) and the legacy
-/// plaintext magic strings (`__session_ping_<UUID>__`, `__session_ready_<UUID>__`,
-/// `__session_reset_init_<UUID>__`). This is the consumer-first half of the migration:
-/// new clients understand the opcode; old peers still send strings, so we keep the fallback.
+/// Names the session-control content types (21, 24, 25, 26) and reads a typed `SessionControl`
+/// payload. Nothing sends any of them since 2026-09-27; they are recognised only so a message
+/// from an older build is acknowledged and dropped (`RetiredSessionControl`).
 ///
 /// See `decisions/binary-control-message-format.md`.
 enum SessionControlCodec {
@@ -56,15 +54,6 @@ enum SessionControlCodec {
     //   • `isLegacyControlPlaintext` — the union of the two plus the END_SESSION marker.
     // A control signal is now identified by KNST byte 5 and nothing else.
 
-    private static let endSessionMarker = Data("__END_SESSION__".utf8)
-
-    /// True when plaintext is the magic END_SESSION marker (or starts with it).
-    ///
-    /// The one magic string left. END_SESSION has no ciphertext to put a frame in — the marker
-    /// *is* the payload — so it cannot be identified any other way.
-    static func isEndSessionMarker(_ data: Data) -> Bool {
-        data == endSessionMarker || data.starts(with: endSessionMarker)
-    }
 
     /// Parse a typed `SessionControl` payload (Phase 2+ producers). Returns nil if the bytes
     /// are not a valid SessionControl or carry an unspecified op (forward-compat: a future
