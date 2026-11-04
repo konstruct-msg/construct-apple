@@ -99,6 +99,7 @@ enum LocalRepositories {
         case .success(let open):
             session = open
             storeFailure = nil
+            upgradeLegacyBodies(.localStore(open))
             return .localStore(open)
         case .failure(let failure):
             Log.error("LocalRepositories: the app's store is not open — \(failure)", category: "Storage")
@@ -181,6 +182,7 @@ enum LocalRepositories {
                     throw error
                 }
             }
+            upgradeLegacyBodies(.localStore(opened))
             LocalStoreImport.markMoved()
             session = opened
             storeFailure = nil
@@ -188,6 +190,20 @@ enum LocalRepositories {
         }
         NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
         return counts
+    }
+
+    /// Before the store is installed, so no write reaches it meanwhile (`LegacyBodyUpgrade`). Not
+    /// in a unit-test host, for the reason `LocalStoreImport.isDueAtLaunch` gives; tested directly.
+    private static func upgradeLegacyBodies(_ backing: Backing) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        let started = Date()
+        do {
+            if let counts = try LegacyBodyUpgrade.runIfDue(messages: backing.messages, keyValue: backing.keyValue) {
+                Log.info("LocalRepositories: legacy media bodies — \(counts.converted) converted, \(counts.kept) kept, \(Int(Date().timeIntervalSince(started) * 1000)) ms", category: "Storage")
+            }
+        } catch {
+            Log.error("LocalRepositories: legacy media bodies not converted, again at the next open — \(error)", category: "Storage")
+        }
     }
 
     private static func install(_ backing: Backing) {

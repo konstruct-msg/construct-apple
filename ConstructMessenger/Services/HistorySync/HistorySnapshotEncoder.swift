@@ -218,7 +218,8 @@ final class HistorySnapshotEncoder {
     }
 
     /// A row from before CTM1 — legacy UTF-8 or the media JSON the bubbles once read. Only this
-    /// app wrote them; step 4 of the store plan converts them, and this goes with it.
+    /// app wrote them. `LegacyBodyUpgrade` converts the media ones in the store; plain text and a
+    /// media row that would not read the same stay, and come here.
     private func liftLegacy(_ message: MessageRecord, stored: LocalMessagePayload, chatPeer: String?) -> Lifted? {
         guard case .legacyUTF8(let data) = stored, let body = HistoryBodyCodec.liftLegacy(data) else {
             counters.messageLegacyUnconvertible += 1

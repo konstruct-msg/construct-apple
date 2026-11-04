@@ -4,7 +4,7 @@
 //
 //  A row from before CTM1 → the wire body oneof. Every other body crosses as bytes in the core
 //  (`history_export_message`, decisions/history-projection-in-the-core.md); these rows exist only
-//  on iOS, and step 4 of the store plan converts them.
+//  on iOS. `LegacyBodyUpgrade` converts the media ones in the store with this; plain text stays.
 //
 
 import Foundation
@@ -37,7 +37,8 @@ enum HistoryBodyCodec {
                     thumbnail: nil,
                     hash: dict["hash"] as? String ?? "",
                     filename: dict["filename"] as? String,
-                    blurhash: dict["blurhash"] as? String
+                    blurhash: dict["blurhash"] as? String,
+                    presentation: MediaPresentation.of(dict)
                 )
             }
             let wire = MediaWireCodec.albumContent(mediaList: items, caption: media.caption, quoted: nil)
