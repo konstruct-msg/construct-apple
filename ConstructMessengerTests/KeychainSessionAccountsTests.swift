@@ -28,8 +28,8 @@ final class KeychainSessionAccountsTests: XCTestCase {
     }
 
     func testArchivedSessionsAreSessionState() {
-        // `SessionArchiveManager` writes "session_archives_<userId>"; a fresh identity must not
-        // inherit the previous one's archives.
+        // Older builds wrote "session_archives_<userId>"; a fresh identity must not inherit the
+        // previous one's archives.
         XCTAssertTrue(KeychainSessionAccounts.isSessionState("session_archives_\(contactId)"))
     }
 

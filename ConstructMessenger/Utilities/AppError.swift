@@ -202,7 +202,6 @@ extension AppError {
             case .decryptionFailed,
                  .invalidCiphertext:           return .decryptionFailed
             case .duplicateMessage:            return .decryptionFailed
-            case .decryptionFailedNoArchive:   return .decryptionFailed
             case .encryptionFailed,
                  .invalidKeyData,
                  .invalidSignature,

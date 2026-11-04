@@ -19,7 +19,7 @@
 //  does not name them leaves ratchet state behind:
 //
 //      session_<CryptoDeviceId>            live ratchet blob      → delete    (written today)
-//      session_archives_<CryptoDeviceId>   archived sessions      → delete    (written today)
+//      session_archives_<CryptoDeviceId>   archived sessions      → delete    (older builds; purged at launch)
 //      session_<ServerUserId>              pre-flip ratchet       → delete    (legacy on disk)
 //      session_<ServerUserId>:<DeviceId>   pre-flip per-device    → delete    (legacy on disk)
 //      session_token                       the auth token         → KEEP
@@ -80,13 +80,17 @@ enum KeychainSessionAccounts {
     /// says only *what* the bytes are; where they live is decided here and nowhere else.
     ///
     /// Android maps the same slots onto Keystore without inheriting any of these names.
-    /// The account this app's own archive *list* for `contactId` lives under — a JSON list of
-    /// `SessionArchive` kept by `SessionArchiveManager`. It was the core's `SessionArchive` slot
-    /// until 2026-09-27, when the core stopped archiving (its archive was END_SESSION's); the
-    /// namespace is unchanged, so what older builds stored is still found and still wiped.
+    /// The account an older build's archive *list* for `contactId` lives under. Nothing writes
+    /// or reads one since 2026-11-04 — the core keeps previous states, and this app keeps no
+    /// archive beside them. The name stays so that what those builds stored is still found:
+    /// purged at launch (`KeychainManager.deleteRetiredSessionArchives`) and wiped with the rest
+    /// of the session state.
     static func archiveAccount(for contactId: String) -> String {
-        prefix + archiveInfix + contactId
+        archivePrefix + contactId
     }
+
+    /// Every older build's archive list starts with this.
+    static var archivePrefix: String { prefix + archiveInfix }
 
     static func account(for slot: CfeSecureStoreSlot) -> String {
         switch slot {

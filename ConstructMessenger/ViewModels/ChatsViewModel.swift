@@ -187,18 +187,17 @@ class ChatsViewModel {
 
         if SessionReducer.chatStartRetiresExistingSession(origin: origin) {
             // Redeeming an invite means the two sides are establishing a session now, so anything
-            // left from before is retired first — including a Keychain entry the core has not
-            // loaded, which `hasSession` cannot see and `archiveSession` now can.
+            // left from before is dropped first — including a Keychain entry the core has not
+            // loaded, which `hasSession` cannot see and `hasStoredSessionState` can.
             //
-            // This replaces a `clearArchivedSessions` that did the opposite of what was needed:
-            // it removed the archives, which are the fallback for decrypting anything still in
-            // flight, and kept the live session, which is the one thing guaranteed to be wrong
-            // after the peer has re-paired. See `chatStartRetiresExistingSession`.
+            // This replaces a `clearArchivedSessions` that kept the live session, which is the one
+            // thing guaranteed to be wrong after the peer has re-paired. See
+            // `chatStartRetiresExistingSession`.
             if CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: user.id) {
                 // Every device of theirs, not the pinned one. A re-pairing that retired one
                 // ratchet and left the rest would re-establish beside sessions the peer has
                 // already thrown away.
-                let retired = CryptoManager.shared.archiveAllSessions(ofPeer: user.id, reason: .manualReset)
+                let retired = CryptoManager.shared.discardAllSessions(ofPeer: user.id)
                 Log.info(
                     "Invite redeem: retired \(retired) session(s) with \(user.id.prefix(8))… before re-establishing",
                     category: "SessionInit"
@@ -206,7 +205,6 @@ class ChatsViewModel {
             }
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         } else if !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: user.id) {
-            CryptoManager.shared.clearArchivedSessionsForAllDevices(ofPeer: user.id)
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         }
         return chat
@@ -232,7 +230,7 @@ class ChatsViewModel {
         // relationship to `User` — but falls back to `pinnedDevice(ofPeer:)`, and that reads
         // `User.knownIdentityKey`, which does not. So for a contact we hold no `PeerDevice` row
         // for, which is every peer we have only ever received from, resolving after the prune
-        // returns nothing. `archiveSessions(ofPeer:)` ran in exactly that position and archived
+        // returns nothing. `discardSessions(ofPeer:)` ran in exactly that position and dropped
         // nothing for those contacts.
         let peerDevices = SessionAddressing.deviceIds(ofPeer: userId)
 
@@ -240,10 +238,9 @@ class ChatsViewModel {
         // They hold our intake key; a removal retires it like a block does.
         Task { await IntakeCredentialService.shared.rotate(dropping: userId) }
 
-        // Forget rather than archive. An archive keeps the ratchet for a late message, which is
-        // the right answer for a session that ended; this contact is gone, and the leftovers are
-        // what steer the next add if they ever come back. `forgetContactState` (core 0.16.0) drops
-        // the archive, the prekey counter, the heal record, the PQ contribution, the init lock,
+        // Forget, not only drop the ratchet. This contact is gone, and the leftovers are what
+        // steer the next add if they ever come back. `forgetContactState` (core 0.16.0) drops
+        // the previous states, the prekey counter, the heal record, the PQ contribution, the init lock,
         // the cooldown, the pending END_SESSION and the queued carriers — none of which
         // `remove_session` touched, and none of which was reachable from here before.
         for device in peerDevices {
@@ -292,7 +289,7 @@ class ChatsViewModel {
         chatManagementService.deleteChatLocally(chatId)
 
         if let userId = requestedFor {
-            chatManagementService.archiveSessions(ofPeer: userId)
+            chatManagementService.discardSessions(ofPeer: userId)
         }
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }

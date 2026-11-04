@@ -102,8 +102,6 @@ class CryptoManager: @unchecked Sendable {
     }
     private var hasRestoredSessionsStorage = false
 
-    // MARK: - Session Archive
-    let archiveManager = SessionArchiveManager()
     let messageCrypto = MessageCryptoService()
     let sessionInitService = CryptoSessionInitializationService()
     let sessionRestoreService = SessionRestoreService()
@@ -115,15 +113,6 @@ class CryptoManager: @unchecked Sendable {
     /// so the startup OTPK check must replace all server keys instead of just replenishing.
     let wasRestoredFromKeychain: Bool
     
-    // MARK: - Garbage Collection
-    
-    /// Timer for periodic archive cleanup (24 hours). Main thread only — it is created and
-    /// replaced from `DispatchQueue.main` and lives on the main run loop.
-    private var gcTimer: Timer?
-    
-    /// GC interval (24 hours)
-    private let gcIntervalSeconds: TimeInterval = 24 * 60 * 60
-
     private init() {
         let (loadedCore, restoredFromKeychain) = coreProvider.loadCore()
         self.bootstrapCoreStorage = loadedCore
@@ -134,41 +123,14 @@ class CryptoManager: @unchecked Sendable {
             KeychainManager.shared.deleteLegacyDeviceKeyCopies()
         }
 
-        // Defer GC and timer to avoid accessing Core Data before stores are loaded.
-        // Session restore is intentionally NOT done here — orchestratorCore is not yet
-        // available. It will be triggered inside setLocalUserId() once the core is ready.
-        DispatchQueue.main.async { [weak self] in
-            self?.cleanupArchivedSessions()
-            self?.startGarbageCollectionTimer()
-        }
+        // Older builds kept archived sessions of their own beside the core's previous states;
+        // nothing reads them since 2026-11-04, and each one is chain keys kept past their use.
+        // Every launch, not once behind a flag: the purge is a listing, and an item a locked
+        // launch could not delete is found by the next one.
+        // `decisions/the-core-keeps-previous-states-the-app-keeps-no-archive.md`.
+        KeychainManager.shared.deleteRetiredSessionArchives()
     }
-    
-    // MARK: - Garbage Collection
-    
-    /// Start periodic garbage collection timer (runs every 24 hours)
-    private func startGarbageCollectionTimer() {
-        gcTimer?.invalidate()  // Cancel existing timer if any
-        
-        gcTimer = Timer.scheduledTimer(withTimeInterval: gcIntervalSeconds, repeats: true) { [weak self] _ in
-            Log.debug("Running periodic archive garbage collection", category: "CryptoManager")
-            self?.cleanupArchivedSessions()
-        }
-        
-        // Add to RunLoop to ensure it fires even when app is in background
-        if let timer = gcTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
-        
-        Log.debug("Started archive GC timer (interval: 24h)", category: "CryptoManager")
-    }
-    
-    deinit {
-        // Stop GC timer on dealloc
-        gcTimer?.invalidate()
-        // UniFFI manages memory automatically via Arc<T>
-        // No manual cleanup needed!
-    }
-    
+
     // MARK: - Device Registration
 
     // MARK: - Operations with this device's own keys
@@ -436,9 +398,9 @@ class CryptoManager: @unchecked Sendable {
                 withoutOneTimePrekey: withoutOneTimePrekey,
                 allowStale: allowStale,
                 core: orchestratorCore,
-                archiveSession: { [weak self] deviceId, reason in
-                    Log.info("Existing session found for \(deviceId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
-                    self?.archiveSession(for: deviceId, reason: reason)
+                discardSession: { [weak self] deviceId in
+                    Log.info("Existing session found for \(deviceId.prefix(8))… - dropping it before a degraded init", category: "CryptoManager")
+                    self?.discardSession(for: deviceId)
                 },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)

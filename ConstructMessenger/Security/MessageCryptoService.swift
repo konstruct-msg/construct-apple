@@ -32,8 +32,7 @@ final class MessageCryptoService {
         forDevice deviceId: String,
         core: OrchestratorCore?,
         restoreSession: (String) -> Bool,
-        saveSession: (String) -> Bool,
-        archiveSession: (String, ArchiveReason) -> Void
+        saveSession: (String) -> Bool
     ) throws -> Data {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
@@ -79,9 +78,7 @@ final class MessageCryptoService {
         contactIdOverride: String? = nil,
         core: OrchestratorCore?,
         restoreSession: (String) -> Bool,
-        saveSession: (String) -> Void,
-        archiveSession: (String, ArchiveReason) -> Void,
-        tryDecryptWithArchived: (ChatMessage) throws -> Data
+        saveSession: (String) -> Void
     ) throws -> DecryptResult {
         guard let core = core else {
             throw CryptoManagerError.coreNotInitialized
@@ -92,7 +89,7 @@ final class MessageCryptoService {
         // candidate walk both hand one down. An account id is a defect, and `asDevice` says so
         // rather than quietly decrypting against the pinned device — which is how a message from
         // a peer's second device used to be fed to the first device's ratchet, failing to open
-        // and then archiving the healthy session it was never sent on.
+        // and then discarding the healthy session it was never sent on.
         let peerId = contactIdOverride ?? message.from
         guard let contactId = SessionAddressing.asDevice(peerId) else {
             throw CryptoManagerError.sessionNotFound
@@ -119,11 +116,15 @@ final class MessageCryptoService {
             saveSession(contactId)
             return DecryptResult(plaintext: result.plaintext, storageKey: result.storageKey)
         } catch {
-            if let plaintext = try? tryDecryptWithArchived(message) {
-                // Archived session decrypt — no storage key available; caller handles appropriately
-                return DecryptResult(plaintext: plaintext, storageKey: Data())
-            }
-            archiveSession(contactId, .decryptionFailed)
+            // Nothing else to try and nothing to tear down. The core has already tried the current
+            // state and every previous one, newest first, and promotes the one that decrypts.
+            //
+            // Until 2026-11-04 a failure here went on to an archive of this app's own and then
+            // dropped the session from the core and the Keychain. The archive lookup never reached
+            // an archive (the one caller hands a SENDER_SYNC, whose `message.from` is our account),
+            // and the drop ran on every own-device session the SENDER_SYNC walk tried before the
+            // one that opened the copy — the wrong candidate failing is that walk's expected
+            // outcome, and each one cost a healthy session with a sibling.
             throw CryptoManagerError.decryptionFailed
         }
     }

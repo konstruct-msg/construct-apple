@@ -161,12 +161,12 @@ final class CryptoIdentitySpaceTests: XCTestCase {
     ///
     /// `pinnedDevice(ofPeer:)` is the offline single-device answer and has legitimate callers —
     /// the send tag, the control emitter, call signalling, the first-contact init fallback. What
-    /// it may not do is sit under `encryptMessage`, `hasSession`, `archiveSession` or the
+    /// it may not do is sit under `encryptMessage`, `hasSession`, `discardSession` or the
     /// background decrypt, where it silently chose one ratchet for every caller that held only an
     /// account. Step 6 took it out of these three files; this keeps it out.
     func testTheCryptoLayerDoesNotResolveThePeerItself() throws {
         let cryptoLayer: Set<String> = [
-            "CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift",
+            "CryptoManager.swift", "CryptoManager+SessionDiscard.swift", "MessageCryptoService.swift",
             "CryptoManager+Prekeys.swift", "CryptoManager+Persistence.swift",
             "CryptoManager+SessionQueries.swift", "CryptoManager+MessageCrypto.swift"
         ]
@@ -190,7 +190,7 @@ final class CryptoIdentitySpaceTests: XCTestCase {
     /// The scan above is only worth anything if the file set it names still exists.
     func testTheCryptoLayerFilesAreWhereTheScanLooks() throws {
         let names = Set(try appSources().map(\.name))
-        for expected in ["CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift",
+        for expected in ["CryptoManager.swift", "CryptoManager+SessionDiscard.swift", "MessageCryptoService.swift",
             "CryptoManager+Prekeys.swift", "CryptoManager+Persistence.swift",
             "CryptoManager+SessionQueries.swift", "CryptoManager+MessageCrypto.swift"] {
             XCTAssertTrue(names.contains(expected), "\(expected) moved — the step 6 scan now guards nothing")

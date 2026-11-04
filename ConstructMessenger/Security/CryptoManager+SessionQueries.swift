@@ -245,9 +245,6 @@ extension CryptoManager {
             return try sessionInitService.openReceiving(
                 message,
                 core: core,
-                archiveSession: { [weak self] deviceId, reason in
-                    self?.archiveSession(for: deviceId, reason: reason)
-                },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
                 }

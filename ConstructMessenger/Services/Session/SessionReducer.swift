@@ -160,8 +160,8 @@ enum SessionReducer {
     /// order of the first two lines: the archives — the only thing that could have decrypted
     /// anything old — were cleared, and the one item that breaks the new session was kept.
     ///
-    /// Retiring is archiving, not deleting: an in-flight message from the old session can still
-    /// be read from the archive by the fallback-decrypt path.
+    /// Retiring drops the session (`discardAllSessions`). It used to export it into an archive of
+    /// this app's own first, for a fallback decrypt that never reached an archive (2026-11-04).
     static func chatStartRetiresExistingSession(origin: ChatStartOrigin) -> Bool {
         origin == .inviteRedeem
     }

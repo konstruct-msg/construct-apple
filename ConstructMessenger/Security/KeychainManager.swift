@@ -684,6 +684,17 @@ final class KeychainManager: Sendable {
             .filter(KeychainSessionAccounts.isSessionState)
     }
 
+    /// Delete the archived sessions older builds kept beside the core's previous states. Each is
+    /// a ratchet's chain keys, kept for a fallback nothing reaches since 2026-11-04.
+    @discardableResult
+    func deleteRetiredSessionArchives() -> Int {
+        let removed = deleteItems(withAccountPrefix: KeychainSessionAccounts.archivePrefix)
+        if removed > 0 {
+            Log.info("Deleted \(removed) retired session archive list(s)", category: "Keychain")
+        }
+        return removed
+    }
+
     /// Delete every item whose account starts with `prefix`; returns how many there were.
     @discardableResult
     func deleteItems(withAccountPrefix prefix: String) -> Int {
