@@ -121,15 +121,21 @@ extension StealthSenderService {
         return ourDeviceIds.contains(deviceId) ? .sibling : .notOurs
     }
 
+    /// A DECRYPTION_ERROR is labelled from the envelope; what a ratchet body is, is known only once
+    /// it has decrypted.
+    nonisolated static func contentType(ofEnvelope kind: EnvelopeKind) -> UInt8 {
+        switch kind {
+        case .decryptionError: UInt8(Shared_Proto_Core_V1_ContentType.decryptionError.rawValue)
+        case .ratchet: UInt8(Shared_Proto_Core_V1_ContentType.unspecified.rawValue)
+        }
+    }
+
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
         do {
             switch try CryptoManager.shared.openSealed(sealedInner: sealedInnerBytes) {
             case .sessionEnvelope(let writerDevice, let sessionId, let body, let kind, let retired):
                 guard let account = Self.account(ofEnvelopeWriter: writerDevice) else { return nil }
-                let decryptionErrorKind: UInt8 = 2
-                let contentType = kind == decryptionErrorKind
-                    ? UInt8(Shared_Proto_Core_V1_ContentType.decryptionError.rawValue)
-                    : UInt8(Shared_Proto_Core_V1_ContentType.unspecified.rawValue)
+                let contentType = Self.contentType(ofEnvelope: kind)
                 if retired {
                     Log.info(
                         "Stealth: envelope from \(writerDevice.prefix(8))… on a session no longer held — the core answers it",

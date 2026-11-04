@@ -76,30 +76,20 @@ final class CryptoSessionInitializationService {
             saveSession(contactId)
             Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(bundle.suiteId), negotiated=\(negotiatedSuite)\(held ? ", replaced held session" : "")", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
-        } catch CryptoError.PeerSpkStale(let message) {
-            let ageSecs: UInt64
-            if let range = message.range(of: "age_secs=") {
-                ageSecs = UInt64(message[range.upperBound...].prefix(while: { $0.isNumber })) ?? 0
-            } else {
-                ageSecs = 0
-            }
+        } catch CryptoError.PeerSpkStale(let ageSecs) {
             let ageDays = Double(ageSecs) / 86400.0
             Log.error("Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "CryptoManager")
             throw SessionError.peerSPKStale(ageDays: ageDays)
-        } catch CryptoError.PeerSpkEpochRegressed(let message) {
+        } catch CryptoError.PeerSpkEpochRegressed(let received, let known) {
             // The core keeps the highest SPK rotation epoch per device and refused this bundle
             // before spending anything on it (core 0.53, TODO 176). Nothing was created; a held
             // session is still there.
-            Log.error("SESSION_STATE[spk_replay_rejected]: \(contactId.prefix(8))… — \(message)", category: "SessionInit")
-            throw SessionError.staleSPKBundle(detail: message)
-        } catch CryptoError.SessionInitializationFailed(let message) where message.contains("PQ_REQUIRED") {
+            let detail = "epoch \(received) is below the \(known) already admitted"
+            Log.error("SESSION_STATE[spk_replay_rejected]: \(contactId.prefix(8))… — \(detail)", category: "SessionInit")
+            throw SessionError.staleSPKBundle(detail: detail)
+        } catch CryptoError.PqRequired(let reason) {
             // Nothing was created, and a held session is still there. The reason names what the
             // bundle lacked; the peer is usually on a build from before PQXDH v2.
-            //
-            // `contains`, not `hasPrefix`: `CryptoError` is a flat UniFFI error, so `message` is
-            // the core's whole Display text — "Session initialization failed: PQ_REQUIRED: …".
-            // The reason handed on starts at the code.
-            let reason = message.range(of: "PQ_REQUIRED").map { String(message[$0.lowerBound...]) } ?? message
             Log.error("SESSION_STATE[pq_required]: \(contactId.prefix(8))… — \(reason)", category: "SessionInit")
             throw SessionError.peerNotPostQuantum(reason: reason)
         } catch {

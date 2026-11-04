@@ -324,12 +324,6 @@ RustBuffer uniffi_construct_transport_fn_func_transport_build_marker(RustCallSta
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_LIVE_CONNECTIONS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_LIVE_CONNECTIONS
-uint32_t uniffi_construct_transport_fn_func_transport_live_connections(RustCallStatus *_Nonnull out_status
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_RUNTIME_STATS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_FN_FUNC_TRANSPORT_RUNTIME_STATS
 RustBuffer uniffi_construct_transport_fn_func_transport_runtime_stats(RustCallStatus *_Nonnull out_status
@@ -599,12 +593,6 @@ void ffi_construct_transport_rust_future_complete_void(uint64_t handle, RustCall
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_BUILD_MARKER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_BUILD_MARKER
 uint16_t uniffi_construct_transport_checksum_func_transport_build_marker(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_LIVE_CONNECTIONS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_TRANSPORT_CHECKSUM_FUNC_TRANSPORT_LIVE_CONNECTIONS
-uint16_t uniffi_construct_transport_checksum_func_transport_live_connections(void
     
 );
 #endif

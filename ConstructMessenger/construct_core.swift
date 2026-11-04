@@ -5188,13 +5188,13 @@ public func FfiConverterTypeDeviceCertKeys_lower(_ value: DeviceCertKeys) -> Rus
 public struct EnvelopeOpened: Equatable, Hashable {
     public var contactId: String
     public var sessionId: String
-    public var kind: UInt8
+    public var kind: EnvelopeKind
     public var body: Data
     public var retired: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(contactId: String, sessionId: String, kind: UInt8, body: Data, retired: Bool) {
+    public init(contactId: String, sessionId: String, kind: EnvelopeKind, body: Data, retired: Bool) {
         self.contactId = contactId
         self.sessionId = sessionId
         self.kind = kind
@@ -5218,7 +5218,7 @@ public struct FfiConverterTypeEnvelopeOpened: FfiConverterRustBuffer {
             try EnvelopeOpened(
                 contactId: FfiConverterString.read(from: &buf), 
                 sessionId: FfiConverterString.read(from: &buf), 
-                kind: FfiConverterUInt8.read(from: &buf), 
+                kind: FfiConverterTypeEnvelopeKind.read(from: &buf), 
                 body: FfiConverterData.read(from: &buf), 
                 retired: FfiConverterBool.read(from: &buf)
         )
@@ -5227,7 +5227,7 @@ public struct FfiConverterTypeEnvelopeOpened: FfiConverterRustBuffer {
     public static func write(_ value: EnvelopeOpened, into buf: inout [UInt8]) {
         FfiConverterString.write(value.contactId, into: &buf)
         FfiConverterString.write(value.sessionId, into: &buf)
-        FfiConverterUInt8.write(value.kind, into: &buf)
+        FfiConverterTypeEnvelopeKind.write(value.kind, into: &buf)
         FfiConverterData.write(value.body, into: &buf)
         FfiConverterBool.write(value.retired, into: &buf)
     }
@@ -9427,30 +9427,27 @@ public enum CryptoError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
 
     
     
-    case InitializationFailed(message: String)
-    
-    case SessionNotFound(message: String)
-    
-    case SessionInitializationFailed(message: String)
-    
-    case EncryptionFailed(message: String)
-    
-    case DecryptionFailed(message: String)
-    
-    case InvalidKeyData(message: String)
-    
-    case InvalidCiphertext(message: String)
-    
-    case SerializationFailed(message: String)
-    
-    case MessagePackDeserializationFailed(message: String)
-    
-    case PeerSpkStale(message: String)
-    
-    case PowDifficultyTooHigh(message: String)
-    
-    case PeerSpkEpochRegressed(message: String)
-    
+    case InitializationFailed
+    case SessionNotFound
+    case SessionInitializationFailed(detail: String
+    )
+    case EncryptionFailed(detail: String
+    )
+    case DecryptionFailed(detail: String
+    )
+    case InvalidKeyData
+    case InvalidCiphertext
+    case SerializationFailed(detail: String
+    )
+    case MessagePackDeserializationFailed
+    case PeerSpkStale(ageSecs: UInt64
+    )
+    case PowDifficultyTooHigh(difficulty: UInt32, max: UInt32
+    )
+    case PeerSpkEpochRegressed(received: UInt32, known: UInt32
+    )
+    case PqRequired(reason: PqxdhRefusal
+    )
 
     
 
@@ -9478,56 +9475,39 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
         
 
         
-        case 1: return .InitializationFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 2: return .SessionNotFound(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+        case 1: return .InitializationFailed
+        case 2: return .SessionNotFound
         case 3: return .SessionInitializationFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            detail: try FfiConverterString.read(from: &buf)
+            )
         case 4: return .EncryptionFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            detail: try FfiConverterString.read(from: &buf)
+            )
         case 5: return .DecryptionFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 6: return .InvalidKeyData(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 7: return .InvalidCiphertext(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            detail: try FfiConverterString.read(from: &buf)
+            )
+        case 6: return .InvalidKeyData
+        case 7: return .InvalidCiphertext
         case 8: return .SerializationFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 9: return .MessagePackDeserializationFailed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            detail: try FfiConverterString.read(from: &buf)
+            )
+        case 9: return .MessagePackDeserializationFailed
         case 10: return .PeerSpkStale(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            ageSecs: try FfiConverterUInt64.read(from: &buf)
+            )
         case 11: return .PowDifficultyTooHigh(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            difficulty: try FfiConverterUInt32.read(from: &buf), 
+            max: try FfiConverterUInt32.read(from: &buf)
+            )
         case 12: return .PeerSpkEpochRegressed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            received: try FfiConverterUInt32.read(from: &buf), 
+            known: try FfiConverterUInt32.read(from: &buf)
+            )
+        case 13: return .PqRequired(
+            reason: try FfiConverterTypePqxdhRefusal.read(from: &buf)
+            )
 
-        default: throw UniffiInternalError.unexpectedEnumCase
+         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
@@ -9537,32 +9517,68 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
         
 
         
-        case .InitializationFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(1))
-        case .SessionNotFound(_ /* message is ignored*/):
-            writeInt(&buf, Int32(2))
-        case .SessionInitializationFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(3))
-        case .EncryptionFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(4))
-        case .DecryptionFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(5))
-        case .InvalidKeyData(_ /* message is ignored*/):
-            writeInt(&buf, Int32(6))
-        case .InvalidCiphertext(_ /* message is ignored*/):
-            writeInt(&buf, Int32(7))
-        case .SerializationFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(8))
-        case .MessagePackDeserializationFailed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(9))
-        case .PeerSpkStale(_ /* message is ignored*/):
-            writeInt(&buf, Int32(10))
-        case .PowDifficultyTooHigh(_ /* message is ignored*/):
-            writeInt(&buf, Int32(11))
-        case .PeerSpkEpochRegressed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(12))
-
         
+        case .InitializationFailed:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .SessionNotFound:
+            writeInt(&buf, Int32(2))
+        
+        
+        case let .SessionInitializationFailed(detail):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case let .EncryptionFailed(detail):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case let .DecryptionFailed(detail):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case .InvalidKeyData:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .InvalidCiphertext:
+            writeInt(&buf, Int32(7))
+        
+        
+        case let .SerializationFailed(detail):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(detail, into: &buf)
+            
+        
+        case .MessagePackDeserializationFailed:
+            writeInt(&buf, Int32(9))
+        
+        
+        case let .PeerSpkStale(ageSecs):
+            writeInt(&buf, Int32(10))
+            FfiConverterUInt64.write(ageSecs, into: &buf)
+            
+        
+        case let .PowDifficultyTooHigh(difficulty,max):
+            writeInt(&buf, Int32(11))
+            FfiConverterUInt32.write(difficulty, into: &buf)
+            FfiConverterUInt32.write(max, into: &buf)
+            
+        
+        case let .PeerSpkEpochRegressed(received,known):
+            writeInt(&buf, Int32(12))
+            FfiConverterUInt32.write(received, into: &buf)
+            FfiConverterUInt32.write(known, into: &buf)
+            
+        
+        case let .PqRequired(reason):
+            writeInt(&buf, Int32(13))
+            FfiConverterTypePqxdhRefusal.write(reason, into: &buf)
+            
         }
     }
 }
@@ -9834,6 +9850,80 @@ public func FfiConverterTypeDeviceLinkEvidence_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeDeviceLinkEvidence_lower(_ value: DeviceLinkEvidence) -> RustBuffer {
     return FfiConverterTypeDeviceLinkEvidence.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a session envelope's body is (first byte inside its ciphertext; the server never sees it).
+ */
+
+public enum EnvelopeKind: Equatable, Hashable {
+    
+    /**
+     * A ratchet wire payload.
+     */
+    case ratchet
+    /**
+     * A DECRYPTION_ERROR (content type 28), plain inside the envelope.
+     */
+    case decryptionError
+
+
+
+}
+
+#if compiler(>=6)
+extension EnvelopeKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEnvelopeKind: FfiConverterRustBuffer {
+    typealias SwiftType = EnvelopeKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EnvelopeKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .ratchet
+        
+        case 2: return .decryptionError
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: EnvelopeKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .ratchet:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .decryptionError:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeKind_lift(_ buf: RustBuffer) throws -> EnvelopeKind {
+    return try FfiConverterTypeEnvelopeKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeKind_lower(_ value: EnvelopeKind) -> RustBuffer {
+    return FfiConverterTypeEnvelopeKind.lower(value)
 }
 
 
@@ -11226,9 +11316,9 @@ public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
 public enum OpenedSealed: Equatable, Hashable {
     
     /**
-     * A session envelope named the writer; `kind` 1 = ratchet wire payload, 2 = DECRYPTION_ERROR.
+     * A session envelope named the writer; a DECRYPTION_ERROR is labelled from `kind`.
      */
-    case sessionEnvelope(writerDevice: String, sessionId: String, body: Data, kind: UInt8, retired: Bool
+    case sessionEnvelope(writerDevice: String, sessionId: String, body: Data, kind: EnvelopeKind, retired: Bool
     )
     /**
      * A first flight sealed whole; `content_type` is `SealedInner.content_type`.
@@ -11259,7 +11349,7 @@ public struct FfiConverterTypeOpenedSealed: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .sessionEnvelope(writerDevice: try FfiConverterString.read(from: &buf), sessionId: try FfiConverterString.read(from: &buf), body: try FfiConverterData.read(from: &buf), kind: try FfiConverterUInt8.read(from: &buf), retired: try FfiConverterBool.read(from: &buf)
+        case 1: return .sessionEnvelope(writerDevice: try FfiConverterString.read(from: &buf), sessionId: try FfiConverterString.read(from: &buf), body: try FfiConverterData.read(from: &buf), kind: try FfiConverterTypeEnvelopeKind.read(from: &buf), retired: try FfiConverterBool.read(from: &buf)
         )
         
         case 2: return .firstFlight(writerAccount: try FfiConverterString.read(from: &buf), writerDevice: try FfiConverterString.read(from: &buf), certificate: try FfiConverterTypeSenderCertificate.read(from: &buf), trust: try FfiConverterTypeCertificateVerdict.read(from: &buf), firstFlightPayload: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
@@ -11281,7 +11371,7 @@ public struct FfiConverterTypeOpenedSealed: FfiConverterRustBuffer {
             FfiConverterString.write(writerDevice, into: &buf)
             FfiConverterString.write(sessionId, into: &buf)
             FfiConverterData.write(body, into: &buf)
-            FfiConverterUInt8.write(kind, into: &buf)
+            FfiConverterTypeEnvelopeKind.write(kind, into: &buf)
             FfiConverterBool.write(retired, into: &buf)
             
         
@@ -11702,6 +11792,136 @@ public func FfiConverterTypePqHandshake_lift(_ buf: RustBuffer) throws -> PqHand
 #endif
 public func FfiConverterTypePqHandshake_lower(_ value: PqHandshake) -> RustBuffer {
     return FfiConverterTypePqHandshake.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why a bundle yields no session under PQXDH v2 (`CryptoError.PqRequired`).
+ */
+
+public enum PqxdhRefusal: Equatable, Hashable {
+    
+    case noKyberPrekey
+    case kyberPrekeyMalformed
+    case kyberSignatureMissing
+    /**
+     * An Ed25519 signature that does not verify: tampering, not a transition.
+     */
+    case kyberSignatureInvalid
+    case kyberPrekeyStale
+    case hybridIdentityMissing
+    case hybridIdentityBindingInvalid
+    /**
+     * A hybrid identity key other than the one pinned for this device.
+     */
+    case hybridIdentityChanged
+    case hybridSignatureMissing
+    case hybridSignatureInvalid
+
+
+
+}
+
+#if compiler(>=6)
+extension PqxdhRefusal: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePqxdhRefusal: FfiConverterRustBuffer {
+    typealias SwiftType = PqxdhRefusal
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PqxdhRefusal {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .noKyberPrekey
+        
+        case 2: return .kyberPrekeyMalformed
+        
+        case 3: return .kyberSignatureMissing
+        
+        case 4: return .kyberSignatureInvalid
+        
+        case 5: return .kyberPrekeyStale
+        
+        case 6: return .hybridIdentityMissing
+        
+        case 7: return .hybridIdentityBindingInvalid
+        
+        case 8: return .hybridIdentityChanged
+        
+        case 9: return .hybridSignatureMissing
+        
+        case 10: return .hybridSignatureInvalid
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PqxdhRefusal, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .noKyberPrekey:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .kyberPrekeyMalformed:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .kyberSignatureMissing:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .kyberSignatureInvalid:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .kyberPrekeyStale:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .hybridIdentityMissing:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .hybridIdentityBindingInvalid:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .hybridIdentityChanged:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .hybridSignatureMissing:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .hybridSignatureInvalid:
+            writeInt(&buf, Int32(10))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqxdhRefusal_lift(_ buf: RustBuffer) throws -> PqxdhRefusal {
+    return try FfiConverterTypePqxdhRefusal.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqxdhRefusal_lower(_ value: PqxdhRefusal) -> RustBuffer {
+    return FfiConverterTypePqxdhRefusal.lower(value)
 }
 
 

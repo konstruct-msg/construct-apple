@@ -435,22 +435,6 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
-    typealias FfiType = UInt32
-    typealias SwiftType = UInt32
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt32 {
-        return try lift(readInt(&buf))
-    }
-
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -1257,19 +1241,6 @@ public func transportBuildMarker() -> String  {
 })
 }
 /**
- * How many QUIC connections this process holds open right now.
- *
- * Belongs in every runtime health line on device. This number was unobservable while abandoned
- * connections were accumulating, which is why "the transport burns a core" took a day to see
- * and could not be attributed to anything.
- */
-public func transportLiveConnections() -> UInt32  {
-    return try!  FfiConverterUInt32.lift(try! rustCall() {
-    uniffi_construct_transport_fn_func_transport_live_connections($0
-    )
-})
-}
-/**
  * Health of the transport runtime itself: open connections and live tokio tasks.
  *
  * Both numbers exist to settle a question the 2026-08-09 device logs could not: the runtime
@@ -1278,6 +1249,10 @@ public func transportLiveConnections() -> UInt32  {
  * live connection nor traffic. `alive_tasks` separates the two remaining shapes: one task that
  * never yields, versus tasks that accumulate and are never reaped. Reading a stack is the next
  * step either way, but this says which stack to go looking for.
+ *
+ * `conns=` is the only FFI carrier of the live-connection count; the app's runtime health line
+ * (iOS `RuntimeDiagnostics`) prints this string. A separate `transport_live_connections` export
+ * carried the same number with no reader on any client and was removed on 2026-11-03.
  */
 public func transportRuntimeStats() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
@@ -1304,10 +1279,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_transport_checksum_func_transport_build_marker() != 44196) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_transport_checksum_func_transport_live_connections() != 53821) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_transport_checksum_func_transport_runtime_stats() != 24534) {
+    if (uniffi_construct_transport_checksum_func_transport_runtime_stats() != 26264) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_transport_checksum_method_quicchannel_close() != 34758) {
