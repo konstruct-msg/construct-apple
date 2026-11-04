@@ -127,7 +127,7 @@ final class PQXDHBundleConversionTests: XCTestCase {
             for: "bob",
             bundle: data,
             core: alice,
-            archiveSession: { _, _ in XCTFail("nothing to archive") },
+            discardSession: { _ in XCTFail("nothing to drop") },
             saveSession: { _ in XCTFail("nothing was opened") }
         )) { error in
             guard case SessionError.peerNotPostQuantum? = error as? SessionError else {

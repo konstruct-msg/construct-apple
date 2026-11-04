@@ -35,10 +35,6 @@ extension CryptoManager {
             },
             saveSession: { [weak self] device in
                 self?.saveSessionToKeychain(forDevice: device) ?? false
-            },
-            archiveSession: { [weak self] device, reason in
-                Log.debug("Archiving session for \(device) to allow reinitialization", category: "CryptoManager")
-                self?.archiveSession(for: device, reason: reason)
             }
         )
 
@@ -48,7 +44,6 @@ extension CryptoManager {
 
     /// Decrypt a ChatMessage directly using clean API
     /// Uses clean API - Rust handles all MessagePack internally
-    /// Now with Session Archive fallback support
     func decryptMessage(_ message: ChatMessage) throws -> MessageDecryptResult {
         try decryptMessage(message, contactIdOverride: nil)
     }
@@ -109,21 +104,6 @@ extension CryptoManager {
                 },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
-                },
-                archiveSession: { [weak self] userId, reason in
-                    // ERROR-level so this appears in exported logs even at INFO filter.
-                    // The message ID is included so the log can be correlated with the
-                    // BackgroundFetch / MessageStream event that triggered the archive.
-                    Log.error("CryptoManager: archiving session for \(userId.prefix(8))… reason=\(reason) msgId=\(message.id.prefix(8))… msgNum=\(message.messageNumber)", category: "CryptoManager")
-                    self?.archiveSession(for: userId, reason: reason)
-                },
-                tryDecryptWithArchived: { [weak self] message in
-                    guard let self = self else {
-                        throw CryptoManagerError.decryptionFailed
-                    }
-                    let plaintext = try self.tryDecryptWithArchivedSessions(message: message)
-                    Log.info("Successfully decrypted with archived session!", category: "CryptoManager")
-                    return plaintext
                 }
             )
         } catch {
@@ -137,7 +117,7 @@ extension CryptoManager {
 
     /// Decrypt a call-signal field — a wire payload the core packed (`encryptMessage(_:forDevice:)`).
     /// Returns UTF-8 (call signals are always valid UTF-8). Restores the session from Keychain if
-    /// needed; does not try archived sessions.
+    /// needed.
     func decryptCallSignal(contactId: String, wirePayload: Data) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }

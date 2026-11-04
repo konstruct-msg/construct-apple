@@ -116,10 +116,10 @@ class ChatManagementService {
     /// `hasStoredSessionState`, not `hasSession`: the latter sees only what the core has loaded,
     /// and a chat nobody opened this run has its session on disk only — so this guard used to
     /// skip, leaving a Keychain entry with no contact attached.
-    func archiveSessions(ofPeer userId: String) {
+    func discardSessions(ofPeer userId: String) {
         guard CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: userId) else { return }
-        let retired = CryptoManager.shared.archiveAllSessions(ofPeer: userId, reason: .manualReset)
-        Log.info("Archived \(retired) crypto session(s) for user: \(userId)", category: "ChatManagementService")
+        let retired = CryptoManager.shared.discardAllSessions(ofPeer: userId)
+        Log.info("Discarded \(retired) crypto session(s) for user: \(userId)", category: "ChatManagementService")
     }
 
     /// Fully remove a contact: delete User, associated Chat + Messages, session, and

@@ -17,14 +17,15 @@ final class CryptoSessionInitializationService {
     /// (`decisions/sessions-renew-by-sending.md`).
     ///
     /// The one exception is a degraded (`allowStale`) init over a held session: the core's reopen
-    /// has no stale variant, so that path archives first and inits, as every init did before.
+    /// has no stale variant, so that path drops the held session first and inits, as every init did
+    /// before.
     func initializeSession(
         for userId: String,
         bundle: PublicKeyBundleData,
         withoutOneTimePrekey: Bool = false,
         allowStale: Bool = false,
         core: OrchestratorCore?,
-        archiveSession: (String, ArchiveReason) -> Void,
+        discardSession: (String) -> Void,
         saveSession: (String) -> Void
     ) throws {
         guard let core = core else {
@@ -56,7 +57,7 @@ final class CryptoSessionInitializationService {
             if held && !allowStale {
                 sessionId = try core.reopenSession(contactId: contactId, recipientBundle: binary)
             } else {
-                if held { archiveSession(contactId, .manualReset) }
+                if held { discardSession(contactId) }
                 sessionId = allowStale
                     ? try core.initSessionAllowingStale(contactId: contactId, recipientBundle: binary)
                     : try core.initSession(contactId: contactId, recipientBundle: binary)
@@ -113,7 +114,6 @@ final class CryptoSessionInitializationService {
     func openReceiving(
         _ message: ChatMessage,
         core: OrchestratorCore?,
-        archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
     ) throws -> (device: String, plaintext: Data) {
         guard let core else {

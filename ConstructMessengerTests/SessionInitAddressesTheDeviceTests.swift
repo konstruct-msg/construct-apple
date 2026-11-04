@@ -169,7 +169,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         _ = try CryptoSessionInitializationService().openReceiving(
             firstMessage(),
             core: core,
-            archiveSession: { _, _ in },
             saveSession: { saved.append($0) }
         )
 
@@ -188,31 +187,13 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            archiveSession: { _, _ in },
+            discardSession: { _ in },
             saveSession: { saved.append($0) }
         )
 
         XCTAssertEqual(core.initSendingContactIds, [bundleDevice])
         XCTAssertEqual(saved, [bundleDevice],
                        "the INITIATOR path is the mirror image and had the same defect")
-    }
-
-    /// A sibling's new state opened over one held is not archived here: the core keeps the held
-    /// state as a previous one, and archiving it — as this did until 2026-09-27 — threw away what
-    /// the sibling still had in flight on it (`decisions/sessions-renew-by-sending.md`).
-    func testAReceivingOpenOverAHeldSessionArchivesNothing() throws {
-        let core = RecordingCore()
-        core.sessionExistsFor = [bundleDevice]
-        var archived: [String] = []
-
-        _ = try CryptoSessionInitializationService().openReceiving(
-            firstMessage(),
-            core: core,
-            archiveSession: { peer, _ in archived.append(peer) },
-            saveSession: { _ in }
-        )
-
-        XCTAssertEqual(archived, [], "the held state is the core's to keep")
     }
 
     /// A session held with the device is replaced by the core's reopen — built first — and kept
@@ -228,7 +209,7 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            archiveSession: { peer, _ in archivedFirst.append(peer) },
+            discardSession: { peer in archivedFirst.append(peer) },
             saveSession: { saved.append($0) }
         )
 
@@ -254,7 +235,7 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            archiveSession: { peer, _ in archived.append(peer) },
+            discardSession: { peer in archived.append(peer) },
             saveSession: { saved.append($0) }
         )) { error in
             guard case SessionError.peerNotPostQuantum(let reason)? = error as? SessionError else {
