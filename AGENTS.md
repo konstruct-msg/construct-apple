@@ -125,8 +125,10 @@ the same change, or is removed; a handler no producer reaches is wired up or del
   stale-by-timestamp checks.
 - **Receiving fetches nothing.** A first message opens with the key its sender certificate names,
   once the core has checked the server's signature. Never fetch the sender's bundle to receive.
-- **The core owns the queue of messages waiting for a session**; this app keeps envelopes and must
-  not grow a second queue.
+- **The core owns the queue of incoming messages waiting for a session**; this app keeps their
+  envelopes and must not grow a second queue. An outgoing send waits in this app's outbox
+  (`.queued` rows, `pendingSends`) while the bundle is fetched; whether and which session to open
+  is `plan_initiation`.
 - **Ask the core for the operation, never for the key**: `signWithDeviceKey`,
   `openSealedToDevice`, `deviceCopyTag*`, `newMlsStore`/`importMlsStore`. The Keychain holds the
   device keys once, in the key record the core loads from.
