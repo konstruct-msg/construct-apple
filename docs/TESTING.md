@@ -106,8 +106,10 @@ a build failure reading like "no test failed".
 
 ## The scheme matters
 
-`ConstructMessenger` and `Construct Messenger Beta` are the schemes with the test target attached;
-use `ConstructMessenger`. A scheme that builds the app alone would run zero tests and report success.
+`ConstructMessenger` (and `Construct Messenger Beta`) run `ConstructMessengerTests`; use
+`ConstructMessenger`, as `scripts/test_run.sh` does. `Construct Desktop` runs only its own
+`Construct DesktopTests`, and `Konstruct Notifications` has no tests. A scheme that builds the app
+without the test target runs zero tests and reports success.
 
 ## What CI does and does not cover
 
@@ -149,16 +151,17 @@ BackgroundTasks) in a file Desktop compiles, or AppKit in one iOS compiles, outs
 scripts/check_localization.sh
 ```
 
-Enforces the AGENTS.md rule that a new key lands in both `en.lproj` and `ru.lproj`, that no key is
-declared twice in one file, and that every literal `NSLocalizedString("…")` key in the sources
-resolves. An unresolved key is displayed to the user verbatim.
+Enforces the AGENTS.md rule that a new key lands in every locale — `en` plus `OTHER_LOCALES`
+(`ru`, `ja`, `fr`, `hy-AM`) — in the same commit. Five checks, listed in the script's header: the
+same key set in every locale, no key declared twice in one file, every literal
+`NSLocalizedString("…")` / `LocalizedStringKey("…")` key in `ConstructMessenger/` and
+`Construct Desktop/` resolves (an unresolved key is displayed to the user verbatim),
+`InfoPlist.strings` covers every `*UsageDescription` in every locale, and a translation carries the
+same format specifiers as its English source (a wrong one crashes in the locale nobody runs).
 
-The third check is a **ratchet**: twelve keys were already unresolved when the script was written
-(`DEVELOPER`, `PUSH_NOTIFICATIONS`, `text_size`, `transcription`, the `stt_error_*` and `spam_*`
-pairs, and more) and are listed in `BASELINE` so the check could be enabled the same day rather
-than after someone wrote twelve strings of product copy. It fails on a new one, and it also fails
-if a `BASELINE` entry starts resolving — a fixed key left in the list would hide the next
-regression behind it.
+The resolve check was a **ratchet**: the keys already unresolved when it was written sat in
+`BASELINE` so it could be enabled the same day. It fails on a new one, and on a `BASELINE` entry
+that starts resolving. `BASELINE` has been empty since 2026-09-24.
 
 Both behaviours were verified by mutation: an injected `NSLocalizedString("mutation_probe_key")`
 and a key deleted from `ru.lproj` each turned the script red, and it went green again on restore.
