@@ -279,6 +279,8 @@ enum AccountWipeKeys {
         // A key inside construct.db (`LocalStoreImport.completedKey`), not in `UserDefaults`; it
         // goes with the store.
         "construct.localStore.importedFromCoreData.v1",
+        // Same, `LegacyBodyUpgrade.doneKey`.
+        "construct.localStore.legacyMediaBodiesConverted.v1",
 
         // Notification names.
         "construct.reaction.didChange"
