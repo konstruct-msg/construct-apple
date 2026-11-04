@@ -33,10 +33,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     case initiationDeferred(decision: String)
 
     /// The core refused to open the session because the peer's bundle does not carry Kyber keys it
-    /// can trust (`PQ_REQUIRED: <reason>`) — usually a peer still on a build from before PQXDH v2,
+    /// can trust (`CryptoError.PqRequired`) — usually a peer still on a build from before PQXDH v2,
     /// sometimes a key the server served stale or unsigned. No session was created, and a session
     /// already held was kept.
-    case peerNotPostQuantum(reason: String)
+    case peerNotPostQuantum(reason: PqxdhRefusal)
 
     /// Asked for one device's bundle, the server returned a bundle whose identity key names
     /// another device. Answering the core's `OpenSession` with it would open the wrong ratchet.

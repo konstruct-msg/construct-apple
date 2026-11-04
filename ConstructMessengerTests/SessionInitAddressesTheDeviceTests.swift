@@ -219,15 +219,12 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         XCTAssertEqual(saved, [bundleDevice])
     }
 
-    /// The reopen refused (PQ_REQUIRED — a peer still on a build from before PQXDH v2): the held
+    /// The reopen refused (`PqRequired` — a peer still on a build from before PQXDH v2): the held
     /// session stays, nothing is archived or saved, and the caller hears why.
     func testRefusedReopenKeepsTheHeldSessionAndSaysWhy() {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
-        // Shaped as the core really sends it: a flat UniFFI error carries the whole Display text.
-        core.reopenRefusal = CryptoError.SessionInitializationFailed(
-            message: "Session initialization failed: PQ_REQUIRED: bundle has no hybrid identity key"
-        )
+        core.reopenRefusal = CryptoError.PqRequired(reason: .hybridIdentityMissing)
         var archived: [String] = []
         var saved: [String] = []
 
@@ -241,9 +238,48 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             guard case SessionError.peerNotPostQuantum(let reason)? = error as? SessionError else {
                 return XCTFail("expected peerNotPostQuantum, got \(error)")
             }
-            XCTAssertTrue(reason.hasPrefix("PQ_REQUIRED"))
+            XCTAssertEqual(reason, .hybridIdentityMissing)
         }
         XCTAssertEqual(archived, [])
         XCTAssertEqual(saved, [])
+    }
+
+    /// The core's refusals reach the caller with their numbers: nothing is read out of a text.
+    func testStaleBundleHearsTheAgeTheCoreMeasured() {
+        let core = RecordingCore()
+        core.sessionExistsFor = [bundleDevice]
+        core.reopenRefusal = CryptoError.PeerSpkStale(ageSecs: 2 * 86_400)
+
+        XCTAssertThrowsError(try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            core: core,
+            discardSession: { _ in },
+            saveSession: { _ in }
+        )) { error in
+            guard case SessionError.peerSPKStale(let days)? = error as? SessionError else {
+                return XCTFail("expected peerSPKStale, got \(error)")
+            }
+            XCTAssertEqual(days, 2)
+        }
+    }
+
+    func testReplayedBundleNamesBothEpochs() {
+        let core = RecordingCore()
+        core.sessionExistsFor = [bundleDevice]
+        core.reopenRefusal = CryptoError.PeerSpkEpochRegressed(received: 4, known: 5)
+
+        XCTAssertThrowsError(try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            core: core,
+            discardSession: { _ in },
+            saveSession: { _ in }
+        )) { error in
+            guard case SessionError.staleSPKBundle(let detail)? = error as? SessionError else {
+                return XCTFail("expected staleSPKBundle, got \(error)")
+            }
+            XCTAssertEqual(detail, "epoch 4 is below the 5 already admitted")
+        }
     }
 }

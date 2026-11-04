@@ -39,7 +39,7 @@ private final class DecryptCore: OrchestratorCore, @unchecked Sendable {
 
     override func decryptWirePayload(contactId: String, wirePayload: Data) throws -> DecryptedMessageResult {
         guard readable else {
-            throw CryptoError.DecryptionFailed(message: "AEAD decryption failed")
+            throw CryptoError.DecryptionFailed(detail: "AEAD decryption failed")
         }
         return DecryptedMessageResult(plaintext: Data("hi".utf8), storageKey: Data(repeating: 1, count: 32))
     }

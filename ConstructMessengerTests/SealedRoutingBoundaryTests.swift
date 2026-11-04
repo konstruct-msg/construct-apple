@@ -452,3 +452,16 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         XCTAssertEqual(addressed.resolvingSealedSender(resolved(), currentUserId: me).to, "someone-else")
     }
 }
+
+final class EnvelopeKindContentTypeTests: XCTestCase {
+    func testADecryptionErrorIsLabelledAndARatchetBodyIsNot() {
+        XCTAssertEqual(
+            StealthSenderService.contentType(ofEnvelope: .decryptionError),
+            UInt8(Shared_Proto_Core_V1_ContentType.decryptionError.rawValue)
+        )
+        XCTAssertEqual(
+            StealthSenderService.contentType(ofEnvelope: .ratchet),
+            UInt8(Shared_Proto_Core_V1_ContentType.unspecified.rawValue)
+        )
+    }
+}
