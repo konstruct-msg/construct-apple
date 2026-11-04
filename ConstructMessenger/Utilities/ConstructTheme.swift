@@ -106,9 +106,9 @@ extension Color {
         static let onFill         = Color.white
 
         // MARK: Paper
-        /// A QR code is read by a camera, so it is black on white in both themes.
+        /// A QR code is read by a camera, so it is black on white in both themes. The black is
+        /// the `CIQRCodeGenerator` image itself (`QRCodeGenerator`); this is the margin around it.
         static let qrPaper        = Color.white
-        static let qrInk          = Color.black
 
         // MARK: Caution
         /// Something the person should weigh before going on — a contact at risk, a flood, a phrase
