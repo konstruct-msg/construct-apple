@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check_localization.sh — the localization rules in AGENTS.md, enforced.
 #
-# Four checks, no build required:
+# Five checks, no build required:
 #
 #   1. Every .lproj in OTHER_LOCALES declares the same key set as en. AGENTS.md requires a new key to land
 #      in every locale in the same commit; nothing enforced it until now.
@@ -21,11 +21,11 @@
 #      wrong word on screen, it is a crash or a garbage pointer read, and it only
 #      happens in the one locale nobody on the team runs.
 #
-# Check 3 is a ratchet, not a proof. Twelve keys were already unresolved when this
-# script was written (see BASELINE below) and are listed so the check can be turned
-# on today rather than after someone writes twelve strings of product copy. The
-# check fails on a *new* one. Deleting a name from BASELINE after fixing it is the
-# point; adding one is not.
+# Check 3 was a ratchet: twelve keys were already unresolved when this script was
+# written and went into BASELINE so the check could be turned on that day. It fails on
+# a *new* unresolved key, and on a BASELINE entry that starts resolving. BASELINE has
+# been empty since 2026-09-24 (every key on screen got a translation); adding to it is
+# not what this file is for.
 #
 # Check 3 read only `NSLocalizedString("…")` under `ConstructMessenger/` until
 # 2026-09-06, which is two blind spots, not one:
