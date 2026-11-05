@@ -24,6 +24,49 @@ final class OutboundFoldTests: XCTestCase {
 
     private struct Boom: Error {}
 
+    // MARK: - The device set the answer names
+
+    private func naming(_ devices: [String]) -> SendMessageResponse {
+        var answer = response("sent")
+        answer.recipientActiveDevices = devices
+        return answer
+    }
+
+    /// A multi-chunk copy is folded before anyone reads it, so a set the fold drops is a new device
+    /// nobody hears of, on exactly the messages big enough to have chunks.
+    func testTheFoldOverChunksKeepsTheNewestSetTheServerNamed() {
+        let folded = OutboundMessagePipeline.aggregate(
+            responses: [naming(["a"]), naming(["a", "b"]), response("sent")],
+            baseMessageId: base
+        )
+        XCTAssertEqual(folded.recipientActiveDevices, ["a", "b"])
+    }
+
+    /// The later copy's answer is the newer statement, and a copy that threw or a server that said
+    /// nothing must not erase what another copy's answer named.
+    func testTheAnswerIsTheLastCopyThatNamedASet() {
+        let named = DeviceSetAnswer.named(in: [
+            .init(deviceId: "a", response: naming(["a"]), error: nil),
+            .init(deviceId: "b", response: naming(["a", "b"]), error: nil),
+            .init(deviceId: "c", response: response("sent"), error: nil),
+            .init(deviceId: "d", response: nil, error: Boom())
+        ])
+        XCTAssertEqual(named, ["a", "b"])
+    }
+
+    func testAnAnswerThatNamesNothingSaysNothing() {
+        XCTAssertEqual(DeviceSetAnswer.named(in: [.init(deviceId: "a", response: response("sent"), error: nil)]), [])
+        XCTAssertFalse(DeviceSetAnswer.shouldAsk(named: [], alreadyAsked: nil))
+    }
+
+    /// One request per named set: a device the key server will not give us keeps the sets apart, and
+    /// asking on every message would spend the bundle budget. A set that changes is a new question.
+    func testTheSameNamedSetIsAskedAboutOnceAndAChangedOneAgain() {
+        XCTAssertTrue(DeviceSetAnswer.shouldAsk(named: ["a", "b"], alreadyAsked: nil))
+        XCTAssertFalse(DeviceSetAnswer.shouldAsk(named: ["a", "b"], alreadyAsked: ["a", "b"]))
+        XCTAssertTrue(DeviceSetAnswer.shouldAsk(named: ["a", "b", "c"], alreadyAsked: ["a", "b"]))
+    }
+
     // MARK: - At least one device accepted
 
     /// The message is in the mailbox, so the row says sent; the device that was not reached is

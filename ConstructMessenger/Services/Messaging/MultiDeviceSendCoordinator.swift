@@ -86,17 +86,20 @@ final class MultiDeviceSendCoordinator {
     /// familiar worry — "we might still be talking to a device someone removed" — is not the
     /// constraint here.
     ///
-    /// *What does bound it is a peer's **new** device.* It receives the envelope (the account
-    /// stream is still written) but the copy inside is sealed to the devices we knew, so it sees
-    /// nothing until we refetch. That is the window this number sets, and five minutes is short
-    /// enough to pass unnoticed by someone still setting the device up — post-link history sync
-    /// is off, so it starts empty regardless — and long enough to cost one request.
+    /// *A peer's **new** device does not bound it either.* The answer to a sealed send names the
+    /// set (`DeviceSetAnswer`), and that is how a sender in an open chat learns of one. This number
+    /// only paces `refreshRecipientDevices`, which remains for a peer the answer says nothing about:
+    /// addressed by key, or on a server older than the field. Measured 2026-11-05 before the answer
+    /// existed: a new device got nothing 6 min 49 s after linking, because expiry asks nobody.
     ///
-    /// The TTL is the backstop, not the mechanism: `recipientBundles(for:)` also drops an entry
-    /// whose device set no longer matches what `PeerDevice` holds, and that store is rewritten by
-    /// `SessionAddressing.reconcileDevices` from the `active_devices` of **every** bundles
-    /// response, wherever in the app it was made.
+    /// `recipientBundles(for:)` also drops an entry whose device set no longer matches what
+    /// `PeerDevice` holds, and that store is rewritten by `SessionAddressing.reconcileDevices` from
+    /// the `active_devices` of **every** bundles response, wherever in the app it was made.
     private let recipientCacheTTL: TimeInterval = 300
+
+    /// The named set the key server last answered about, per peer (`DeviceSetAnswer.shouldAsk`).
+    /// Memory only: a relaunch costs one more request.
+    private var askedDeviceSet: [String: Set<String>] = [:]
 
     /// When `refreshRecipientDevices` last asked, so a peer whose bundles are unavailable is asked
     /// at the TTL's pace rather than on every chat open.
@@ -128,12 +131,28 @@ final class MultiDeviceSendCoordinator {
     /// Consumes a one-time pre-key only when a device we hold no session with will spend one.
     func recipientBundles(for recipientUserId: String) async throws -> [DeviceBundleData] {
         if let cached = cachedRecipientBundles(for: recipientUserId) { return cached }
+        return try await fetchRecipientBundles(for: recipientUserId, naming: [])
+    }
+
+    /// Ask the key server regardless of the cache. A device in `named` that we hold no session
+    /// with counts toward spending a one-time pre-key: it is about to open one.
+    @discardableResult
+    func fetchRecipientBundles(for recipientUserId: String, naming named: Set<String>) async throws -> [DeviceBundleData] {
         let fetched = try await KeyServiceClient.shared.getPreKeyBundles(
             userId: recipientUserId,
-            consumeOneTimePrekey: fanOutNeedsOneTimePrekey(for: recipientUserId)
+            consumeOneTimePrekey: fanOutNeedsOneTimePrekey(for: recipientUserId, naming: named)
         )
         recipientDeviceCache[recipientUserId] = DeviceCache(bundles: fetched, fetchedAt: Date())
         return fetched
+    }
+
+    /// The answer to a send named a device set other than the one planned: ask the key server,
+    /// which carries the certificates, unless this very set has been asked about. Throws when the
+    /// key server does not answer, and the set counts as not asked about.
+    func askAboutDeviceSet(_ named: Set<String>, ofPeer recipientUserId: String) async throws {
+        guard DeviceSetAnswer.shouldAsk(named: named, alreadyAsked: askedDeviceSet[recipientUserId]) else { return }
+        try await fetchRecipientBundles(for: recipientUserId, naming: named)
+        askedDeviceSet[recipientUserId] = named
     }
 
     /// What the key server last said about this peer's devices, **without asking it again.**
@@ -147,12 +166,9 @@ final class MultiDeviceSendCoordinator {
 
     /// Ask the key server who this peer's devices are, when nothing recent has said.
     ///
-    /// **A peer's new device is otherwise invisible.** `PeerDevice` is written from what arrives —
-    /// an inbound message, a bundle response some other path made — and a device that has not
-    /// written to us produces neither. The TTL on the cache above bounds the window only for a
-    /// peer we are *already* fetching bundles for, which stops happening the moment we hold a
-    /// session with every device we know: then nothing asks again, ever, and the five minutes that
-    /// comment claims is unbounded in fact. This is the call that asks.
+    /// **The fallback for a peer the answer to a send says nothing about** (`DeviceSetAnswer`).
+    /// `PeerDevice` is written from what arrives — an inbound message, a bundle response some other
+    /// path made — and a device that has not written to us produces neither.
     ///
     /// Best-effort by construction: a failure leaves the plan on the set we hold, which is what a
     /// send would have used anyway. Driven by opening a conversation rather than by sending, so
@@ -209,8 +225,8 @@ final class MultiDeviceSendCoordinator {
     ///
     /// Unknown counts as "yes": a recipient we hold no devices for is one we have certainly not
     /// established sessions with.
-    private func fanOutNeedsOneTimePrekey(for recipientUserId: String) -> Bool {
-        let known = SessionAddressing.devices(ofPeer: recipientUserId).map(\.deviceId)
+    private func fanOutNeedsOneTimePrekey(for recipientUserId: String, naming named: Set<String>) -> Bool {
+        let known = SessionAddressing.devices(ofPeer: recipientUserId).map(\.deviceId) + named
         return Self.needsOneTimePrekey(knownDeviceIds: known) {
             CryptoManager.shared.hasSession(for: $0)
         }

@@ -457,18 +457,6 @@ public nonisolated struct Shared_Proto_Services_V1_MessageStreamResponse: Sendab
   /// Clears the value of `streamCursor`. Subsequent reads from it will return its default value.
   public mutating func clearStreamCursor() {self._streamCursor = nil}
 
-  /// Rate-limit PoW challenge for the stream send path.
-  /// Populated when the oneof error has error_code = RATE_LIMIT.
-  /// Replaces the legacy JSON-encoded challenge in error_message.
-  public var rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge {
-    get {_rateLimitChallenge ?? Shared_Proto_Services_V1_RateLimitChallenge()}
-    set {_rateLimitChallenge = newValue}
-  }
-  /// Returns true if `rateLimitChallenge` has been explicitly set.
-  public var hasRateLimitChallenge: Bool {self._rateLimitChallenge != nil}
-  /// Clears the value of `rateLimitChallenge`. Subsequent reads from it will return its default value.
-  public mutating func clearRateLimitChallenge() {self._rateLimitChallenge = nil}
-
   /// Echoed from MessageStreamRequest.attempt_id for "attempt → decision" tracing.
   public var attemptID: String {
     get {_attemptID ?? String()}
@@ -510,7 +498,6 @@ public nonisolated struct Shared_Proto_Services_V1_MessageStreamResponse: Sendab
 
   fileprivate var _responseID: String? = nil
   fileprivate var _streamCursor: String? = nil
-  fileprivate var _rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge? = nil
   fileprivate var _attemptID: String? = nil
 }
 
@@ -735,28 +722,6 @@ public nonisolated struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sen
   fileprivate var _attemptID: String? = nil
 }
 
-/// RateLimitChallenge - Proof-of-Work challenge issued on soft rate-limit breach.
-/// Client must solve this challenge before retrying the send.
-/// difficulty: 4 = x1.5 limit, 6 = x3 limit, 8 = x5+ limit
-public nonisolated struct Shared_Proto_Services_V1_RateLimitChallenge: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// Random hex string the client must hash against
-  public var challenge: String = String()
-
-  /// Argon2 difficulty level
-  public var difficulty: UInt32 = 0
-
-  /// Unix millis — challenge expires in 60 seconds
-  public var expiresAt: Int64 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
 /// SendMessageResponse - Send message response
 public nonisolated struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
@@ -785,17 +750,6 @@ public nonisolated struct Shared_Proto_Services_V1_SendMessageResponse: Sendable
   /// Clears the value of `error`. Subsequent reads from it will return its default value.
   public mutating func clearError() {self._error = nil}
 
-  /// PoW challenge issued when rate limit is soft-exceeded.
-  /// Client must solve this challenge before retrying.
-  public var rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge {
-    get {_rateLimitChallenge ?? Shared_Proto_Services_V1_RateLimitChallenge()}
-    set {_rateLimitChallenge = newValue}
-  }
-  /// Returns true if `rateLimitChallenge` has been explicitly set.
-  public var hasRateLimitChallenge: Bool {self._rateLimitChallenge != nil}
-  /// Clears the value of `rateLimitChallenge`. Subsequent reads from it will return its default value.
-  public mutating func clearRateLimitChallenge() {self._rateLimitChallenge = nil}
-
   /// Echoed from SendMessageRequest.attempt_id for client-side tracing.
   public var attemptID: String {
     get {_attemptID ?? String()}
@@ -815,12 +769,26 @@ public nonisolated struct Shared_Proto_Services_V1_SendMessageResponse: Sendable
   /// server nothing new. Unset on SendMessage and from a server that predates the field.
   public var intakeVerdict: Shared_Proto_Services_V1_IntakeVerdict = .unspecified
 
+  /// SendSealedMessage only: the recipient's active devices as the server holds them now, sorted.
+  /// The sender compares this with the devices it planned for; on a difference it asks
+  /// GetPreKeyBundles, which carries the certificates, and sends the copies this message still
+  /// owes. This set is a reason to ask and never a list of keys to trust. Empty says nothing:
+  /// a server older than the field, a failed lookup, a recipient on another server, or a recipient
+  /// addressed by key.
+  ///
+  /// Tells a sender of a recipient addressed by account id what GetPreKeyBundlesResponse
+  /// .active_devices tells any caller. Never set for a recipient addressed by key: that door
+  /// answers the same whether or not the address has an account, and the key service does not
+  /// resolve key addresses. The field would say which addresses have accounts, and device ids
+  /// would tie an address to its account id. construct-docs
+  /// decisions/the-send-answer-names-the-device-set.md.
+  public var recipientActiveDevices: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _error: Shared_Proto_Services_V1_MessageError? = nil
-  fileprivate var _rateLimitChallenge: Shared_Proto_Services_V1_RateLimitChallenge? = nil
   fileprivate var _attemptID: String? = nil
 }
 
@@ -1532,7 +1500,7 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtob
 
 nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{3}mailbox_gap\0\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{b}attempt_id\0\u{3}mailbox_gap\0\u{b}rate_limit_challenge\0\u{c}\u{15}\u{1}\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1646,7 +1614,6 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
       }()
       case 10: try { try decoder.decodeSingularStringField(value: &self._responseID) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self._streamCursor) }()
-      case 21: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
       case 22: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
       case 23: try {
         var v: Shared_Proto_Services_V1_MailboxGap?
@@ -1712,9 +1679,6 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
     try { if let v = self._streamCursor {
       try visitor.visitSingularStringField(value: v, fieldNumber: 11)
     } }()
-    try { if let v = self._rateLimitChallenge {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
-    } }()
     try { if let v = self._attemptID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 22)
     } }()
@@ -1728,7 +1692,6 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
     if lhs.response != rhs.response {return false}
     if lhs._responseID != rhs._responseID {return false}
     if lhs._streamCursor != rhs._streamCursor {return false}
-    if lhs._rateLimitChallenge != rhs._rateLimitChallenge {return false}
     if lhs._attemptID != rhs._attemptID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -2056,49 +2019,9 @@ nonisolated extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftPr
   }
 }
 
-nonisolated extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".RateLimitChallenge"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}challenge\0\u{1}difficulty\0\u{3}expires_at\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.challenge) }()
-      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.difficulty) }()
-      case 3: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.challenge.isEmpty {
-      try visitor.visitSingularStringField(value: self.challenge, fieldNumber: 1)
-    }
-    if self.difficulty != 0 {
-      try visitor.visitSingularUInt32Field(value: self.difficulty, fieldNumber: 2)
-    }
-    if self.expiresAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.expiresAt, fieldNumber: 3)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Shared_Proto_Services_V1_RateLimitChallenge, rhs: Shared_Proto_Services_V1_RateLimitChallenge) -> Bool {
-    if lhs.challenge != rhs.challenge {return false}
-    if lhs.difficulty != rhs.difficulty {return false}
-    if lhs.expiresAt != rhs.expiresAt {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{3}rate_limit_challenge\0\u{3}attempt_id\0\u{3}intake_verdict\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{4}\u{2}attempt_id\0\u{3}intake_verdict\0\u{3}recipient_active_devices\0\u{b}rate_limit_challenge\0\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2111,9 +2034,9 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.serverTimestamp) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self.success) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._error) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
       case 7: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
       case 8: try { try decoder.decodeSingularEnumField(value: &self.intakeVerdict) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.recipientActiveDevices) }()
       default: break
       }
     }
@@ -2139,14 +2062,14 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
     try { if let v = self._error {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
-    try { if let v = self._rateLimitChallenge {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    } }()
     try { if let v = self._attemptID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 7)
     } }()
     if self.intakeVerdict != .unspecified {
       try visitor.visitSingularEnumField(value: self.intakeVerdict, fieldNumber: 8)
+    }
+    if !self.recipientActiveDevices.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.recipientActiveDevices, fieldNumber: 9)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2157,9 +2080,9 @@ nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobu
     if lhs.serverTimestamp != rhs.serverTimestamp {return false}
     if lhs.success != rhs.success {return false}
     if lhs._error != rhs._error {return false}
-    if lhs._rateLimitChallenge != rhs._rateLimitChallenge {return false}
     if lhs._attemptID != rhs._attemptID {return false}
     if lhs.intakeVerdict != rhs.intakeVerdict {return false}
+    if lhs.recipientActiveDevices != rhs.recipientActiveDevices {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
