@@ -96,9 +96,9 @@ class ChatViewModel {
         // their keys, opportunistically re-key to a fresh session (no-op otherwise).
         let contactId = conversation.peerId
         Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
-        // Who this person's devices are, when nothing recent has said. Opening the chat is the
-        // trigger rather than sending, so the key server is asked once per peer per TTL and never
-        // per message. Best-effort; see `refreshRecipientDevices`.
+        // Who this person's devices are, for a peer the answer to a send says nothing about
+        // (`DeviceSetAnswer`). Asked once per peer per TTL and never per message. Best-effort; see
+        // `refreshRecipientDevices`.
         Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
     }
 

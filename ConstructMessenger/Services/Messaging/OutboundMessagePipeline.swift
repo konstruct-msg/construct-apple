@@ -163,6 +163,14 @@ final class OutboundMessagePipeline {
 
         let stealthOn = StealthPolicy.shared.shouldUseSealedSender()
         var targets = try await recipientTargets(for: recipientId, stealthOn: stealthOn)
+        // A retry owed to a device we could not fetch when the server named it. A device revoked
+        // since costs one request per attempt, and the queue bounds the attempts.
+        if let onlyDevices, !Set(onlyDevices).isSubset(of: targets.map(\.deviceId)) {
+            _ = try? await MultiDeviceSendCoordinator.shared.fetchRecipientBundles(
+                for: recipientId, naming: Set(onlyDevices)
+            )
+            targets = try await recipientTargets(for: recipientId, stealthOn: stealthOn)
+        }
         if kind == .control {
             targets = targets.filter { CryptoManager.shared.hasSession(for: $0.deviceId) }
             guard !targets.isEmpty else {
@@ -206,36 +214,74 @@ final class OutboundMessagePipeline {
         // send as.
         let tagger = SenderSyncDeviceTag.Tagger.current
 
-        var copies: [RecipientSendReport.Copy] = []
-        for target in planned {
+        func sendCopies(to devices: [DeviceDeliveryTarget]) async throws -> [RecipientSendReport.Copy] {
+            var sent: [RecipientSendReport.Copy] = []
+            for target in devices {
+                do {
+                    let response = try await sendCopy(
+                        to: target,
+                        plan: plan,
+                        baseMessageId: baseMessageId,
+                        senderId: senderId,
+                        recipientId: recipientId,
+                        timestamp: timestamp,
+                        kind: kind,
+                        stealthOn: stealthOn,
+                        spendUnit: spendUnit,
+                        tagger: tagger
+                    )
+                    sent.append(.init(deviceId: target.deviceId, response: response, error: nil))
+                } catch let blocked as StealthDowngradeBlocked {
+                    // Ours to fix, not the device's: the sender certificate. Every copy would fail the
+                    // same way, and the callers' answer to it is to queue the whole message.
+                    throw blocked
+                } catch {
+                    // One device's failure says nothing about the next one's session or transport, so
+                    // the loop is not cut short. A partial multi-chunk copy never reassembles, so a
+                    // chunk that failed owes the device the whole message — `sendCopy` stops at the
+                    // first failed chunk for that reason.
+                    Log.error(
+                        "Outbound: copy of \(baseMessageId.prefix(8))… for \(target.deviceId.prefix(8))… failed: \(error)",
+                        category: "Outbound"
+                    )
+                    sent.append(.init(deviceId: target.deviceId, response: nil, error: error))
+                }
+            }
+            return sent
+        }
+
+        var copies = try await sendCopies(to: planned)
+
+        // The answer to this send names the devices the server holds. One we did not plan for gets
+        // its copy of this message now, while the plan is in hand; the retry queue cannot rebuild a
+        // media message. Until 2026-11-05 a peer's new device got nothing until the chat was next
+        // opened, and what it missed never came (todo/263).
+        let named = DeviceSetAnswer.named(in: copies)
+        let plannedIds = Set(targets.map(\.deviceId))
+        if kind == .message, !named.isEmpty, named != plannedIds {
             do {
-                let response = try await sendCopy(
-                    to: target,
-                    plan: plan,
-                    baseMessageId: baseMessageId,
-                    senderId: senderId,
-                    recipientId: recipientId,
-                    timestamp: timestamp,
-                    kind: kind,
-                    stealthOn: stealthOn,
-                    spendUnit: spendUnit,
-                    tagger: tagger
-                )
-                copies.append(.init(deviceId: target.deviceId, response: response, error: nil))
-            } catch let blocked as StealthDowngradeBlocked {
-                // Ours to fix, not the device's: the sender certificate. Every copy would fail the
-                // same way, and the callers' answer to it is to queue the whole message.
-                throw blocked
-            } catch {
-                // One device's failure says nothing about the next one's session or transport, so
-                // the loop is not cut short. A partial multi-chunk copy never reassembles, so a
-                // chunk that failed owes the device the whole message — `sendCopy` stops at the
-                // first failed chunk for that reason.
-                Log.error(
-                    "Outbound: copy of \(baseMessageId.prefix(8))… for \(target.deviceId.prefix(8))… failed: \(error)",
+                try await MultiDeviceSendCoordinator.shared.askAboutDeviceSet(named, ofPeer: recipientId)
+                let current = try await recipientTargets(for: recipientId, stealthOn: stealthOn)
+                let found = current.filter { !plannedIds.contains($0.deviceId) }
+                Log.info(
+                    "Outbound: server names \(named.count) device(s) of \(recipientId.prefix(8))…, we planned \(plannedIds.count); \(found.count) new with keys",
                     category: "Outbound"
                 )
-                copies.append(.init(deviceId: target.deviceId, response: nil, error: error))
+                do {
+                    copies += try await sendCopies(to: found)
+                } catch {
+                    // The message has already gone to the devices above, so queueing all of it
+                    // would send them a second ciphertext. Only these devices are owed.
+                    copies += found.map { .init(deviceId: $0.deviceId, response: nil, error: error) }
+                }
+            } catch {
+                Log.error(
+                    "Outbound: could not ask for the device set of \(recipientId.prefix(8))… the server named: \(error)",
+                    category: "Outbound"
+                )
+                copies += named.subtracting(plannedIds).sorted().map {
+                    .init(deviceId: $0, response: nil, error: error)
+                }
             }
         }
 
@@ -562,6 +608,7 @@ final class OutboundMessagePipeline {
         var errorCode = ""
         var retryAfterMs: Int64 = 0
         var attemptId = ""
+        var recipientActiveDevices: [String] = []
         let firstServerOrderedResponse = responses
             .filter { $0.serverOrderKey != nil }
             .min { ($0.serverOrderKey ?? "") < ($1.serverOrderKey ?? "") }
@@ -590,6 +637,10 @@ final class OutboundMessagePipeline {
             if r.retryAfterMs > retryAfterMs {
                 retryAfterMs = r.retryAfterMs
             }
+            // The last chunk's answer is the newest statement of the set.
+            if !r.recipientActiveDevices.isEmpty {
+                recipientActiveDevices = r.recipientActiveDevices
+            }
         }
         return SendMessageResponse(
             messageId: baseMessageId,
@@ -599,7 +650,27 @@ final class OutboundMessagePipeline {
             retryable: retryable,
             errorCode: errorCode,
             retryAfterMs: retryAfterMs,
-            attemptId: attemptId
+            attemptId: attemptId,
+            recipientActiveDevices: recipientActiveDevices
         )
+    }
+}
+
+/// What the answer to a send says about the recipient's devices.
+enum DeviceSetAnswer {
+    /// The set the server named across these copies, the last answer winning; empty when none did.
+    nonisolated static func named(in copies: [RecipientSendReport.Copy]) -> Set<String> {
+        let answers = copies.compactMap { $0.response?.recipientActiveDevices }
+        return Set(answers.last { !$0.isEmpty } ?? [])
+    }
+
+    /// Whether this named set is one the key server has not been asked about yet.
+    ///
+    /// **The set is the address, not a timer.** A device the key server named and we refused, or one
+    /// with no bundle, stays out of the plan, so the two sets keep differing. Without this every
+    /// later message would ask again, and `BUNDLE_RATE_LIMIT_PER_MIN` would take the budget session
+    /// setup needs. The same set is asked about once; a changed set is asked about again.
+    nonisolated static func shouldAsk(named: Set<String>, alreadyAsked: Set<String>?) -> Bool {
+        !named.isEmpty && named != alreadyAsked
     }
 }

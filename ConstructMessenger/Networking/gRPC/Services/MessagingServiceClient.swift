@@ -342,7 +342,8 @@ final class MessagingServiceClient: Sendable {
                 retryable: retryable,
                 errorCode: errorCodeStr,
                 retryAfterMs: retryAfterMs,
-                attemptId: echoedAttemptId
+                attemptId: echoedAttemptId,
+                recipientActiveDevices: response.recipientActiveDevices
             )
         }
     }
