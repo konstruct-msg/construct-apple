@@ -247,6 +247,8 @@ enum SessionAddressing {
         ofPeer accountId: String
     ) {
         guard !accountId.isEmpty, !devices.isEmpty else { return }
+        // Before this write can add a row: the seed marks the rows from before judging existed.
+        PeerDeviceJudgement.seedIfDue()
         let store = LocalRepositories.peerDevices
         var candidates: [PeerDeviceRecord] = []
         let now = Date()
@@ -330,6 +332,7 @@ enum SessionAddressing {
         do {
             let stale = try LocalRepositories.peerDevices.retain(ofAccount: accountId, keeping: keep)
             guard !stale.isEmpty else { return }
+            PeerDeviceJudgement.forget(stale)
             Log.info(
                 "PEER_DEVICE_RETIRED: \(stale.count) device(s) of \(accountId.prefix(8))… no longer "
                 + "active — \(stale.map { $0.prefix(8) + "…" }.joined(separator: ",")) "

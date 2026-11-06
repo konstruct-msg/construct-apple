@@ -141,10 +141,10 @@ final class ContactLinkService {
                 Log.error("IK_PIN[save_failed]: \(contactId.prefix(8))… (source=invite): \(error)", category: "ContactLink")
             }
         }
-        SessionAddressing.recordDevices(
-            [(deviceId: deriveDeviceId(identityPublicKey: identityKey), identityKey: identityKey)],
-            ofPeer: contactId
-        )
+        let deviceId = deriveDeviceId(identityPublicKey: identityKey)
+        SessionAddressing.recordDevices([(deviceId: deviceId, identityKey: identityKey)], ofPeer: contactId)
+        // Checked out of band: the root the account's other devices are judged against.
+        PeerDeviceJudgement.mark([deviceId])
     }
 
     /// Keep a peer's identity key when nothing else did — the backstop for the sealed-sender

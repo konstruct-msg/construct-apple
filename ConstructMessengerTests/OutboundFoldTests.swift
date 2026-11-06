@@ -67,6 +67,30 @@ final class OutboundFoldTests: XCTestCase {
         XCTAssertTrue(DeviceSetAnswer.shouldAsk(named: ["a", "b", "c"], alreadyAsked: ["a", "b"]))
     }
 
+    /// A device seen without a verdict gets one from the next message, even when the sets agree, as
+    /// they do once a first message has pinned it. Otherwise the alarm waits for a chat to open.
+    func testAMessageAsksToJudgeADeviceSeenWithoutAVerdict() {
+        XCTAssertEqual(
+            DeviceSetAnswer.setToJudge(kind: .message, named: ["a", "b"], planned: ["a"], unjudged: ["b"]),
+            ["a", "b"]
+        )
+        XCTAssertEqual(
+            DeviceSetAnswer.setToJudge(kind: .message, named: [], planned: ["a", "b"], unjudged: ["b"]),
+            ["a", "b"],
+            "A server that named nothing leaves the plan to ask about"
+        )
+    }
+
+    func testNothingIsAskedWithEveryDeviceJudged() {
+        XCTAssertNil(DeviceSetAnswer.setToJudge(kind: .message, named: ["a"], planned: ["a"], unjudged: []))
+    }
+
+    /// The receipt for a first message goes out right after it opens, to the very device that has
+    /// no verdict yet. Asking there would make receiving fetch.
+    func testAControlDoesNotAskToJudge() {
+        XCTAssertNil(DeviceSetAnswer.setToJudge(kind: .control, named: ["a", "b"], planned: ["a", "b"], unjudged: ["b"]))
+    }
+
     // MARK: - At least one device accepted
 
     /// The message is in the mailbox, so the row says sent; the device that was not reached is
