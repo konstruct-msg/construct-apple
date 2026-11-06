@@ -89,7 +89,7 @@ final class MultiDeviceSendCoordinator {
     /// *A peer's **new** device does not bound it either.* The answer to a sealed send names the
     /// set (`DeviceSetAnswer`), and that is how a sender in an open chat learns of one. This number
     /// only paces `refreshRecipientDevices`, which remains for a peer the answer says nothing about:
-    /// addressed by key, or on a server older than the field. Measured 2026-11-05 before the answer
+    /// on another server, or on a server older than the field. Measured 2026-11-05 before the answer
     /// existed: a new device got nothing 6 min 49 s after linking, because expiry asks nobody.
     ///
     /// `recipientBundles(for:)` also drops an entry whose device set no longer matches what
