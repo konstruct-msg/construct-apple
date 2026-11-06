@@ -506,6 +506,18 @@ class AuthViewModel {
         }
     }
 
+    /// The server accepted the phrase and the keys and tokens are saved: become that device now.
+    ///
+    /// The same path a launch takes, because a launch is what used to finish recovery: until
+    /// someone killed the app the core stayed down, and peers got a bundle with no post-quantum
+    /// keys and could not open a session (stand of 2026-11-06, todo/263). The flag is cleared first
+    /// because this path never clears it; if the keys really are unreadable it sets it again.
+    func completeAccountRecovery() async {
+        deviceKeysUnavailable = false
+        lastRestoreAttemptAt = nil
+        await restoreOrAuthenticateDevice()
+    }
+
     /// Called from KeysRecoveryView "Create New Account" button — explicit user action.
     /// Wipes ALL local crypto state so the user goes through fresh onboarding.
     /// Core Data (message history, contacts) is intentionally preserved.

@@ -427,24 +427,9 @@ final class AccountRecoveryViewModel {
             // hybrid now: the server kept the claim's ML-DSA half.
             AccountAddress.rememberOwn(claim.address)
 
-            Task {
-                _ = try? await OtpkReplenishmentService.generateAndUpload(
-                    count: 100,
-                    deviceId: deviceId,
-                    replaceExisting: true
-                )
-            }
-
-            // Force-rotate SPK after recovery: the server still holds the original
-            // device's SPK (which may be stale). Upload a fresh SPK so peers can
-            // init sessions without hitting the Rust 14-day staleness rejection.
-            Task { [weak self] in
-                _ = self
-                try? await PreKeyRotationService.shared.forceRotate(
-                    deviceId: deviceId,
-                    reason: .reinstall
-                )
-            }
+            // The keys peers need (SPK, Kyber, one-time keys, the hybrid identity) are published
+            // by the post-auth maintenance `AuthViewModel.completeAccountRecovery` starts. They
+            // cannot be published from here: the core is not up yet.
             recoverStep = .done
             enteredWords = Array(repeating: "", count: 12)  // clear sensitive data after step change
         } catch {

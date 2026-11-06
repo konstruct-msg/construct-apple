@@ -37,8 +37,8 @@ struct SendMessageResponse: Codable {
     /// Per-attempt UUID echoed back by server for "attempt → decision" correlation.
     var attemptId: String = ""
     /// The recipient's active devices as the server holds them now. Empty says nothing: a server
-    /// older than the field, a failed lookup, a recipient addressed by key. A reason to ask
-    /// `GetPreKeyBundles`, never a source of keys (`DeviceSetAnswer`).
+    /// older than the field, a failed lookup, a key address with none of its devices named. A
+    /// reason to ask `GetPreKeyBundles`, never a source of keys (`DeviceSetAnswer`).
     var recipientActiveDevices: [String] = []
 
     var serverOrderKey: String? {

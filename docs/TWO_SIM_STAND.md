@@ -103,6 +103,15 @@ erase B and re-link rather than trying to reason about the result.
 (1 h) or the process restarts, and B's message stream stays authenticated as the old identity
 until relaunch — copies then arrive addressed to an account B no longer is.
 
+## Restoring an account by phrase takes a fresh account each time
+
+The server refuses a second recovery of one account for seven days ("Recovery cooldown active"), so
+a repeat run needs a new account on B. Registration creates the key, so Settings offers only to save
+a copy: `Set up` → `Show the key`. Save the words there, then on an erased C go
+`onboarding.existingIdentity` → RESTORE FROM RECOVERY PHRASE, type the account id, tap the first word
+field, and type each word followed by the Return key (HID 40). Read the fields back before tapping
+Restore Account. The old device wipes itself on the server's signal.
+
 ## Typing goes through the simulator's active keyboard, so verify what landed
 
 UI automation sends HID key codes: under a Russian layout `alice` arrives as `фдш`, and the

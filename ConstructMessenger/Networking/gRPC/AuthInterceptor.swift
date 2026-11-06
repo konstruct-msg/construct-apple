@@ -18,6 +18,10 @@ struct AuthInterceptor: ClientInterceptor {
         "AuthenticateDevice",
         "RefreshToken",
         "CheckUsernameAvailability",
+        // The one way back for someone who lost every device, so there is never a session to send.
+        // Missing from this list, recovery was refused here, before the network, with "Session token
+        // expired", on exactly the devices it exists for (stand of 2026-11-06, todo/263).
+        "RecoverAccount",
         // DeviceLinkService (Flow A + Flow B) — no JWT on the linking device yet.
         "ConfirmDeviceLink",
         "SubmitJoinRequest",
