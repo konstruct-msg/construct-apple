@@ -11,6 +11,7 @@ import SwiftUI
 
 struct RecoveryEntryView: View {
     @Environment(AccountRecoveryViewModel.self) private var vm
+    @Environment(AuthViewModel.self) private var authViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -23,6 +24,12 @@ struct RecoveryEntryView: View {
                     recoveringView
                 case .done:
                     doneView
+                        .onAppear {
+                            // Not `.task`: finishing the session replaces this view, and the work
+                            // must outlive it. Not on the Done button: until this runs, peers
+                            // cannot open a session with this device.
+                            Task { await authViewModel.completeAccountRecovery() }
+                        }
                 case .failed(let msg):
                     failedView(message: msg)
                 }
