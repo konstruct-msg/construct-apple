@@ -51,6 +51,12 @@ Silence is the worst failure: a message that never appears raises no error.
 1. **Prior art first.** Before any protocol mechanism, write down how Signal / MLS (RFC 9420) /
    Matrix solve it and why we deviate. END_SESSION spent eight months reinventing what Signal
    has had since 2016: a session renews by sending. Group key management is MLS, not ours.
+   Read them, do not recall them: the note links the code or spec it read (Session too when the
+   question is metadata). For a delivery, crypto or privacy mechanism it answers what theirs does,
+   who may call it and what a refused caller sees, and what happens to a party without the
+   credential; it lists what in ours is our own, why, and what would let us remove it; and it gives
+   the share of real traffic each new condition or exception affects.
+   `~/Code/construct-docs/scripts/check_prior_art.py` refuses a decision note without the link.
 2. **The core decides, this app executes.** If two clients must compute it identically for a message
    to be readable — or it touches ratchet/session state, or decides which sessions an operation
    touches, or a session's lifecycle phase — it is a `construct-core` API, written first. This
