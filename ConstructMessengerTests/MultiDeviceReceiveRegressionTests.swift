@@ -108,19 +108,18 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
     // MARK: - The duplicate guard refusing the handler that armed it
 
     /// `routeIncomingMessage` marks a SENDER_SYNC processed **before** calling its handler, to
-    /// close the redelivery window. The handler then asks `decryptMessage`, once per candidate
-    /// session, which of our own devices sent it — and every candidate was refused on the strength
-    /// of that claim.
+    /// close the redelivery window. The handler then asks `decryptMessage` to read it, and was
+    /// refused on the strength of that claim.
     ///
     /// The result was not an error anyone saw: `messageNumber == 0` survived, because an unopened
     /// first message takes the init path, which does not consult the guard. Everything after it was
     /// dropped with "no own-device session opened", on every multi-device account, silently.
     ///
-    /// This pins the shape of the fix rather than the crypto: the walk must ask about the session,
-    /// and must not re-ask a message-level question its own caller already answered.
+    /// This pins the shape of the fix rather than the crypto: the handler must ask about the
+    /// session, and must not re-ask a message-level question its own caller already answered.
     ///
     /// Mutation: drop `claimedByThisHandler` at the call site in `openSenderSync` — this reddens.
-    func testTheCandidateWalkDoesNotConsultItsOwnClaim() throws {
+    func testOpeningACopyDoesNotConsultItsOwnClaim() throws {
         let source = try XCTUnwrap(
             try? String(
                 contentsOf: URL(fileURLWithPath: #filePath)
@@ -137,11 +136,11 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
                 encoding: .utf8
             )
         )
-        let walk = try XCTUnwrap(syncSource.range(of: "private func openSenderSync"))
-        let body = String(syncSource[walk.lowerBound...].prefix(1400))
+        let open = try XCTUnwrap(syncSource.range(of: "private func openSenderSync"))
+        let body = String(syncSource[open.lowerBound...].prefix(1400))
         XCTAssertTrue(
             body.contains("claimedByThisHandler: true"),
-            "openSenderSync decrypts one id once per candidate; without this it is refused by the "
+            "without this openSenderSync is refused by the "
             + "mark routeIncomingMessage made before calling it"
         )
 

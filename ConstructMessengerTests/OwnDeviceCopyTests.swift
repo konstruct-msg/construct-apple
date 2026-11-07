@@ -28,7 +28,7 @@ final class OwnDeviceCopyTests: XCTestCase {
         let wire = try sender.encryptToWire(contactId: siblingId, plaintext: Data("copy".utf8))
 
         let certificate = try TestCertificateServer.shared.certificate(for: sender, account: account)
-        let payload = OwnDeviceCopy.wrap(certificate: try serialized(certificate), wirePayload: wire)
+        let payload = try OwnDeviceCopy.wrap(certificate: try serialized(certificate), wirePayload: wire)
         let message = try XCTUnwrap(parsed(payload), "a wrapped copy parses into a message")
 
         XCTAssertEqual(message.rawPayload, wire, "the core gets the wire payload, not the wrapper")
@@ -44,16 +44,22 @@ final class OwnDeviceCopyTests: XCTestCase {
         XCTAssertTrue(sibling.hasSession(contactId: senderId), "filed under the device the certificate names")
     }
 
-    /// A sender without a certificate still sends: the copy parses, and one on an existing session
-    /// needs nothing more.
+    /// This client sends no copy without a certificate; one that arrives from a client that does
+    /// must still parse, so the receive path can count it instead of losing it in the parser.
     func testACopyWithoutACertificateStillParses() throws {
         let wire = try midRatchetWire()
-        let payload = OwnDeviceCopy.wrap(certificate: nil, wirePayload: wire)
-        let message = try XCTUnwrap(parsed(payload))
+        var bare = Shared_Proto_Core_V1_OwnDeviceCopy()
+        bare.wirePayload = wire
+        let message = try XCTUnwrap(parsed(try bare.serializedData()))
 
         XCTAssertNil(message.senderCertificate)
         XCTAssertEqual(message.senderDeviceId, "")
         XCTAssertEqual(message.rawPayload, wire)
+    }
+
+    /// Bytes that are not a certificate would send a copy that names nobody.
+    func testACopyIsNotWrappedAroundBytesThatAreNotACertificate() throws {
+        XCTAssertThrowsError(try OwnDeviceCopy.wrap(certificate: Data([0xFF, 0xFF, 0xFF]), wirePayload: Data([1])))
     }
 
     /// The format before 2026-09-27 — a bare wire payload — is not a copy. Early alpha: no

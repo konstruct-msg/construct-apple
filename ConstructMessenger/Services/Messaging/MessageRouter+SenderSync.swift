@@ -25,9 +25,8 @@ extension MessageRouter {
         // meant for the other two and can decrypt neither.
         //
         // The target is on the wire in the id suffix the sender writes, `-ss-<tag>`, so recognising
-        // a foreign copy costs one X25519 per own device. Without it every foreign copy walks the
-        // whole candidate list, fails each decrypt, and — with messageNumber 0 — takes the recovery
-        // path into a bundle fetch, for a message that was never ours to read.
+        // a foreign copy costs one X25519 per own device. Without it every foreign copy fails a
+        // decrypt, for a message that was never ours to read.
         //
         // The tag is a MAC under a secret only the two devices share, not the device id it used to
         // be; see SenderSyncDeviceTag for what the readable form gave the relay.
@@ -48,18 +47,34 @@ extension MessageRouter {
             return
         }
 
-        // Which of our own devices sent this is settled by decryption, not by a field: the sender
-        // device selects the Double Ratchet session, so it is needed *before* the plaintext exists
-        // and cannot travel inside it. We try our own-device sessions; the one that opens the
-        // message is the answer, and it is a cryptographic one rather than a claim.
-        //
-        // `message.senderDeviceId` was always empty here until the unseal boundary began recovering
-        // it from the sender certificate (2026-09-06); before that the old code took the
-        // `message.from` branch, looked up a session that is the *primary* session with ourselves,
-        // and got nowhere. Since 2026-09-27 every copy carries its certificate (`OwnDeviceCopy`).
-        let candidates = senderSyncSessionCandidates(myUserId: currentUserId, message: message)
-        guard let opened = openSenderSync(message, candidates: candidates) else {
-            handleUnopenedSenderSync(message, candidates: candidates, in: context)
+        // The copy's certificate names the device that wrote it, and that one session is read:
+        // the message says which state it means (todo/254). The certificate is not checked on an
+        // existing session, so it is only a name; opening on that session is what proves the writer
+        // holds it, and the check below is what makes that session one of ours. A copy that names
+        // nobody opens nothing. Until 2026-11-07 such a copy walked every sibling's session.
+        let origin = SenderSyncOrigin.of(
+            certifiedAccount: message.senderCertificate?.userId,
+            device: message.senderCertificate?.deviceId,
+            myUserId: currentUserId,
+            myDeviceId: AuthSessionManager.shared.currentDeviceId,
+            accountOfDevice: { SessionAddressing.peer(ofDevice: $0)?.accountId }
+        )
+        let device: String
+        switch origin {
+        case .device(let named):
+            device = named
+        case .unnamed:
+            Log.error("SENDER_SYNC: \(message.id.prefix(8))… carries no certificate, nothing names its session — dropping", category: "MessageRouter")
+            PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_certificate")
+            return
+        case .notOurs:
+            // Read, a contact's profile or card would be applied as our own.
+            Log.error("SENDER_SYNC: \(message.id.prefix(8))… names a device that is not ours — dropping", category: "MessageRouter")
+            PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "not_our_device")
+            return
+        }
+        guard let opened = openSenderSync(message, device: device) else {
+            handleUnopenedSenderSync(message, in: context, myUserId: currentUserId)
             return
         }
 
@@ -79,7 +94,7 @@ extension MessageRouter {
         in context: NSManagedObjectContext
     ) {
         // Read markers ride the same own-device envelope; the frame inside says which. Opened by
-        // a session with one of our own devices, so they are ours — the one check they need.
+        // a session with one of our own devices (`SenderSyncOrigin`), so they are ours.
         if let frame = ChunkedMessageCodec.controlFrame(plaintext),
            ContentTypeRouting.framedSideChannel(for: frame.contentType) == .readSync {
             applyReadMarkers(frame.payload, myUserId: myUserId, fromOwnAccount: true)
@@ -207,60 +222,31 @@ extension MessageRouter {
         PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_routing_header")
     }
 
-    /// Own-device sessions to try, most likely first — device ids only.
-    ///
-    /// `message.from` — our own account — led this list until 2026-09-27, for a sibling whose
-    /// copy named no device. Every copy names one now (`OwnDeviceCopy` carries the certificate),
-    /// and an account id below the seam only ever logged `hasSession(for:) was handed … an
-    /// account id`.
-    private func senderSyncSessionCandidates(myUserId: String, message: ChatMessage) -> [String] {
-        var keys: [String] = []
-        if !message.senderDeviceId.isEmpty {
-            // The sibling that wrote this copy, from its certificate. Free to try, and it
-            // short-circuits the loop when present.
-            keys.append(message.senderDeviceId)
-        }
-        // Siblings, not every own device: this one cannot have sent us a SENDER_SYNC.
-        for deviceId in MultiDeviceSendCoordinator.shared.knownSiblingDeviceIds(myUserId: myUserId) {
-            let key = deviceId
-            if !keys.contains(key) { keys.append(key) }
-        }
-        return keys
+    /// Read the copy on the session with the device it names.
+    private func openSenderSync(_ message: ChatMessage, device: String) -> (plaintext: Data, contactId: String)? {
+        guard CryptoManager.shared.hasSession(for: device) else { return nil }
+        // `claimedByThisHandler`: `routeIncomingMessage` marked this id processed before calling
+        // us, so the duplicate guard inside `decryptMessage` would refuse it on the strength of our
+        // own claim — which is what dropped every SENDER_SYNC after the first on a multi-device
+        // account until 2026-08-27.
+        guard let result = try? CryptoManager.shared.decryptMessage(
+            message, contactIdOverride: device, claimedByThisHandler: true
+        ) else { return nil }
+        return (result.plaintext, device)
     }
 
-    /// Try each candidate session until one opens the message.
-    ///
-    /// A failed Double Ratchet decrypt does not advance the ratchet, so trying the wrong session
-    /// costs nothing but the attempt — and there are as many attempts as the account has devices.
-    private func openSenderSync(
-        _ message: ChatMessage,
-        candidates: [String]
-    ) -> (plaintext: Data, contactId: String)? {
-        for contactId in candidates where CryptoManager.shared.hasSession(for: contactId) {
-            // `claimedByThisHandler`: `routeIncomingMessage` marked this id processed before
-            // calling us, so the duplicate guard inside `decryptMessage` would refuse every
-            // candidate on the strength of our own claim — which is what dropped every
-            // SENDER_SYNC after the first on a multi-device account until 2026-08-27.
-            if let result = try? CryptoManager.shared.decryptMessage(
-                message, contactIdOverride: contactId, claimedByThisHandler: true
-            ) {
-                return (result.plaintext, contactId)
-            }
-        }
-        return nil
-    }
-
-    /// No candidate session opened it. A message carrying the handshake header is the one
-    /// recoverable case: the sibling opened a new state — or its first — and this opens it.
+    /// The named session did not open it. A message carrying the handshake header is the one
+    /// recoverable case: the sibling opened a new state — or its first — and this opens it, with
+    /// the key the certificate names, nothing fetched
+    /// (`decisions/first-message-opens-without-the-server.md`).
     private func handleUnopenedSenderSync(
         _ message: ChatMessage,
-        candidates: [String],
-        in context: NSManagedObjectContext
+        in context: NSManagedObjectContext,
+        myUserId: String
     ) {
-        let kind = message.initKind
-        guard kind == .handshake else {
+        guard message.initKind == .handshake else {
             Log.error(
-                "SENDER_SYNC: no own-device session opened \(message.id) and it carries no handshake header (messageNumber=\(message.messageNumber)) — dropping",
+                "SENDER_SYNC: the session it names did not open \(message.id) and it carries no handshake header (messageNumber=\(message.messageNumber)) — dropping",
                 category: "MessageRouter"
             )
             // Counted, like the branch below. This is the *more common* way to be unroutable —
@@ -271,48 +257,12 @@ extension MessageRouter {
             PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_session_and_not_first")
             return
         }
-        guard let myUserId = AuthSessionManager.shared.currentUserId else { return }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+        if openSenderSync(firstMessage: message, myUserId: myUserId, in: context) { return }
 
-            // A device that linked and has not yet sent anything knows of no siblings: the
-            // own-device cache had one filler and it was the send path. So the candidate list held
-            // no device id, and the loop below skipped it — silently, which is how this went
-            // unnoticed until the two-sim stand showed a freshly linked device dropping both
-            // copies without a line in the log.
-            var candidates = candidates
-            if SenderSyncRecovery.needsOwnDeviceRefresh(candidates: candidates) {
-                await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: myUserId)
-                candidates = self.senderSyncSessionCandidates(myUserId: myUserId, message: message)
-                // The refresh may also have produced a session-bearing candidate that already
-                // works; retry the cheap path before reaching for bundles.
-                if let opened = self.openSenderSync(message, candidates: candidates) {
-                    self.routeOpenedSenderSync(
-                        opened.plaintext, original: message, myUserId: myUserId, in: context
-                    )
-                    return
-                }
-            }
-
-            // No session opened it and it carries the header, so the sibling opened a new state
-            // (or its first) with us: it opens under the device its sender certificate names, with the key the certificate names — one
-            // attempt, nothing fetched (`decisions/first-message-opens-without-the-server.md`).
-            // Until 2026-09-27 this walked the own-device candidates and fetched a bundle for
-            // each, because the copy said nothing about which sibling had written it.
-            if let certificate = message.senderCertificate, certificate.userId == myUserId {
-                self.openSenderSync(firstMessage: message, myUserId: myUserId, in: context)
-                if CryptoManager.shared.hasSession(for: certificate.deviceId) { return }
-            }
-
-            // Reaching here means the copy is unrecoverable. Say so: the previous version ended
-            // exactly here having done nothing, and an unroutable transcript copy that leaves no
-            // trace is indistinguishable from one that never arrived.
-            Log.error(
-                "SENDER_SYNC: \(message.id.prefix(8))… opened under no own-device session and none could be established (\(candidates.count) candidate(s)) — dropping",
-                category: "MessageRouter"
-            )
-            PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_own_device_session")
-        }
+        // Say so: an unroutable transcript copy that leaves no trace is indistinguishable from one
+        // that never arrived.
+        Log.error("SENDER_SYNC: \(message.id.prefix(8))… opened no session — dropping", category: "MessageRouter")
+        PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_own_device_session")
     }
 
     // `extractPartnerUserId(from:myUserId:)` was removed 2026-08-17 with its only caller. It read
@@ -450,11 +400,12 @@ extension MessageRouter {
     }
 
     /// Open the session a sibling's SENDER_SYNC arrived on, from the copy itself, then route it.
+    /// False when it did not open.
     private func openSenderSync(
         firstMessage message: ChatMessage,
         myUserId: String,
         in context: NSManagedObjectContext
-    ) {
+    ) -> Bool {
         do {
             let opened = try CryptoManager.shared.openReceiving(singleMessage: message)
             routeOpenedSenderSync(opened.plaintext, original: message, myUserId: myUserId, in: context)
@@ -464,8 +415,10 @@ extension MessageRouter {
                 let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
                 await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
             }
+            return true
         } catch {
             Log.error("SENDER_SYNC: opening \(message.id.prefix(8))… failed: \(error)", category: "MessageRouter")
+            return false
         }
     }
 }

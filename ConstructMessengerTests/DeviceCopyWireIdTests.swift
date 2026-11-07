@@ -403,33 +403,6 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
     // MARK: - Recovering on a device that has never sent anything
 
-    /// The state every freshly linked device was in: own devices were known only from a cache the
-    /// send path filled, so a device that had linked and not yet sent had none. The candidate list
-    /// was the plain `userId` alone, which names no device, so no bundle could be fetched and no
-    /// session established — and the loop returned having logged nothing.
-    ///
-    /// Mutation: `return false` — the refresh never fires and a linked device keeps dropping every
-    /// copy in silence, which is what the stand caught on 2026-08-17.
-    func testCandidateListWithNoDeviceIdNeedsARefresh() {
-        XCTAssertTrue(SenderSyncRecovery.needsOwnDeviceRefresh(
-            candidates: ["289b95ca-8260-4b99-a79a-acaba5681b71"]
-        ))
-        XCTAssertTrue(SenderSyncRecovery.needsOwnDeviceRefresh(candidates: []))
-    }
-
-    /// Once a sibling is known the list can recover by itself, and the receive path must not reach
-    /// for the network while routing an incoming message.
-    ///
-    /// Mutation: `return true` — every SENDER_SYNC copy triggers a bundle fetch.
-    func testCandidateListNamingADeviceDoesNot() {
-        // A per-device candidate is the bare device id since the addressing flip; it used to be
-        // `<userId>:<deviceId>`, and this asked whether any candidate contained a colon.
-        XCTAssertFalse(SenderSyncRecovery.needsOwnDeviceRefresh(candidates: [
-            "289b95ca-8260-4b99-a79a-acaba5681b71",
-            "37617f2c0617c888fa4750e0799c49ff",
-        ]))
-    }
-
     /// Malformed key material yields no tag rather than a guess. A best-effort tag would be
     /// indistinguishable on the wire from a correct one and would address nobody.
     func testMalformedKeyMaterialYieldsNoTag() {

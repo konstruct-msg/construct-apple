@@ -278,46 +278,9 @@ final class MultiDeviceSendCoordinator {
         knownOwnDevices(myUserId: myUserId).map(\.deviceId)
     }
 
-    /// Our siblings: the same set with **this** device removed.
-    ///
-    /// Separate accessor rather than a filter at each call site, because the set already had two
-    /// consumers that filter (`senderSyncPeerIdentityKeys` here, `DeviceDeliveryPlan.targets` via
-    /// its explicit `ourDeviceId`) and one that did not — the SENDER_SYNC candidate list. There it
-    /// is not a wasted comparison: until 2026-09-27 a candidate with no session sent the receive
-    /// path to `initAndDecryptSenderSync`, which fetched a bundle over the network and ran X3DH, so this
-    /// device listed as its own sibling costs one key-service request and one guaranteed AEAD
-    /// failure per sync copy. 2026-09-03, Desktop's first minute after linking:
-    ///
-    ///     Rust core initReceivingSession failed: All 1 prekey(s) failed.
-    ///     Last error: Decryption failed: AEAD decryption failed
-    ///     SENDER_SYNC: initReceivingSession failed for f1a3d746f85c8f8ce226…
-    ///
-    /// `f1a3d746…` is that device's own id. It recovered on the next candidate, so nothing was
-    /// lost — but the request was one of the ten that took it past the bundle rate limit, and past
-    /// that point it could not rebuild any session at all.
-    ///
-    /// It cannot succeed, either: a copy a sibling sealed to us does not open against a session
-    /// with ourselves. Relying on the AEAD failure to move the loop along is leaving a candidate in
-    /// the list that is only ever wrong.
-    func knownSiblingDeviceIds(myUserId: String) -> [String] {
-        let myDeviceId = AuthSessionManager.shared.currentDeviceId
-        return knownOwnDevices(myUserId: myUserId)
-            .map(\.deviceId)
-            .filter { $0 != myDeviceId }
-    }
-
-    /// Fill the own-device cache from the server, for the **receive** path.
-    ///
-    /// Until 2026-08-18 the cache had exactly one filler — the send path — so a device that had
-    /// linked and not yet sent anything knew of no siblings at all. A SENDER_SYNC copy then had no
-    /// candidate session to try, no device id to fetch a bundle for, and
-    /// `handleUnopenedSenderSync` walked a list of one entry that carried no `:` and returned
-    /// having done nothing and logged nothing. Observed on the two-simulator stand 2026-08-17: a
-    /// freshly linked device received both copies and neither reached the transcript.
-    ///
-    /// Not a hot-path call: the receive side reaches for it only when it has no siblings on record
-    /// **and** a copy from one has just arrived, which is once per device lifetime in the ordinary
-    /// case. Never burns a one-time pre-key — these are our own devices.
+    /// Fill the own-device cache from the server, for a device that has not sent anything yet: the
+    /// send path is the other filler. The tag on an incoming copy is read against this cache.
+    /// Never burns a one-time pre-key — these are our own devices.
     @discardableResult
     func refreshOwnDevices(myUserId: String) async -> [DeviceBundleData] {
         do {
@@ -917,6 +880,12 @@ final class MultiDeviceSendCoordinator {
         spendUnit: TokenSpendUnit? = nil
     ) async -> Bool {
         do {
+            // The certificate names the device that wrote the copy, and every copy carries it:
+            // nothing else says which session it is read on, and whether the sibling still holds
+            // this session is its knowledge, not ours. Without one no copy is written, before the
+            // ratchet moves. Cached for its 24 h, so a network call once a day at most.
+            let certificate = try await StealthSenderService.shared.getSenderCertificate()
+
             // Ensure a session exists for this contactId; never clobber an existing one.
             if !CryptoManager.shared.hasSession(for: contactId) {
                 guard let bundle else { throw CryptoManagerError.sessionNotFound }
@@ -941,17 +910,7 @@ final class MultiDeviceSendCoordinator {
                 messageId: messageId,
                 toDevice: contactId
             )
-            // The certificate rides with every copy, not only the first: whether the sibling
-            // still holds this session is its knowledge, not ours. Cached for its 24 h, so this
-            // is a network call once a day at most.
-            let certificate = try? await StealthSenderService.shared.getSenderCertificate()
-            if certificate == nil {
-                Log.error(
-                    "MultiDevice[sync]: no sender certificate for the copy to \(contactId.prefix(8))… — a first message will not open",
-                    category: "MultiDevice"
-                )
-            }
-            let copyPayload = OwnDeviceCopy.wrap(certificate: certificate, wirePayload: encPayload)
+            let copyPayload = try OwnDeviceCopy.wrap(certificate: certificate, wirePayload: encPayload)
 
             // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
             // the other side, in the clear, once per extra device per message — for a multi-device

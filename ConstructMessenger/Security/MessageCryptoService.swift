@@ -85,8 +85,8 @@ final class MessageCryptoService {
         }
 
         // `contactIdOverride` is the sender's device when the envelope named one; `message.from`
-        // is a device on every path that reaches here, because the sealed-sender resolve and the
-        // candidate walk both hand one down. An account id is a defect, and `asDevice` says so
+        // is a device on every path that reaches here, because the sealed-sender resolve and
+        // `openSenderSync` both hand one down. An account id is a defect, and `asDevice` says so
         // rather than quietly decrypting against the pinned device — which is how a message from
         // a peer's second device used to be fed to the first device's ratchet, failing to open
         // and then discarding the healthy session it was never sent on.
