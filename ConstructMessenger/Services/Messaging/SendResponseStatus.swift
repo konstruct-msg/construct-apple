@@ -14,12 +14,18 @@ extension SendMessageResponse {
     /// The message's state after this answer: a refusal is queued when the server says it is worth
     /// trying again (rate limit), failed when it is not (blocked, a refused ciphertext).
     var deliveryStatus: DeliveryStatus {
+        if wasRefused { return retryable ? .queued : .failed }
         switch status.lowercased() {
-        case "delivered":          return .delivered
-        case "queued":             return .queued
-        case "failed", "blocked":  return retryable ? .queued : .failed
-        default:                   return .sent
+        case "delivered":  return .delivered
+        case "queued":     return .queued
+        default:           return .sent
         }
+    }
+
+    /// The server did not take this envelope, for now or for good. "queued" is not a refusal: the
+    /// server holds it and will deliver it.
+    var wasRefused: Bool {
+        ["failed", "blocked"].contains(status.lowercased())
     }
 
     /// The server refused the ciphertext itself, which names the ratchet that wrote it — ours to

@@ -120,6 +120,35 @@ final class MultiDeviceSendCoordinator {
 
     var ownDeviceListIsCached: Bool { ownDeviceCache != nil }
 
+    /// Hands one copy to the server and returns its answer. Replaced in tests, which have no server.
+    ///
+    /// conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on the other
+    /// side, in the clear, once per extra device per message — for a multi-device account it handed
+    /// the server exactly the pairing sealed sender exists to hide.
+    ///
+    /// Nothing wanted it. `Envelope.conversation_id` has no reader anywhere on the server — the only
+    /// consumers of a field by that name are APNs payloads fed from group and request ids, the
+    /// message push path passes None, and it is in no migration — and the server blanks it on
+    /// delivery besides. The client stopped reading it from a received envelope when SENDER_SYNC
+    /// began routing from inside the ciphertext.
+    var sendCopy: (
+        _ messageId: String, _ account: String, _ payload: Data, _ timestamp: UInt64, _ device: String
+    ) async throws -> SendMessageResponse = { messageId, account, payload, timestamp, device in
+        try await MessagingServiceClient.shared.sendMessage(
+            messageId: messageId,
+            recipientId: account,
+            senderId: account,
+            conversationId: "",
+            encryptedPayload: payload,
+            timestamp: timestamp,
+            // Written on the unsealed branch by `buildEnvelope`, because the outer field is visible
+            // to the relay — and the relay already knows this pair.
+            recipientDeviceId: device,
+            contentType: .senderSync,
+            sealing: .identified(.ownDevices)
+        )
+    }
+
     func holdOwnDeviceListForTesting(_ bundles: [DeviceBundleData] = []) {
         ownDeviceCache = DeviceCache(bundles: bundles, fetchedAt: Date())
     }
@@ -905,7 +934,8 @@ final class MultiDeviceSendCoordinator {
     }
 
     /// One copy to one of **our own** devices: ensures a session exists, encrypts, sends.
-    /// Swallows errors — counted as `sync_send_failed`, not retried.
+    /// Swallows errors and the server's refusals — counted as `sync_send_failed`, not retried. False
+    /// tells the caller the copy did not go: read markers, the card and the profile try again later.
     ///
     /// Unsealed, and that is the one legitimate exemption: the pair is (me, me), which the relay
     /// knows from the authenticated channel before it opens the envelope, and `conversation_id`
@@ -951,30 +981,15 @@ final class MultiDeviceSendCoordinator {
             )
             let copyPayload = try OwnDeviceCopy.wrap(certificate: certificate, wirePayload: encPayload)
 
-            // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
-            // the other side, in the clear, once per extra device per message — for a multi-device
-            // account it handed the server exactly the pairing sealed sender exists to hide.
-            //
-            // Nothing wanted it. `Envelope.conversation_id` has no reader anywhere on the server —
-            // the only consumers of a field by that name are APNs payloads fed from group and
-            // request ids, the message push path passes None, and it is in no migration — and the
-            // server blanks it on delivery besides. The client stopped reading it from a received
-            // envelope when SENDER_SYNC began routing from inside the ciphertext.
-            _ = try await MessagingServiceClient.shared.sendMessage(
-                messageId: messageId,
-                recipientId: networkRecipientUserId,
-                senderId: senderUserId,
-                conversationId: "",
-                encryptedPayload: copyPayload,
-                timestamp: timestamp,
-                // Written on the unsealed branch by `buildEnvelope`, because the outer field is
-                // visible to the relay — and the relay already knows this pair.
-                recipientDeviceId: recipientDeviceId,
-                contentType: .senderSync,
-                sealing: .identified(.ownDevices)
+            let answer = try await sendCopy(
+                messageId, senderUserId, copyPayload, timestamp, recipientDeviceId
             )
 
             CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
+            // An answer, not a thrown error: the transport worked and the server said no.
+            guard !answer.wasRefused else {
+                throw OwnCopyRefused(errorCode: answer.errorCode, retryAfterMs: answer.retryAfterMs)
+            }
             Log.info("MultiDevice[sync]: sent to \(contactId.prefix(20))…", category: "MultiDevice")
             return true
         } catch {
@@ -990,5 +1005,11 @@ final class MultiDeviceSendCoordinator {
             return false
         }
     }
+}
+
+/// The server answered a copy to our own device with a refusal. Printed in the skip's log line.
+private struct OwnCopyRefused: Error {
+    let errorCode: String
+    let retryAfterMs: Int64
 }
 

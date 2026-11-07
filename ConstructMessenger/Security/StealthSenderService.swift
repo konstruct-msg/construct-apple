@@ -108,6 +108,11 @@ final class StealthSenderService: SealedSenderResolving {
     /// Test seam: overrides the KT-verified-identity lookup so unit tests exercise the KT
     /// cross-check without a Core Data stack. `nil` (default) uses the real `User` store.
     var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
+
+    /// A certificate as if just fetched. Under the current user: the cache is bound to its owner.
+    func holdCertificateForTesting(_ certificate: Data) {
+        cacheCert(certificate, expiresAt: Int64(Date().timeIntervalSince1970) + 86_400)
+    }
     #endif
 
     /// The account address a sealed envelope names its recipient by. Injected so a test can build
