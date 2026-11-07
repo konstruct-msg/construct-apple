@@ -865,6 +865,45 @@ final class MultiDeviceSendCoordinator {
         return all.filter { $0.deviceId != myDeviceId }
     }
 
+    /// Open the session a copy to one of our own devices goes out on.
+    ///
+    /// A new device publishes its post-quantum keys after the link, so a list fetched in between
+    /// holds a bundle the core refuses, for the cache's hour, and copies are not retried
+    /// (todo/276). The refusal names the entry: the list goes, and this one copy asks once for the
+    /// device's bundle as it is now. Keys still not there means the next send asks again.
+    func openOwnDeviceSession(
+        contactId: String,
+        bundle: PublicKeyBundleData,
+        freshBundle: () async throws -> PublicKeyBundleData?
+    ) async throws {
+        do {
+            try openOwnDeviceSessionNow(contactId: contactId, bundle: bundle)
+        } catch SessionError.peerNotPostQuantum(let reason) {
+            invalidateOwnDeviceCache()
+            guard let fresh = try await freshBundle() else {
+                throw SessionError.peerNotPostQuantum(reason: reason)
+            }
+            try openOwnDeviceSessionNow(contactId: contactId, bundle: fresh)
+        }
+    }
+
+    private func openOwnDeviceSessionNow(contactId: String, bundle: PublicKeyBundleData) throws {
+        do {
+            _ = try SessionInitializationService.shared.initializeSession(
+                userId: contactId,
+                bundle: bundle
+            )
+        } catch SessionError.peerSPKStale {
+            // Own replica has been offline too long to rotate its SPK — degrade rather
+            // than drop the sync. Flags the session at-risk (see stale-peer-reachability).
+            _ = try SessionInitializationService.shared.initializeSession(
+                userId: contactId,
+                bundle: bundle,
+                allowStale: true
+            )
+        }
+    }
+
     /// One copy to one of **our own** devices: ensures a session exists, encrypts, sends.
     /// Swallows errors — counted as `sync_send_failed`, not retried.
     ///
@@ -896,19 +935,12 @@ final class MultiDeviceSendCoordinator {
             // Ensure a session exists for this contactId; never clobber an existing one.
             if !CryptoManager.shared.hasSession(for: contactId) {
                 guard let bundle else { throw CryptoManagerError.sessionNotFound }
-                do {
-                    _ = try SessionInitializationService.shared.initializeSession(
-                        userId: contactId,
-                        bundle: bundle
-                    )
-                } catch SessionError.peerSPKStale {
-                    // Own replica has been offline too long to rotate its SPK — degrade rather
-                    // than drop the sync. Flags the session at-risk (see stale-peer-reachability).
-                    _ = try SessionInitializationService.shared.initializeSession(
-                        userId: contactId,
-                        bundle: bundle,
-                        allowStale: true
-                    )
+                try await openOwnDeviceSession(contactId: contactId, bundle: bundle) {
+                    try await KeyServiceClient.shared.getPreKeyBundles(
+                        userId: senderUserId,
+                        deviceIds: [contactId],
+                        consumeOneTimePrekey: false
+                    ).first { $0.deviceId == contactId }?.bundle
                 }
             }
 
