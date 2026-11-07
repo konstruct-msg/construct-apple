@@ -129,6 +129,8 @@ class CryptoManager: @unchecked Sendable {
         // launch could not delete is found by the next one.
         // `decisions/the-core-keeps-previous-states-the-app-keeps-no-archive.md`.
         KeychainManager.shared.deleteRetiredSessionArchives()
+        // The same for the copy of each session's suite, gone since 2026-11-07 (todo/255).
+        KeychainManager.shared.deleteRetiredSessionSuiteIds()
     }
 
     // MARK: - Device Registration
@@ -243,17 +245,15 @@ class CryptoManager: @unchecked Sendable {
         return (deviceId, bundle)
     }
 
-    /// The NEGOTIATED crypto suite of the session with one device — read from the
-    /// Rust core (authoritative; suite 3 is negotiated, the bundle only ever says 1/2).
-    /// Falls back to the Keychain copy when the session isn't loaded into the core yet.
-    /// Returns 0 when no session is known at all.
+    /// The NEGOTIATED crypto suite of the session with one device, from the Rust core (suite 3 is
+    /// negotiated; the bundle only ever says 1/2). A session on disk is loaded first: the suite is
+    /// in its own record. Returns 0 when there is no current state, so also after a retire.
     func sessionSuiteId(forDevice deviceId: String) -> UInt16 {
         guard let contactId = SessionAddressing.asDevice(deviceId) else { return 0 }
+        restoreSession(for: contactId)
         coreLock.lock()
-        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: contactId) ?? 0
-        coreLock.unlock()
-        if coreSuite > 0 { return coreSuite }
-        return KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
+        defer { coreLock.unlock() }
+        return orchestratorCore?.getSessionSuiteId(contactId: contactId) ?? 0
     }
 
     /// The suite a **conversation** runs at: the weakest of the suites we hold with the person's

@@ -40,7 +40,6 @@ final class RetiringKeepsWhatWasInFlightTests: XCTestCase {
     override func tearDown() async throws {
         CryptoManager.shared.orchestratorCore = coreBefore
         KeychainManager.shared.deleteSession(for: bobId)
-        KeychainManager.shared.deleteSessionSuiteId(userId: bobId)
         try await super.tearDown()
     }
 

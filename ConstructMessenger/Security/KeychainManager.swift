@@ -556,29 +556,17 @@ final class KeychainManager: Sendable {
     }
 
     // MARK: - Session Suite ID
-    // Fallback store for suiteId when the Rust in-memory session returns 0.
-    // Uses kSecAttrAccessibleAfterFirstUnlock so it survives app background/restart
-    // and is atomic with the rest of the Keychain — unlike UserDefaults which can be
-    // cleared independently from Keychain on reinstall or data-reset.
+    // (A copy of each session's suite lived here until 2026-11-07; the suite is in the session's
+    // own record and the core answers it. `deleteRetiredSessionSuiteIds` removes the old items.)
 
-    private func suiteIdKey(for userId: String) -> String {
-        "construct.session.suite.\(userId)"
-    }
-
-    func saveSessionSuiteId(userId: String, suiteId: UInt16) {
-        var value = suiteId
-        let data = Data(bytes: &value, count: MemoryLayout<UInt16>.size)
-        _ = save(data, forKey: suiteIdKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
-    }
-
-    func loadSessionSuiteId(userId: String) -> UInt16? {
-        guard let data = load(forKey: suiteIdKey(for: userId)),
-              data.count == MemoryLayout<UInt16>.size else { return nil }
-        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt16.self) }
-    }
-
-    func deleteSessionSuiteId(userId: String) {
-        delete(forKey: suiteIdKey(for: userId))
+    /// What older builds kept under `construct.session.suite.<device>`. Returns how many there were.
+    @discardableResult
+    func deleteRetiredSessionSuiteIds() -> Int {
+        let removed = deleteItems(withAccountPrefix: "construct.session.suite.")
+        if removed > 0 {
+            Log.info("Deleted \(removed) retired session suite id(s)", category: "Keychain")
+        }
+        return removed
     }
 
     // (The per-peer SPK rotation epoch, `construct.spk_epoch.<account>`, lived here until

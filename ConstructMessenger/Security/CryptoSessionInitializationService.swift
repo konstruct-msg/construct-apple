@@ -59,10 +59,8 @@ final class CryptoSessionInitializationService {
             case (false, true):
                 sessionId = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: binary)
             }
-            // Persist the NEGOTIATED suite (always 3 since PQXDH v2), not the bundle's crypto
-            // suite — the bundle only ever says 1/2.
+            // The NEGOTIATED suite (always 3 since PQXDH v2), not the bundle's: that only ever says 1/2.
             let negotiatedSuite = core.getSessionSuiteId(contactId: contactId)
-            KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : bundle.suiteId)
             // `contactId`, for the reason this whole function names a device rather than an
             // account: the session was opened under the key in the bundle, and `saveSession`
             // exports by the name it is given. Handed `userId` it resolves through the pinned
@@ -139,10 +137,6 @@ final class CryptoSessionInitializationService {
                 KyberPrekeyService.persist(blob: kyberPrekeys)
             }
             let device = result.sessionId
-            let suite = core.getSessionSuiteId(contactId: device)
-            if suite > 0 {
-                KeychainManager.shared.saveSessionSuiteId(userId: device, suiteId: suite)
-            }
             saveSession(device)
             // Never log the body: INTERNAL_TOOLS builds persist this line to an exportable file.
             Log.info("SESSION_STATE[open_receiving_single]: \(device.prefix(8))… opened from \(message.id.prefix(8))…, \(result.decryptedMessage.count)B", category: "SessionInit")

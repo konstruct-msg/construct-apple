@@ -74,7 +74,6 @@ extension CryptoManager {
         guard !deviceId.isEmpty else { return }
         orchestratorCore?.forgetContactState(contactId: deviceId)
         KeychainManager.shared.deleteSession(for: deviceId)
-        KeychainManager.shared.deleteSessionSuiteId(userId: deviceId)
         KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: deviceId)
     }
 
@@ -182,7 +181,6 @@ extension CryptoManager {
         defer { coreLock.unlock() }
         guard let contactId = SessionAddressing.asDevice(deviceId) else { return }
         let removed = orchestratorCore?.removeSession(contactId: contactId) ?? false
-        KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
         KeychainManager.shared.deleteSession(for: contactId)
         Log.info(
             "Discarded session for \(contactId.prefix(8))… (in core: \(removed))",
