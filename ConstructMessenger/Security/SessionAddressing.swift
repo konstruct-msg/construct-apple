@@ -290,7 +290,7 @@ enum SessionAddressing {
                 category: "Crypto"
             )
             // A device of ours the cached list cannot hold yet. Left alone, copies skip it until the
-            // cache's hour is up (todo/272). Every way of learning of a device comes through here:
+            // cache's hour is up (todo/275). Every way of learning of a device comes through here:
             // the link itself, a bundle fetch, its first copy. `fresh` names it once.
             Task { @MainActor in
                 if isOurOwnAccount(accountId) {

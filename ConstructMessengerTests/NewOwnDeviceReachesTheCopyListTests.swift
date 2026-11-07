@@ -4,7 +4,7 @@
 //
 //  The list of our own devices is cached for an hour. A device of ours recorded in that hour must
 //  not wait for it: the stand on 2026-11-07 sent two messages after a link and the new device got
-//  neither copy, with nothing in the log (todo/272).
+//  neither copy, with nothing in the log (todo/275).
 //
 
 import XCTest
