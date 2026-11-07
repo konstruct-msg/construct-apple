@@ -188,6 +188,9 @@ enum AccountWipeKeys {
     /// Key **prefixes** removed by a wipe — families with one entry per contact or message.
     static let wipedPrefixes: [String] = [
         "construct.contact_request_seen.",
+        // Which contact devices were judged (`PeerDeviceJudgement`). The account's: a mark left
+        // behind would read a device as trusted for the next person on this phone.
+        "construct.peerDeviceJudged.",
         "construct.outgoingWirePayload.",
         // Intake keys a peer handed us. Wiped: they are the peers' secrets, held only so our
         // envelopes to them owe no token, and an account that is gone has no envelopes to send.

@@ -283,6 +283,20 @@ final class OutboundMessagePipeline {
                     .init(deviceId: $0, response: nil, error: error)
                 }
             }
+        } else if let toJudge = DeviceSetAnswer.setToJudge(
+            kind: kind, named: named, planned: plannedIds,
+            unjudged: PeerDeviceJudgement.unjudged(ofPeer: recipientId)
+        ) {
+            // Asked once per set, so a device the key server cannot vouch for does not cost a
+            // request per message; opening the chat asks again.
+            do {
+                try await MultiDeviceSendCoordinator.shared.askAboutDeviceSet(toJudge, ofPeer: recipientId)
+            } catch {
+                Log.info(
+                    "Outbound: could not ask to judge a device of \(recipientId.prefix(8))…: \(error)",
+                    category: "Outbound"
+                )
+            }
         }
 
         let report = Self.fold(copies, baseMessageId: baseMessageId)
@@ -672,5 +686,20 @@ enum DeviceSetAnswer {
     /// setup needs. The same set is asked about once; a changed set is asked about again.
     nonisolated static func shouldAsk(named: Set<String>, alreadyAsked: Set<String>?) -> Bool {
         !named.isEmpty && named != alreadyAsked
+    }
+
+    /// The set to ask the key server about so that a device seen without a verdict, from a first
+    /// message or a single bundle fetch, gets one. Nil when this send has no reason to ask.
+    ///
+    /// Only a message asks: a receipt answers someone's message, and receiving fetches nothing.
+    /// The set the server named is the newer statement; without one, the plan.
+    nonisolated static func setToJudge(
+        kind: OutboundMessagePipeline.Kind,
+        named: Set<String>,
+        planned: Set<String>,
+        unjudged: @autoclosure () -> [String]
+    ) -> Set<String>? {
+        guard kind == .message, !unjudged().isEmpty else { return nil }
+        return named.isEmpty ? planned : named
     }
 }
