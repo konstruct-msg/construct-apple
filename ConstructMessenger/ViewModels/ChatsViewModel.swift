@@ -186,22 +186,16 @@ class ChatsViewModel {
         streamLifecycle.reconnectIfSubscriptionsChanged()
 
         if SessionReducer.chatStartRetiresExistingSession(origin: origin) {
-            // Redeeming an invite means the two sides are establishing a session now, so anything
-            // left from before is dropped first — including a Keychain entry the core has not
-            // loaded, which `hasSession` cannot see and `hasStoredSessionState` can.
-            //
-            // This replaces a `clearArchivedSessions` that kept the live session, which is the one
-            // thing guaranteed to be wrong after the peer has re-paired. See
+            // Redeeming an invite means the two sides are establishing a session now, so what is
+            // left from before stops being current — including a Keychain entry the core has not
+            // loaded, which `hasSession` cannot see and `hasStoredSessionState` can. It stays a
+            // previous state: a message the peer sent before the redeem still reads. See
             // `chatStartRetiresExistingSession`.
             if CryptoManager.shared.hasStoredSessionStateForAnyDevice(ofPeer: user.id) {
                 // Every device of theirs, not the pinned one. A re-pairing that retired one
                 // ratchet and left the rest would re-establish beside sessions the peer has
                 // already thrown away.
-                let retired = CryptoManager.shared.discardAllSessions(ofPeer: user.id)
-                Log.info(
-                    "Invite redeem: retired \(retired) session(s) with \(user.id.prefix(8))… before re-establishing",
-                    category: "SessionInit"
-                )
+                SessionLifecycleController.shared.resetSession(with: user.id, reason: "invite redeem")
             }
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         } else if !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: user.id) {

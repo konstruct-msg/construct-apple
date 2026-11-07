@@ -14,18 +14,13 @@ final class CryptoSessionInitializationService {
     /// A session already held with that device is replaced only once the new one is built
     /// (`reopenSession`); on any refusal it stays exactly as it was. The core keeps the replaced
     /// state as a previous one, for messages still in flight on it
-    /// (`decisions/sessions-renew-by-sending.md`).
-    ///
-    /// The one exception is a degraded (`allowStale`) init over a held session: the core's reopen
-    /// has no stale variant, so that path drops the held session first and inits, as every init did
-    /// before.
+    /// (`decisions/sessions-renew-by-sending.md`). A degraded (`allowStale`) open is the same.
     func initializeSession(
         for userId: String,
         bundle: PublicKeyBundleData,
         withoutOneTimePrekey: Bool = false,
         allowStale: Bool = false,
         core: OrchestratorCore?,
-        discardSession: (String) -> Void,
         saveSession: (String) -> Void
     ) throws {
         guard let core = core else {
@@ -54,13 +49,15 @@ final class CryptoSessionInitializationService {
 
         do {
             let sessionId: String
-            if held && !allowStale {
+            switch (held, allowStale) {
+            case (true, false):
                 sessionId = try core.reopenSession(contactId: contactId, recipientBundle: binary)
-            } else {
-                if held { discardSession(contactId) }
-                sessionId = allowStale
-                    ? try core.initSessionAllowingStale(contactId: contactId, recipientBundle: binary)
-                    : try core.initSession(contactId: contactId, recipientBundle: binary)
+            case (true, true):
+                sessionId = try core.reopenSessionAllowingStale(contactId: contactId, recipientBundle: binary)
+            case (false, false):
+                sessionId = try core.initSession(contactId: contactId, recipientBundle: binary)
+            case (false, true):
+                sessionId = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: binary)
             }
             // Persist the NEGOTIATED suite (always 3 since PQXDH v2), not the bundle's crypto
             // suite — the bundle only ever says 1/2.

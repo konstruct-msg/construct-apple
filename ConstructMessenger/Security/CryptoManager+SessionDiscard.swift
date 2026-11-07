@@ -14,10 +14,12 @@ extension CryptoManager {
 
     /// Drop **every** session we hold with a person.
     ///
-    /// The account-shaped counterpart to `discardSession(for:)`, which names one device. Three
-    /// callers mean the person and not a device — a redeemed invite retiring what came before, a
-    /// deleted chat, a deleted contact — and each of them retired whichever single device
-    /// `pinnedDevice(ofPeer:)` happened to name, leaving the other N−1 ratchets in the Keychain.
+    /// The account-shaped counterpart to `discardSession(for:)`, which names one device. For a
+    /// deleted chat: nothing of it is meant to stay, so nothing is kept for late messages. Where the
+    /// person goes on, as at a redeemed invite, the session is retired instead (`retireSession`).
+    ///
+    /// Callers meaning the person used to retire whichever single device `pinnedDevice(ofPeer:)`
+    /// happened to name, leaving the other N−1 ratchets in the Keychain.
     ///
     /// The comment on the contact-deletion site already described that as the worse half of the
     /// defect: "the contact is gone from every list and its ratchet is still in the Keychain, ready
@@ -76,12 +78,16 @@ extension CryptoManager {
         KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: deviceId)
     }
 
-    /// Retire the current state with `deviceId` — the person reset the session, or the server
+    /// Retire the current state with `deviceId` — the person redeemed a new invite, or the server
     /// refused a ciphertext we wrote on it. The core keeps it as a previous state (what the peer
     /// still sends on it decrypts) and the next send opens a new one; nothing is sent now. True
     /// when there was a current state to retire.
+    ///
+    /// A chat nobody opened this run has its session on disk only, and the core can retire only what
+    /// it holds. Left there, the state would come back as current on the next load.
     @MainActor @discardableResult
     func retireSession(device deviceId: String) -> Bool {
+        restoreSession(for: deviceId)
         let actions: [CfeAction] = {
             coreLock.lock()
             defer { coreLock.unlock() }

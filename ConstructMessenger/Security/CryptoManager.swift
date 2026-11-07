@@ -398,10 +398,6 @@ class CryptoManager: @unchecked Sendable {
                 withoutOneTimePrekey: withoutOneTimePrekey,
                 allowStale: allowStale,
                 core: orchestratorCore,
-                discardSession: { [weak self] deviceId in
-                    Log.info("Existing session found for \(deviceId.prefix(8))… - dropping it before a degraded init", category: "CryptoManager")
-                    self?.discardSession(for: deviceId)
-                },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
                 }

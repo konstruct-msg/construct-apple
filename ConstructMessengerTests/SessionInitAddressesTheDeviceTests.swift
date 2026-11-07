@@ -38,6 +38,8 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     private(set) var initReceivingContactIds: [String] = []
     private(set) var initSendingContactIds: [String] = []
     private(set) var reopenContactIds: [String] = []
+    private(set) var reopenStaleContactIds: [String] = []
+    private(set) var initStaleContactIds: [String] = []
 
     init() {
         super.init(noHandle: NoHandle())
@@ -68,6 +70,16 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     override func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {
         reopenContactIds.append(contactId)
         if let reopenRefusal { throw reopenRefusal }
+        return "session-\(contactId)"
+    }
+
+    override func reopenSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {
+        reopenStaleContactIds.append(contactId)
+        return "session-\(contactId)"
+    }
+
+    override func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {
+        initStaleContactIds.append(contactId)
         return "session-\(contactId)"
     }
 
@@ -187,7 +199,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            discardSession: { _ in },
             saveSession: { saved.append($0) }
         )
 
@@ -196,26 +207,62 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
                        "the INITIATOR path is the mirror image and had the same defect")
     }
 
+    /// A degraded open over a held session goes through the same reopen, so what the peer already
+    /// sent on it still reads. Until core 0.63 this path dropped the session first.
+    func testADegradedInitOverAHeldSessionReopensToo() throws {
+        let core = RecordingCore()
+        core.sessionExistsFor = [bundleDevice]
+        var saved: [String] = []
+
+        try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            allowStale: true,
+            core: core,
+            saveSession: { saved.append($0) }
+        )
+
+        XCTAssertEqual(core.reopenStaleContactIds, [bundleDevice])
+        XCTAssertEqual(core.reopenContactIds, [], "the strict reopen refuses a stale bundle")
+        XCTAssertEqual(core.initStaleContactIds, [], "an init would refuse while a session is held")
+        XCTAssertEqual(saved, [bundleDevice])
+    }
+
+    /// With nothing held there is nothing to keep, and the degraded init opens.
+    func testADegradedInitWithNothingHeldOpens() throws {
+        let core = RecordingCore()
+        var saved: [String] = []
+
+        try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            allowStale: true,
+            core: core,
+            saveSession: { saved.append($0) }
+        )
+
+        XCTAssertEqual(core.initStaleContactIds, [bundleDevice])
+        XCTAssertEqual(core.reopenStaleContactIds, [])
+        XCTAssertEqual(saved, [bundleDevice])
+    }
+
     /// A session held with the device is replaced by the core's reopen — built first — and kept
     /// by the core as a previous state. Nothing is archived: up front that left a pair with no
     /// session when the init was then refused, and afterwards it duplicated what the core keeps.
     func testSendingInitOverAHeldSessionReopensAndArchivesNothing() throws {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
-        var archivedFirst: [String] = []
         var saved: [String] = []
 
         try CryptoSessionInitializationService().initializeSession(
             for: account,
             bundle: served(),
             core: core,
-            discardSession: { peer in archivedFirst.append(peer) },
             saveSession: { saved.append($0) }
         )
 
         XCTAssertEqual(core.reopenContactIds, [bundleDevice])
         XCTAssertEqual(core.initSendingContactIds, [], "a held session goes through reopen, not init")
-        XCTAssertEqual(archivedFirst, [], "nothing is torn down, before or after")
         XCTAssertEqual(saved, [bundleDevice])
     }
 
@@ -225,14 +272,12 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
         core.reopenRefusal = CryptoError.PqRequired(reason: .hybridIdentityMissing)
-        var archived: [String] = []
         var saved: [String] = []
 
         XCTAssertThrowsError(try CryptoSessionInitializationService().initializeSession(
             for: account,
             bundle: served(),
             core: core,
-            discardSession: { peer in archived.append(peer) },
             saveSession: { saved.append($0) }
         )) { error in
             guard case SessionError.peerNotPostQuantum(let reason)? = error as? SessionError else {
@@ -240,7 +285,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             }
             XCTAssertEqual(reason, .hybridIdentityMissing)
         }
-        XCTAssertEqual(archived, [])
         XCTAssertEqual(saved, [])
     }
 
@@ -254,7 +298,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            discardSession: { _ in },
             saveSession: { _ in }
         )) { error in
             guard case SessionError.peerSPKStale(let days)? = error as? SessionError else {
@@ -273,7 +316,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             for: account,
             bundle: served(),
             core: core,
-            discardSession: { _ in },
             saveSession: { _ in }
         )) { error in
             guard case SessionError.staleSPKBundle(let detail)? = error as? SessionError else {
