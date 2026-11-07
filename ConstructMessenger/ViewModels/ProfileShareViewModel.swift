@@ -367,10 +367,11 @@ class ProfileShareViewModel {
     }
 
     func sessionSecurity(ofPeer userId: String) -> SessionSecuritySummary {
-        let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: userId)
-        // Real negotiated suite from the Rust core (Keychain only as fallback) —
-        // suite 3 is negotiated per-session and never appears in the peer's bundle.
+        // The real negotiated suite from the Rust core: suite 3 is negotiated per-session and never
+        // appears in the peer's bundle. Asked first, because it loads a session that is only on
+        // disk, and until then the next line reads "no session" for a contact not opened this run.
         let suiteId = Int(CryptoManager.shared.sessionSuiteIdAcrossDevices(ofPeer: userId))
+        let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: userId)
         // A session opened before PQXDH v2 has no ML-KEM in its first key (or only the old
         // deferred contribution) until the upgrade sweep replaces it. The core's health report
         // says which, per device; the Keychain flag this read before is gone with the path

@@ -537,7 +537,6 @@ final class OutboundSessionService {
         case .session(let contactId):
             guard !rawBytes.isEmpty else {
                 KeychainManager.shared.deleteSession(for: contactId)
-                KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
                 Log.debug("Deleted hot session for \(contactId.prefix(8))… (Rust archive_session)", category: "OutboundSession")
                 return CryptoManager.shared.saveOrchestratorStateCFE()
             }

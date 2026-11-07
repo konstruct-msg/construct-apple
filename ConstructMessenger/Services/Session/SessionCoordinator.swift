@@ -513,10 +513,6 @@ final class SessionCoordinator: MessageRouterDelegate {
             return .failed(tried: result.triedMessageIds, lastError: result.lastError)
         }
 
-        let suite = CryptoManager.shared.sessionSuiteId(forDevice: opened)
-        if suite > 0 {
-            KeychainManager.shared.saveSessionSuiteId(userId: opened, suiteId: suite)
-        }
         if let certificate, certificate.deviceId == opened {
             SessionAddressing.recordDevices(
                 [(deviceId: certificate.deviceId, identityKey: certificate.identityKey)],

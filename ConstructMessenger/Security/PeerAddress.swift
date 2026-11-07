@@ -37,7 +37,7 @@ import CoreData
 ///
 /// Three further mismatches sat on the same parameter and were found by drawing this type:
 /// `pendingQueue` and `SessionHealingService` filed entries under a device id that only ever gets
-/// drained by account; `KeychainManager.loadSessionSuiteId` is written by device and was read by
+/// drained by account; `KeychainManager.loadSessionSuiteId` (gone since 2026-11-07) was written by device and read by
 /// account, which is why every `tie_break_win` / `heal_triggered` line in every log says
 /// `suiteId=0` while the session negotiated suite 3.
 ///

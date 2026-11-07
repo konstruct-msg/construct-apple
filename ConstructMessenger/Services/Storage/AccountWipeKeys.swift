@@ -207,6 +207,9 @@ enum AccountWipeKeys {
         // The per-peer PQXDH downgrade flag of builds before PQXDH v2 (Keychain). Nothing writes
         // it any more; `KyberPrekeyService.deleteLegacyItems` sweeps what an older build left.
         "construct.pqxdh.downgraded.",
+        // The copy of a session's suite that builds before 2026-11-07 kept (Keychain). Nothing
+        // writes it any more; `KeychainManager.deleteRetiredSessionSuiteIds` sweeps it at launch.
+        "construct.session.suite.",
         // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
         // (`commit_spk_rotation` is called only from its own tests), but a secret key that
         // appears must leave with the account, and classifying it now costs nothing.
