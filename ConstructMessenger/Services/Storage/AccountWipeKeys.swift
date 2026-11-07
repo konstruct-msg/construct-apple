@@ -38,6 +38,9 @@ enum AccountWipeKeys {
         // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
         "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
+        // Notes not yet moved into the store (`NotesStore`). A key without the `construct.` prefix,
+        // so the classification test does not reach it; `NotesLiveInTheEncryptedStoreTests` does.
+        NotesStore.storageKey,
         // This account's intake key, and the note of which epoch we last published tags for.
         // Wiped together: a new account minting a fresh key while the old publish marker says
         // "already done today" would publish nothing until tomorrow, and every contact would pay

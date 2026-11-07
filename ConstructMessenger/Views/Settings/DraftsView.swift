@@ -12,10 +12,9 @@ import UIKit
 
 struct DraftsView: View {
     @State private var draftText: String = ""
-    @State private var drafts: [DraftItem] = []
+    @State private var drafts: [NoteItem] = []
     @State private var hasLoadedDrafts = false
 
-    private let storageKey = "local_drafts"
     private var trimmedDraftText: String {
         draftText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -90,33 +89,28 @@ struct DraftsView: View {
 
     private func addDraft() {
         guard canSaveDraft else { return }
-
-        let draft = DraftItem(id: UUID(), text: trimmedDraftText, createdAt: Date())
-        drafts.insert(draft, at: 0)
-        draftText = ""
-        saveDrafts()
-    }
-
-    private func deleteDrafts(at offsets: IndexSet) {
-        drafts.remove(atOffsets: offsets)
-        saveDrafts()
-    }
-
-    private func loadDrafts() {
-        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
-        if let decoded = try? JSONDecoder().decode([DraftItem].self, from: data) {
-            drafts = decoded
+        // The text stays in the editor when the store refuses it: nothing typed is lost.
+        do {
+            drafts = try NotesStore.add(trimmedDraftText)
+            draftText = ""
+        } catch {
+            Log.error("Drafts: could not save — \(error)", category: "Storage")
         }
     }
 
-    private func saveDrafts() {
-        guard let data = try? JSONEncoder().encode(drafts) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
+    private func deleteDrafts(at offsets: IndexSet) {
+        do {
+            drafts = try NotesStore.delete(Set(offsets.map { drafts[$0].id }))
+        } catch {
+            Log.error("Drafts: could not delete — \(error)", category: "Storage")
+        }
     }
-}
 
-private struct DraftItem: Identifiable, Codable {
-    let id: UUID
-    let text: String
-    let createdAt: Date
+    private func loadDrafts() {
+        do {
+            drafts = try NotesStore.all()
+        } catch {
+            Log.error("Drafts: could not read — \(error)", category: "Storage")
+        }
+    }
 }
