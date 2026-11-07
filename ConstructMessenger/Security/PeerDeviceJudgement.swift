@@ -23,20 +23,30 @@ enum PeerDeviceJudgement {
     static let seededKey = "construct.peerDeviceJudged.seeded.v1"
 
     private static func key(_ deviceId: String) -> String { keyFamily + "v1." + deviceId }
+    /// The devices of an account that had a verdict and left it. Wiped with the marks.
+    static func formerKey(_ accountId: String) -> String { keyFamily + "former.v1." + accountId }
 
     /// The devices of `accountId` the core may treat as trusted, or nil when that cannot be read.
     ///
     /// **Nil is not an empty list.** The core reads no trusted device as a first meeting and accepts
     /// everything offered, so a failed read must judge nothing rather than pass a rogue device.
     ///
+    /// **For the same reason this is empty only for an account that never had a verdict.** With
+    /// every judged device gone from the active set, what is left is unjudged, and a server could
+    /// use a first meeting to pass it. The devices that left go to the core instead: nothing offered
+    /// matches them, and a certificate from one cannot be checked once it is gone, so the alarm fires.
+    ///
     /// An account with no rows keeps the answer it always had: the device its pinned key derives to.
     static func trusted(ofPeer accountId: String) -> [String]? {
-        seedIfDue()
         do {
-            let rows = try LocalRepositories.peerDevices.devices(ofAccount: accountId)
-            guard !rows.isEmpty else { return SessionAddressing.deviceIds(ofPeer: accountId) }
             let keyValue = LocalRepositories.keyValue
-            return try rows.map(\.deviceId).filter { try keyValue.get(key($0)) != nil }
+            try seedIfDue(peerDevices: LocalRepositories.peerDevices, keyValue: keyValue)
+            let rows = try LocalRepositories.peerDevices.devices(ofAccount: accountId)
+            let marked = try rows.map(\.deviceId).filter { try keyValue.get(key($0)) != nil }
+            if !marked.isEmpty { return marked }
+            let former = try formerlyTrusted(ofPeer: accountId, keyValue: keyValue)
+            if !former.isEmpty { return former }
+            return rows.isEmpty ? SessionAddressing.deviceIds(ofPeer: accountId) : []
         } catch {
             Log.error("PEER_DEVICE_JUDGED_READ_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
             return nil
@@ -70,11 +80,29 @@ enum PeerDeviceJudgement {
         }
     }
 
-    static func forget(_ deviceIds: [String]) {
+    /// These devices left the account. One that comes back is judged again, so each loses its mark;
+    /// those that had one are kept, so the account cannot read as a first meeting again.
+    static func retire(_ deviceIds: [String], ofPeer accountId: String) {
         let keyValue = LocalRepositories.keyValue
-        for deviceId in deviceIds {
-            try? keyValue.remove(key(deviceId))
+        do {
+            let judged = try deviceIds.filter { try keyValue.get(key($0)) != nil }
+            if !judged.isEmpty {
+                let former = judged.sorted().joined(separator: "\n")
+                try keyValue.put(formerKey(accountId), Data(former.utf8))
+            }
+            for deviceId in deviceIds {
+                try keyValue.remove(key(deviceId))
+            }
+        } catch {
+            // A device that keeps its mark reads as pinned if it comes back. Losing the mark and
+            // not recording it would be a first meeting, so the marks go last.
+            Log.error("PEER_DEVICE_JUDGED_RETIRE_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
         }
+    }
+
+    private static func formerlyTrusted(ofPeer accountId: String, keyValue: any KeyValueStore) throws -> [String] {
+        guard let stored = try keyValue.get(formerKey(accountId)) else { return [] }
+        return String(decoding: stored, as: UTF8.self).split(separator: "\n").map(String.init)
     }
 
     /// Once per store: the rows from before this distinction count as judged. Left unmarked, an

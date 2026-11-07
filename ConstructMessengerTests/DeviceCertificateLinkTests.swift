@@ -187,6 +187,14 @@ final class DeviceCertificateLinkTests: XCTestCase {
         func entries(withPrefix prefix: String) throws -> [(key: String, value: Data)] { throw Unreadable() }
     }
 
+    private final class UnwritableKeyValue: KeyValueStore, @unchecked Sendable {
+        struct Unwritable: Error {}
+        func put(_ key: String, _ value: Data) throws { throw Unwritable() }
+        func get(_ key: String) throws -> Data? { nil }
+        func remove(_ key: String) throws {}
+        func entries(withPrefix prefix: String) throws -> [(key: String, value: Data)] { [] }
+    }
+
     /// The production order, on the real core: read what is trusted, record, judge, mark.
     private func answer(
         _ bundles: [DeviceBundleData], of peer: String, me: Device, alarms: Alarms, coreUp: Bool = true
@@ -405,6 +413,61 @@ final class DeviceCertificateLinkTests: XCTestCase {
         }
     }
 
+    /// Every judged device retired, and what is left has no verdict: this must not read as a first
+    /// meeting, or a server passes any device by showing it once without its keys. The same answer
+    /// is what a real recovery can look like, between the new device's bundle and its hybrid key.
+    func testADeviceLeftAfterEveryJudgedOneRetiredIsNoFirstMeeting() async throws {
+        let (phone, rogue, me) = (try makeDevice(), try makeDevice(), try makeDevice())
+        try await withPeerStore { peer in
+            let alarms = Alarms()
+            await answer([phone.entry], of: peer, me: me, alarms: alarms)
+            await answer([bare(rogue)], of: peer, me: me, alarms: alarms)
+            XCTAssertEqual(PeerDeviceJudgement.unjudged(ofPeer: peer), [rogue.id])
+            XCTAssertEqual(PeerDeviceJudgement.trusted(ofPeer: peer), [phone.id])
+            await answer([rogue.entry], of: peer, me: me, alarms: alarms)
+            XCTAssertEqual(alarms.raised, 1)
+            XCTAssertEqual(PeerDeviceJudgement.trusted(ofPeer: peer), [rogue.id], "A verdict was given, so the device that left stops counting")
+        }
+    }
+
+    /// A second unjudged device passing through must not erase that the account had a verdict.
+    func testAnUnjudgedDeviceLeavingKeepsTheJudgedOneThatLeft() async throws {
+        let (phone, first, second, me) = (try makeDevice(), try makeDevice(), try makeDevice(), try makeDevice())
+        try await withPeerStore { peer in
+            let alarms = Alarms()
+            await answer([phone.entry], of: peer, me: me, alarms: alarms)
+            await answer([bare(first)], of: peer, me: me, alarms: alarms)
+            await answer([bare(second)], of: peer, me: me, alarms: alarms)
+            XCTAssertEqual(PeerDeviceJudgement.trusted(ofPeer: peer), [phone.id])
+        }
+    }
+
+    /// A device that never had a verdict leaves nothing behind: the account is still at its first meeting.
+    func testADeviceRetiredWithoutAVerdictLeavesNothingBehind() async throws {
+        let (first, second) = (try makeDevice(), try makeDevice())
+        try await withPeerStore { peer in
+            pin(first, of: peer)
+            SessionAddressing.reconcileDevices(
+                [(deviceId: second.id, identityKey: second.entry.bundle.identityPublic)],
+                activeSet: [second.id],
+                ofPeer: peer
+            )
+            XCTAssertEqual(PeerDeviceJudgement.trusted(ofPeer: peer), [])
+        }
+    }
+
+    /// A seed that failed left every old row unmarked, which reads as nothing trusted.
+    func testAFailedSeedJudgesNothing() async throws {
+        let phone = try makeDevice()
+        try await withPeerStore { peer in
+            _ = try LocalRepositories.peerDevices.record([
+                PeerDeviceRecord(deviceId: phone.id, accountId: peer, identityKey: phone.entry.bundle.identityPublic, firstSeenAt: Date())
+            ])
+            LocalRepositories.useKeyValueForTesting(UnwritableKeyValue())
+            XCTAssertNil(PeerDeviceJudgement.trusted(ofPeer: peer))
+        }
+    }
+
     /// A retired device's mark goes with it: seen again, it is judged again.
     func testARetiredDeviceIsJudgedAgainIfItComesBack() async throws {
         let (phone, other, me) = (try makeDevice(), try makeDevice(), try makeDevice())
@@ -436,7 +499,9 @@ final class DeviceCertificateLinkTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(Data([1]), forKey: PeerDeviceJudgement.keyFamily + "v1.abc")
         defaults.set(Data([1]), forKey: PeerDeviceJudgement.seededKey)
+        defaults.set(Data([1]), forKey: PeerDeviceJudgement.formerKey("abc"))
         AccountWipeKeys.wipe(defaults)
+        XCTAssertNil(defaults.data(forKey: PeerDeviceJudgement.formerKey("abc")))
         XCTAssertNil(defaults.data(forKey: PeerDeviceJudgement.keyFamily + "v1.abc"))
         XCTAssertNil(defaults.data(forKey: PeerDeviceJudgement.seededKey))
     }
