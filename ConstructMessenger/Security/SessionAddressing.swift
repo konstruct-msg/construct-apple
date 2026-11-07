@@ -332,7 +332,7 @@ enum SessionAddressing {
         do {
             let stale = try LocalRepositories.peerDevices.retain(ofAccount: accountId, keeping: keep)
             guard !stale.isEmpty else { return }
-            PeerDeviceJudgement.forget(stale)
+            PeerDeviceJudgement.retire(stale, ofPeer: accountId)
             Log.info(
                 "PEER_DEVICE_RETIRED: \(stale.count) device(s) of \(accountId.prefix(8))… no longer "
                 + "active — \(stale.map { $0.prefix(8) + "…" }.joined(separator: ",")) "
