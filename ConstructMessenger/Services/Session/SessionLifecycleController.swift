@@ -53,8 +53,9 @@ final class SessionLifecycleController {
         coordinator.reestablishSessionForQueuedOutbound(to: userId)
     }
 
-    /// The server refused a ciphertext we wrote for some of `userId`'s devices: retire our current
-    /// state with each of `devices` (every device of the peer when `nil`). Local only — the next
+    /// The server refused a ciphertext we wrote for some of `userId`'s devices, or the person
+    /// redeemed a new invite: retire our current state with each of `devices` (every device of the
+    /// peer when `nil`). Local only — the next
     /// send opens a new state and the peer opens it from the header beside its own. Until
     /// 2026-09-27 this sent END_SESSION. There is no user-facing reset: a session renews by
     /// sending, and a state the peer cannot read is retired by its DECRYPTION_ERROR (2026-09-28).

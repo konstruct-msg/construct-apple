@@ -3671,6 +3671,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
+    func reopenSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
+    
     /**
      * How late messages have arrived since the process started (PQR-4).
      */
@@ -4453,6 +4455,16 @@ open func removeSession(contactId: String) -> Bool  {
 open func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_reopen_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+open func reopenSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_reopen_session_allowing_stale(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
@@ -15219,6 +15231,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_reopen_session() != 45402) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_reopen_session_allowing_stale() != 54970) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_reorder_stats() != 53206) {

@@ -160,8 +160,8 @@ enum SessionReducer {
     /// order of the first two lines: the archives — the only thing that could have decrypted
     /// anything old — were cleared, and the one item that breaks the new session was kept.
     ///
-    /// Retiring drops the session (`discardAllSessions`). It used to export it into an archive of
-    /// this app's own first, for a fallback decrypt that never reached an archive (2026-11-04).
+    /// Retiring leaves the session in the core as a previous state (`retireSession`), so a message
+    /// the peer sent before the redeem still reads. Until 2026-11-07 this dropped it.
     static func chatStartRetiresExistingSession(origin: ChatStartOrigin) -> Bool {
         origin == .inviteRedeem
     }
