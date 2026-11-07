@@ -105,6 +105,13 @@ struct Construct_MessengerApp: App {
                 MediaManager.shared.evictOldFiles()
                 // Packs that ship in the app, into the store once. No network; first launch only.
                 StickerService.shared.seedBundledPacks()
+                // Here and not in the Drafts screen: the plain copy should not wait for someone to
+                // open it. After the import, which `StoreImportView` holds this task back for.
+                do {
+                    try NotesStore.moveOutOfDefaults()
+                } catch {
+                    Log.error("Notes: not moved out of UserDefaults, next launch tries again — \(error)", category: "Storage")
+                }
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
                 )
