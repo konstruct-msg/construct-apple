@@ -18,19 +18,14 @@ import SwiftProtobuf
 /// that fetch assumed a certificate the copy did not have, and every copy to a new sibling was
 /// dropped (three-simulator stand, 2026-09-27).
 enum OwnDeviceCopy {
-    /// Every SENDER_SYNC goes out through this, with a certificate or without.
-    ///
-    /// `certificate` is the serialized proto the server issued. Absent or unreadable, the copy
-    /// still goes: on an existing session it opens without one, and a first message then fails
-    /// in the core with `SENDER_CERTIFICATE_MISSING` rather than never being sent.
-    static func wrap(certificate: Data?, wirePayload: Data) -> Data {
+    /// Every SENDER_SYNC goes out through this. `certificate` is the serialized proto the server
+    /// issued: it names the device that wrote the copy, so a copy does not go without it. Throws
+    /// when the bytes do not parse.
+    static func wrap(certificate: Data, wirePayload: Data) throws -> Data {
         var copy = Shared_Proto_Core_V1_OwnDeviceCopy()
         copy.wirePayload = wirePayload
-        if let certificate,
-           let parsed = try? Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certificate) {
-            copy.senderCertificate = parsed
-        }
-        return (try? copy.serializedData()) ?? Data()
+        copy.senderCertificate = try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certificate)
+        return try copy.serializedData()
     }
 
     /// The wire payload and, when the sender had one, its certificate as the core takes it.

@@ -52,7 +52,7 @@ extension PeerDevice {
     @NSManaged public var identityKey: Data
 
     /// When this device was first recorded. The device set is ordered by it, oldest first, so the
-    /// candidate walk keeps a stable order across runs — and so the device a single-device peer
+    /// set keeps a stable order across runs — and so the device a single-device peer
     /// has always had stays first, which is the order the pinned key produced before this entity.
     @NSManaged public var firstSeenAt: Date
 }

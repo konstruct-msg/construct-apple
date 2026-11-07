@@ -47,7 +47,7 @@ struct ChatMessage: Codable, Identifiable {
     ///
     /// When it holds a value it names the session outright: a contactId is a `CryptoDeviceId` and
     /// nothing is derived from it. `MessageRouter` returns that one session instead of walking the
-    /// peer's devices, and `senderSyncSessionCandidates` puts it first.
+    /// peer's devices, and a SENDER_SYNC is read on that session alone (`SenderSyncOrigin`).
     var senderDeviceId: String = ""
 
     /// The sender certificate this message was sealed with, as unsealed and unchecked — or, for a

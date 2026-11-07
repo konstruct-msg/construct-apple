@@ -200,22 +200,30 @@ enum DeviceCopyWireId {
     }
 }
 
-/// The one decision the SENDER_SYNC receive path makes before it can recover.
-enum SenderSyncRecovery {
+/// Which session a SENDER_SYNC is read on, from what its certificate names.
+enum SenderSyncOrigin: Equatable {
+    /// One of our other devices, as far as this device can tell.
+    case device(String)
+    /// No certificate, so nothing says which session it belongs to.
+    case unnamed
+    /// Another account, a device recorded under another account, or this device. A server signs
+    /// certificates and nothing checks one on an existing session, so it could hand a contact's
+    /// message back as a copy. Read on the contact's session it opens, and its frames would be
+    /// applied as ours.
+    case notOurs
 
-    /// Whether the candidate list names no device at all, and so cannot recover on its own.
-    ///
-    /// A candidate is a contact id. Since 2026-08-26 a per-device one is the bare `deviceId`;
-    /// before that it was `userId:deviceId`, and this asked whether any candidate contained a
-    /// colon. Establishing a session needs the device id — that is what a bundle is fetched for —
-    /// so a list holding only an account id can do nothing.
-    ///
-    /// That was the state of every freshly linked device until 2026-08-18: own devices were known
-    /// only from a cache the **send** path filled, so a device that had linked and not yet sent
-    /// anything had none. `handleUnopenedSenderSync` then walked a one-entry list, skipped it for
-    /// having no `:`, and returned — no session, no fetch, no log line. Seen on the two-simulator
-    /// stand 2026-08-17: a linked device received both copies and neither reached the transcript.
-    static func needsOwnDeviceRefresh(candidates: [String]) -> Bool {
-        !candidates.contains(where: SessionAddressing.isCryptoIdentity)
+    /// A device this phone has no record of passes: a new sibling is one, and the session it would
+    /// be read on either is not there or was opened from a certificate the core checked.
+    static func of(
+        certifiedAccount: String?,
+        device: String?,
+        myUserId: String,
+        myDeviceId: String?,
+        accountOfDevice: (String) -> String?
+    ) -> SenderSyncOrigin {
+        guard let certifiedAccount, let device, !device.isEmpty else { return .unnamed }
+        guard certifiedAccount == myUserId, device != myDeviceId else { return .notOurs }
+        if let recorded = accountOfDevice(device), recorded != myUserId { return .notOurs }
+        return .device(device)
     }
 }
