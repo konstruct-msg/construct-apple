@@ -110,11 +110,18 @@ final class MultiDeviceSendCoordinator {
     /// drain never suspends between reading it and clearing it in a `defer`.
     private var isDraining = false
 
-    /// Invalidate the own-device cache. Called after this device approves a join request and after
-    /// it revokes a device (both wired 2026-10-20; until then nothing called it and the set stayed
-    /// stale for the cache's hour).
+    /// Invalidate the own-device cache. Called after this device approves a join request, after it
+    /// revokes a device, and when a device of ours is first recorded
+    /// (`SessionAddressing.recordDevices`). Until 2026-10-20 nothing called it and the set stayed
+    /// stale for the cache's hour.
     func invalidateOwnDeviceCache() {
         ownDeviceCache = nil
+    }
+
+    var ownDeviceListIsCached: Bool { ownDeviceCache != nil }
+
+    func holdOwnDeviceListForTesting(_ bundles: [DeviceBundleData] = []) {
+        ownDeviceCache = DeviceCache(bundles: bundles, fetchedAt: Date())
     }
 
     /// Cached bundles for a recipient, or `nil` when they must be fetched.
