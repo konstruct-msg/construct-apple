@@ -35,7 +35,8 @@ enum AccountWipeKeys {
         // Keychain: the at-rest store key. `LocalDataWipe` deletes it first; listed so the scan
         // knows it is the account's.
         "construct.localStore.key.v1",
-        // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
+        // Ids of first messages that failed to open, kept by builds before 2026-11-08
+        // (`FailedInitMessageStore`, removed with todo/252) — the account's.
         "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
         // Notes not yet moved into the store (`NotesStore`).

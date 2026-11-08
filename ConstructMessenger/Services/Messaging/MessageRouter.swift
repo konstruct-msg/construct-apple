@@ -215,27 +215,41 @@ final class MessageRouter {
     /// redeliveries a second that is a saturated core (build 584: CPU 100–128 %, thermal
     /// nominal → fair, 99.6 % of incoming already processed).
     ///
-    /// Both reasons the full path still has work to do for a duplicate can be answered from the
-    /// envelope, without opening the seal:
-    ///
-    /// - **The orphaned-init exception.** A msgNum-0 init may need re-processing when the session
-    ///   was lost after the ACK, and deciding that needs the unsealed content type and sender. So
-    ///   `msgNum == 0` never takes this path — it was 1.1 % of the traffic.
-    /// - **The receipt resend.** A duplicate re-sends a delivery receipt at most once per window,
-    ///   and the throttle is keyed on the message id. While it is still suppressing, there is no
-    ///   receipt to send and therefore no need for the sender the unseal would recover.
+    /// The one reason the full path still has work to do for a duplicate can be answered from the
+    /// envelope, without opening the seal: **the receipt resend.** A duplicate re-sends a delivery
+    /// receipt at most once per window, and the throttle is keyed on the message id. While it is
+    /// still suppressing, there is no receipt to send and therefore no need for the sender the
+    /// unseal would recover. (A msgNum-0 message was kept on the full path for the orphaned-init
+    /// exception until 2026-11-08; that exception is gone, todo/252.)
     ///
     /// Deliberately *not* keyed on "is this sealed": an identified redelivery has the same nothing
     /// to do, and a rule that applies to one wire form and not the other is the kind of split this
     /// codebase keeps paying for.
     nonisolated static func canSkipRedeliveryBeforeUnseal(
         isProcessed: Bool,
-        messageNumber: UInt32,
         receiptStillThrottled: Bool
     ) -> Bool {
-        guard isProcessed else { return false }
-        guard messageNumber > 0 else { return false }
-        return receiptStillThrottled
+        isProcessed && receiptStillThrottled
+    }
+
+    /// A message the peer is still redelivering is already in the transcript, and re-sending the
+    /// receipt is the only thing that can move their checkmark off "sent" if our first one was
+    /// lost. Once per message per window, not once per redelivery: a receipt is itself a message,
+    /// and answering every redelivery turned 6236 duplicates into 3754 sends on 2026-08-04.
+    /// Moved here from the app's own duplicate check when that went (todo/252).
+    private func resendReceiptForDuplicate(_ messageId: String, to otherUserId: String, in context: NSManagedObjectContext) {
+        if ReceiptResendThrottle.shared.shouldSend(messageId: messageId) {
+            OutboundSessionService.sendDeliveryReceipt(for: [messageId], to: otherUserId, in: context)
+        } else {
+            PerformanceMetrics.shared.record(.receiptResendThrottled, label: "duplicate_delivery")
+        }
+    }
+
+    /// The carriers the core's router never reads, so their "handled before?" is asked here: a
+    /// SENDER_SYNC (opened directly) and a DECRYPTION_ERROR (its own event). Everything else is the
+    /// core's `Duplicate`.
+    nonisolated static func isDeduplicatedHere(_ message: ChatMessage) -> Bool {
+        message.isSenderSync || message.isDecryptionError
     }
 
     private func beginProcessing(_ messageId: String) -> Bool {
@@ -356,18 +370,16 @@ final class MessageRouter {
         // reaching the duplicate check that threw the result away. The redelivery is the server's
         // defect; burning a core on it is ours.
         //
-        // Nothing is lost by leaving early, because the two things the full path still does for a
-        // duplicate both have pre-unseal answers: the orphaned-init exception is `msgNum == 0`
-        // only (138 of 12 251 here — 1.1 %), and the receipt resend is already suppressed by the
-        // throttle, which is keyed on the message id. The exit is `.durable`, exactly as the
+        // Nothing is lost by leaving early: the one thing the full path still does for a duplicate,
+        // the receipt resend, is already suppressed by the throttle, which is keyed on the message
+        // id. (The orphaned-init exception kept msgNum 0 off this path until 2026-11-08, todo/252.) The exit is `.durable`, exactly as the
         // duplicate branch below produces, so cursor bookkeeping is unchanged — the `defer` above
         // still settles and reports.
         if Self.canSkipRedeliveryBeforeUnseal(
             isProcessed: PersistentACKStore.shared.isProcessed(message.id),
-            messageNumber: message.messageNumber,
             receiptStillThrottled: ReceiptResendThrottle.shared.isThrottled(messageId: message.id)
         ) {
-            PerformanceMetrics.shared.record(.redeliverySkippedBeforeUnseal, label: "msgNum>0")
+            PerformanceMetrics.shared.record(.redeliverySkippedBeforeUnseal, label: "processed")
             return
         }
 
@@ -516,52 +528,20 @@ final class MessageRouter {
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
         #endif
         
-        // 1. Skip if already processed — applies to ALL messages including END_SESSION.
-        //    Without this, the same END_SESSION is processed twice (pending queue + stream).
+        // 1. Whether a message was handled before is the core's answer for everything its router
+        //    reads: the ACK cache in front of the durable table, `Duplicate` below. Two carriers do
+        //    not go through that router — a SENDER_SYNC is opened directly (`openSenderSync`), a
+        //    DECRYPTION_ERROR is its own event — so for them the question is asked here.
         //
-        //    Exception: if this is a session init (msgNum=0) and we have no active session
-        //    for the sender, re-process it. This handles the crash-recovery scenario where
-        //    the init was ACKed before the session was persisted (e.g., app crashed mid-init).
-        if PersistentACKStore.shared.isProcessed(message.id) {
-            // Orphaned-init exception: re-process msgNum=0 when the session was lost
-            // after ACK (e.g. app crashed between ACK and session persist). But exclude
-            // messages that have already been through initReceivingSession and failed
-            // (OTPK consumed, key mismatch, etc.) — those can never succeed and would
-            // loop on every reconnect if we keep re-processing them.
-            // Never re-process control carriers as "orphaned init" — END_SESSION / sender-sync
-            // already failed or completed; replaying them loops session teardown. A handshake is
-            // the header, at any message number (`decisions/sessions-renew-by-sending.md`).
-            let isOrphanedInit = message.initKind == .handshake
-                && !message.isEndSession
-                && !message.isSenderSync
-                && !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: otherUserId)
-                && !FailedInitMessageStore.shared.contains(message.id)
-            if !isOrphanedInit {
-                Log.debug("Skipping already-processed message \(message.id.prefix(8))… (ACK store)", category: "MessageRouter")
-                // The message IS in the transcript from the first delivery, and re-sending the
-                // receipt is still the only thing that can move the sender's checkmark off "sent"
-                // if our first one was lost. But once per *redelivery* is an amplifier: a receipt
-                // is itself a message, so it enters the peer's stream, gets replayed back at us by
-                // the server, and is answered again. On 2026-08-04 that turned 6236 duplicates
-                // into 3754 encrypt+ratchet+RPC cycles and cooked the phone.
-                //
-                // Once per message per window keeps the recovery and removes the loop: a lost
-                // receipt is cosmetic and rare, and receipts do not stop redelivery anyway — the
-                // stream cursor does.
-                //
-                // Not for a SENDER_SYNC: it is our own account's copy, there is no sender waiting
-                // for a checkmark, and on a pending-messages replay its `to` is empty — the
-                // "other side" of a message from ourselves is then nobody at all.
-                if message.isSenderSync {
-                    // nothing owed
-                } else if ReceiptResendThrottle.shared.shouldSend(messageId: message.id) {
-                    OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: otherUserId, in: context)
-                } else {
-                    PerformanceMetrics.shared.record(.receiptResendThrottled, label: "duplicate_delivery")
-                }
-                return
-            }
-            Log.info("Re-processing orphaned session init \(message.id.prefix(8))… (no active session for \(otherUserId.prefix(8))…)", category: "MessageRouter")
+        //    Until 2026-11-08 it was asked here for every message, ahead of the core, with an
+        //    "orphaned init" exception that re-processed a handshake when no session was held and
+        //    `FailedInitMessageStore` to stop it looping (todo/252,
+        //    `decisions/one-answer-to-already-processed.md`). That was a session decision in Swift,
+        //    and it is not needed: a session renews by sending, and the peer's next message carries
+        //    the handshake header again until we answer.
+        if Self.isDeduplicatedHere(message), PersistentACKStore.shared.isProcessed(message.id) {
+            Log.debug("Skipping already-processed \(message.id.prefix(8))… (not routed by the core)", category: "MessageRouter")
+            return
         }
 
         // 2. SENDER_SYNC — copy of own outgoing message from another device.
@@ -823,6 +803,7 @@ final class MessageRouter {
                     .duplicateAfterAckCheck,
                     label: "msgNum=\(message.messageNumber)"
                 )
+                resendReceiptForDuplicate(message.id, to: otherUserId, in: context)
                 return
 
             case .droppedPendingRedelivery:
@@ -923,6 +904,7 @@ final class MessageRouter {
                 "Duplicate named by the core — \(message.id.prefix(8))… msgNum=\(message.messageNumber), recorded and dropped",
                 category: "MessageRouter"
             )
+            resendReceiptForDuplicate(message.id, to: otherUserId, in: context)
             return
         case .malformed:
             // Can never open: decrypt uses the parser that just refused it. Recorded and passed,

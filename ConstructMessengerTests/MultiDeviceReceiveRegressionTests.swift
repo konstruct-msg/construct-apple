@@ -105,69 +105,46 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
         XCTAssertNil(SessionAddressing.identityKey(ofDevice: ""))
     }
 
-    // MARK: - The duplicate guard refusing the handler that armed it
+    // MARK: - A SENDER_SYNC is deduplicated by the router, not inside the decrypt
 
-    /// `routeIncomingMessage` marks a SENDER_SYNC processed **before** calling its handler, to
-    /// close the redelivery window. The handler then asks `decryptMessage` to read it, and was
-    /// refused on the strength of that claim.
+    /// `routeIncomingMessage` claims a SENDER_SYNC as processed **before** calling its handler, to
+    /// close the redelivery window. On 2026-08-27 a guard inside `decryptMessage` then refused the
+    /// handler on the strength of that claim and every copy after the first was lost. The guard is
+    /// gone (todo/252); the claim stays, and the router is where a redelivered copy stops.
     ///
-    /// The result was not an error anyone saw: `messageNumber == 0` survived, because an unopened
-    /// first message takes the init path, which does not consult the guard. Everything after it was
-    /// dropped with "no own-device session opened", on every multi-device account, silently.
-    ///
-    /// This pins the shape of the fix rather than the crypto: the handler must ask about the
-    /// session, and must not re-ask a message-level question its own caller already answered.
-    ///
-    /// Mutation: drop `claimedByThisHandler` at the call site in `openSenderSync` — this reddens.
-    func testOpeningACopyDoesNotConsultItsOwnClaim() throws {
-        let source = try XCTUnwrap(
-            try? String(
-                contentsOf: URL(fileURLWithPath: #filePath)
-                    .deletingLastPathComponent().deletingLastPathComponent()
-                    .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift"),
-                encoding: .utf8
-            )
-        )
-        let syncSource = try XCTUnwrap(
-            try? String(
-                contentsOf: URL(fileURLWithPath: #filePath)
-                    .deletingLastPathComponent().deletingLastPathComponent()
-                    .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter+SenderSync.swift"),
-                encoding: .utf8
-            )
-        )
-        let open = try XCTUnwrap(syncSource.range(of: "private func openSenderSync"))
-        let body = String(syncSource[open.lowerBound...].prefix(1400))
+    /// Mutation: drop the guard on `isDeduplicatedHere` in the router — the second assertion
+    /// reddens; reintroduce a processed check in `decryptMessage` — the third reddens.
+    func testACopyIsClaimedByTheRouterAndNotRefusedByTheDecrypt() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let router = try String(contentsOf: root.appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift"), encoding: .utf8)
+        let crypto = try String(contentsOf: root.appendingPathComponent("ConstructMessenger/Security/CryptoManager+MessageCrypto.swift"), encoding: .utf8)
         XCTAssertTrue(
-            body.contains("claimedByThisHandler: true"),
-            "without this openSenderSync is refused by the "
-            + "mark routeIncomingMessage made before calling it"
-        )
-
-        // And the claim itself is still made — removing it would reopen the redelivery window the
-        // mark exists to close, which is a different regression with the same symptom.
-        XCTAssertTrue(
-            source.contains("if message.isSenderSync {\n            PersistentACKStore.shared.markProcessed("),
+            router.contains("if message.isSenderSync {\n            PersistentACKStore.shared.markProcessed("),
             "the pre-claim must stay: it is what dedups the server's second delivery"
         )
+        XCTAssertTrue(router.contains("if Self.isDeduplicatedHere(message), PersistentACKStore.shared.isProcessed(message.id) {"))
+        XCTAssertFalse(crypto.contains("PersistentACKStore.shared.isProcessed"), "the decrypt asks no duplicate question")
     }
 
-    /// The guard still does its job for everyone else. It exists so a redelivered message does not
-    /// decrypt against an advanced ratchet and archive a healthy session.
-    ///
-    /// Mutation: default `claimedByThisHandler` to true — this reddens.
-    func testEveryOtherCallerStillGetsTheGuard() throws {
-        let source = try XCTUnwrap(
-            try? String(
-                contentsOf: URL(fileURLWithPath: #filePath)
-                    .deletingLastPathComponent().deletingLastPathComponent()
-                    .appendingPathComponent("ConstructMessenger/Security/CryptoManager+MessageCrypto.swift"),
-                encoding: .utf8
-            )
-        )
-        XCTAssertTrue(source.contains("claimedByThisHandler: Bool = false"),
-                      "the bypass must be opt-in; defaulting it on removes the guard everywhere")
-        XCTAssertTrue(source.contains("if !claimedByThisHandler, PersistentACKStore.shared.isProcessedInMemory"),
-                      "the guard must still run for callers that did not claim the message")
+    /// Exactly the two carriers the core's router does not read are deduplicated here; an
+    /// ordinary message is not, whether it opens a session or follows one. Real wire payloads, so
+    /// the second carries message number 1.
+    /// Mutation: add ordinary messages to the set by any property — this reddens.
+    func testOnlyTheCarriersTheCoreDoesNotRouteAreDeduplicatedHere() throws {
+        let (writer, _) = try makeTestDevice()
+        let (reader, readerId) = try makeTestDevice()
+        _ = try writer.initSession(contactId: readerId, recipientBundle: try reader.pqxdhTestBundle())
+        let first = try writer.encryptToWire(contactId: readerId, plaintext: Data("0".utf8))
+        let second = try writer.encryptToWire(contactId: readerId, plaintext: Data("1".utf8))
+        func message(_ type: Shared_Proto_Core_V1_ContentType, _ wire: Data = Data()) -> ChatMessage {
+            ChatMessage(id: "m", from: "a", to: "b", timestamp: 0, contentType: type.byte, rawPayload: wire)
+        }
+        XCTAssertEqual(message(.e2EeSignal, second).messageNumber, 1, "premise: a message past the first")
+
+        XCTAssertTrue(MessageRouter.isDeduplicatedHere(message(.senderSync)))
+        XCTAssertTrue(MessageRouter.isDeduplicatedHere(message(.decryptionError)))
+        XCTAssertFalse(MessageRouter.isDeduplicatedHere(message(.e2EeSignal, first)))
+        XCTAssertFalse(MessageRouter.isDeduplicatedHere(message(.e2EeSignal, second)))
     }
+
 }

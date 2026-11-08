@@ -225,13 +225,8 @@ extension MessageRouter {
     /// Read the copy on the session with the device it names.
     private func openSenderSync(_ message: ChatMessage, device: String) -> (plaintext: Data, contactId: String)? {
         guard CryptoManager.shared.hasSession(for: device) else { return nil }
-        // `claimedByThisHandler`: `routeIncomingMessage` marked this id processed before calling
-        // us, so the duplicate guard inside `decryptMessage` would refuse it on the strength of our
-        // own claim — which is what dropped every SENDER_SYNC after the first on a multi-device
-        // account until 2026-08-27.
-        guard let result = try? CryptoManager.shared.decryptMessage(
-            message, contactIdOverride: device, claimedByThisHandler: true
-        ) else { return nil }
+        guard let result = try? CryptoManager.shared.decryptMessage(message, contactIdOverride: device)
+        else { return nil }
         return (result.plaintext, device)
     }
 

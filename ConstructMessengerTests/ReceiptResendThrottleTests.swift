@@ -116,7 +116,7 @@ final class ReceiptResendThrottleTests: XCTestCase {
     func testSettledRedeliveryIsSkippedBeforeUnseal() {
         XCTAssertTrue(
             MessageRouter.canSkipRedeliveryBeforeUnseal(
-                isProcessed: true, messageNumber: 7, receiptStillThrottled: true
+                isProcessed: true, receiptStillThrottled: true
             )
         )
     }
@@ -125,21 +125,18 @@ final class ReceiptResendThrottleTests: XCTestCase {
     func testFirstDeliveryIsNeverSkipped() {
         XCTAssertFalse(
             MessageRouter.canSkipRedeliveryBeforeUnseal(
-                isProcessed: false, messageNumber: 7, receiptStillThrottled: true
+                isProcessed: false, receiptStillThrottled: true
             ),
             "skipping an unprocessed message loses it outright"
         )
     }
 
-    /// msgNum 0 keeps the full path: the orphaned-init exception needs the unsealed content type
-    /// and sender to decide, and re-processing a lost init is how a crashed handshake recovers.
-    /// It was 1.1 % of the traffic, so keeping it costs nothing.
-    func testSessionInitAlwaysTakesTheFullPath() {
-        XCTAssertFalse(
-            MessageRouter.canSkipRedeliveryBeforeUnseal(
-                isProcessed: true, messageNumber: 0, receiptStillThrottled: true
-            ),
-            "an orphaned init must still be able to re-establish a session lost after its ACK"
+    /// msgNum 0 is no longer kept on the full path: that was for the orphaned-init exception,
+    /// which went with todo/252 (a session renews by sending). A redelivered first message is a
+    /// redelivery like any other. Mutation: keep msgNum 0 off the fast path — this reddens.
+    func testAFirstMessageRedeliveryIsSkippedToo() {
+        XCTAssertTrue(
+            MessageRouter.canSkipRedeliveryBeforeUnseal(isProcessed: true, receiptStillThrottled: true)
         )
     }
 
@@ -148,25 +145,18 @@ final class ReceiptResendThrottleTests: XCTestCase {
     func testRedeliveryStillOwingAReceiptTakesTheFullPath() {
         XCTAssertFalse(
             MessageRouter.canSkipRedeliveryBeforeUnseal(
-                isProcessed: true, messageNumber: 7, receiptStillThrottled: false
+                isProcessed: true, receiptStillThrottled: false
             ),
             "the receipt is the only thing that can move the sender's checkmark off 'sent'"
         )
     }
 
-    /// All three conditions are load-bearing; none of them alone is enough.
+    /// Both conditions are load-bearing; neither alone is enough.
     func testEveryConditionIsRequired() {
-        let skippable = MessageRouter.canSkipRedeliveryBeforeUnseal(
-            isProcessed: true, messageNumber: 7, receiptStillThrottled: true
-        )
-        XCTAssertTrue(skippable)
-        for (processed, num, throttled) in [
-            (false, UInt32(7), true), (true, UInt32(0), true), (true, UInt32(7), false)
-        ] {
+        XCTAssertTrue(MessageRouter.canSkipRedeliveryBeforeUnseal(isProcessed: true, receiptStillThrottled: true))
+        for (processed, throttled) in [(false, true), (true, false), (false, false)] {
             XCTAssertFalse(
-                MessageRouter.canSkipRedeliveryBeforeUnseal(
-                    isProcessed: processed, messageNumber: num, receiptStillThrottled: throttled
-                )
+                MessageRouter.canSkipRedeliveryBeforeUnseal(isProcessed: processed, receiptStillThrottled: throttled)
             )
         }
     }
