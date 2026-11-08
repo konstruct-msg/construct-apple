@@ -392,18 +392,15 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// stops because the blamed messages are marked processed and their held cursor released
     /// (`releaseCoreQueued`) — the server trims from `Subscribe.since_cursor`, never from a receipt.
     ///
-    /// - Parameter blamedMessageIds: the messages recorded as permanently failed so the
-    ///   orphaned-init exception in `MessageRouter` does not re-process them on the next reconnect.
+    /// - Parameter blamedMessageIds: the messages recorded as processed, so a redelivery of them
+    ///   stops at the core's duplicate check.
     /// Takes a **list** because the search is now two-dimensional: when it is exhausted, every
     /// carrier it tried has been proven unopenable against every device we know of, not just one.
     /// Blaming a single id left the others to re-trigger the same doomed search on the next
-    /// reconnect — the queue is cleared either way, but the failure store is what stops the
-    /// orphaned-init exception from bringing them back.
+    /// reconnect.
     private func giveUpInit(for userId: String, blamedMessageIds: [String], metricLabel: String) {
         PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: metricLabel)
         for id in blamedMessageIds {
-            FailedInitMessageStore.shared.add(id)
-            // Belt-and-suspenders alongside the failure store.
             PersistentACKStore.shared.markProcessed(id, senderId: userId)
         }
         messageRouter.releaseCoreQueued(blamedMessageIds)
