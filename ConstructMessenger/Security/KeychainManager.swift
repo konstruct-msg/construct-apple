@@ -457,6 +457,9 @@ final class KeychainManager: Sendable {
         delete(forKey: KeychainSessionAccounts.userId)
         deleteHybridSigPrivateKey()
         deletePrivateKeys()
+        // Written by builds before the key record; nothing reads it, and only the accessibility
+        // migration named it, so an old install kept it through every wipe (todo/281).
+        delete(forKey: APIConstants.privateKeyKey)
         deleteAllSessions()
         Log.info("All cryptographic keys and sessions deleted", category: "Keychain")
     }

@@ -39,7 +39,16 @@ final class AccountWipeKeysTests: XCTestCase {
         guard let walker = fm.enumerator(at: sourceRoot, includingPropertiesForKeys: nil) else {
             throw XCTSkip("app sources not reachable from \(sourceRoot.path)")
         }
+        // Every `construct.*` literal, and every literal used as a key without that prefix: a
+        // `UserDefaults` call, `@AppStorage`, or a constant named `…Key` or `…Prefix`. The second
+        // half is todo/281: `ct.device_link.fp.user.<account id>` outlived the wipe, and so did the
+        // notes under `local_drafts`, because only the first half was scanned.
         let literal = try NSRegularExpression(pattern: #""(construct\.[A-Za-z0-9_.]+)""#)
+        let unprefixed = try [
+            #"(?:[Dd]efaults|UserDefaults\.standard)\s*\.\s*(?:set|bool|string|data|integer|double|float|object|array|removeObject|dictionary|url|stringArray)\([^\n]*?forKey:\s*"([A-Za-z_][^"\\]*)""#,
+            #"@AppStorage\(\s*"([^"\\]+)""#,
+            #"\blet\s+\w*(?:[Kk]ey|Prefix|prefix)\w*\s*(?::\s*String\s*)?=\s*"([A-Za-z_][^"\\]*)""#,
+        ].map { try NSRegularExpression(pattern: $0) }
         var keys: Set<String> = []
         for case let url as URL in walker where url.pathExtension == "swift" {
             // Generated bindings hold no app keys and are megabytes of noise.
@@ -47,8 +56,10 @@ final class AccountWipeKeysTests: XCTestCase {
             if url.path.contains("/Generated/") { continue }
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
             let range = NSRange(text.startIndex..., in: text)
-            for match in literal.matches(in: text, range: range) {
-                if let r = Range(match.range(at: 1), in: text) { keys.insert(String(text[r])) }
+            for pattern in [literal] + unprefixed {
+                for match in pattern.matches(in: text, range: range) {
+                    if let r = Range(match.range(at: 1), in: text) { keys.insert(String(text[r])) }
+                }
             }
         }
         return keys
@@ -74,7 +85,7 @@ final class AccountWipeKeysTests: XCTestCase {
 
         XCTAssertTrue(
             unclassified.isEmpty,
-            "unclassified construct.* literals — add each to AccountWipeKeys.wiped, .survives or "
+            "unclassified key literals — add each to AccountWipeKeys.wiped, .survives or "
                 + ".notStorage with a reason:\n"
                 + unclassified.sorted().joined(separator: "\n")
         )
@@ -87,6 +98,10 @@ final class AccountWipeKeysTests: XCTestCase {
         XCTAssertTrue(declared.contains("construct.stream.cursor"))
         XCTAssertTrue(declared.contains("construct.session.vanishedPeers"))
         XCTAssertGreaterThan(declared.count, 30, "the app owns ~53 construct.* keys")
+        // The keys of todo/281, found only by the wider scan.
+        XCTAssertTrue(declared.contains("ct.device_link.fp.user."))
+        XCTAssertTrue(declared.contains("block_sync_pending"))
+        XCTAssertTrue(declared.contains("stickers.bundled.seeded"))
     }
 
     /// A key cannot be both removed and kept.
@@ -119,6 +134,54 @@ final class AccountWipeKeysTests: XCTestCase {
 
         XCTAssertNil(defaults.object(forKey: "construct.contact_request_seen.abc-123"))
         XCTAssertNil(defaults.object(forKey: "construct.outgoingWirePayload.5b1d7b0c-c0"))
+    }
+
+    /// What todo/281 found under names without the `construct.` prefix. Each would be sent by the
+    /// next account or read as its own: blocks and acks owed to the server, a link pin naming the
+    /// previous account, per-peer session marks, and a sticker mark that keeps the bundled packs
+    /// from the next account. Mutation: drop any one family from the lists — this reddens.
+    func testWipeRemovesWhatTheNextAccountWouldSendOrInherit() {
+        let defaults = UserDefaults(suiteName: "wipe-\(UUID().uuidString)")!
+        let account = [
+            "block_sync_pending", "cr_accepted_acks", "profileRebroadcastOwed",
+            "orientation_completed_user_ids", "local_display_name", "ct.pending_restore",
+            "stickers.bundled.seeded", "stickers.bundled.retired",
+            "ct.device_link.fp.user.296a7249-2b7f-4f36-85d9-d87de1817d06",
+            "ct.device_link.fp.token.a1b2", "ct.device_link.bundle_only.user.296a7249",
+            "ct.device_link.peer_identity.device.9e6f97a9",
+            "session.atRiskUpgrade.lastAttempt.296a7249", "session_last_activity_9e6f97a9",
+        ]
+        account.forEach { defaults.set(Data([1]), forKey: $0) }
+
+        AccountWipeKeys.wipe(defaults)
+
+        XCTAssertEqual(account.filter { defaults.object(forKey: $0) != nil }, [])
+    }
+
+    /// The lists say why a key stays; this says the wipe agrees.
+    func testWipeKeepsTheLockTheNetworkAndThePreferences() {
+        let defaults = UserDefaults(suiteName: "wipe-\(UUID().uuidString)")!
+        let device = ["textSize", "veil_learned_fronts", "security.useBiometrics", "stt_language", "hybrid_spk_sig_heal_v1"]
+        device.forEach { defaults.set(Data([1]), forKey: $0) }
+
+        AccountWipeKeys.wipe(defaults)
+
+        XCTAssertEqual(device.filter { defaults.object(forKey: $0) == nil }, [])
+    }
+
+    /// The blind tokens the account was issued leave with it. Mutation: an empty `forget` — this
+    /// reddens.
+    @MainActor
+    func testTheTokenWalletIsForgotten() {
+        let key = "stealth_token_wallet_v2"
+        let before = KeychainManager.shared.loadRawData(forKey: key)
+        defer { if let before { _ = KeychainManager.shared.saveRawData(before, forKey: key) } }
+        _ = KeychainManager.shared.saveRawData(Data("[]".utf8), forKey: key)
+
+        TokenWalletService.shared.forget()
+
+        XCTAssertNil(KeychainManager.shared.loadRawData(forKey: key))
+        XCTAssertFalse(TokenWalletService.shared.hasToken)
     }
 
     /// And it must leave the device's own settings alone — a wipe changes identity, not hardware.

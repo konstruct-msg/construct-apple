@@ -75,6 +75,7 @@ enum LocalDataWipe {
         RecoveryPhraseVault.shared.forgetPending()
         RecoveryPhraseVault.shared.forgetHeld()
         Task { await MediaSendCache.shared.clear() }
+        TokenWalletService.shared.forget()
         // The push tokens stay — they belong to the install — but their registration went with
         // the account; the next account registers them again.
         PushNotificationManager.shared.forgetServerRegistration()
