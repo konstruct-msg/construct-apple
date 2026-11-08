@@ -287,20 +287,17 @@ struct PublicKeyBundleData: Codable, Sendable {
     // key still decodes — an unknown key is ignored.
 
     /// The bundle as the core takes it, for an INITIATOR init. The one conversion: every Kyber
-    /// field the core needs to trust the key is carried, so none can be dropped on the way.
-    ///
-    /// - Parameter withoutOneTimePrekey: 3-DH re-init (the peer said it could not reproduce our
-    ///   one-time prekey). Only the classic one-time key is dropped; the Kyber one is a separate
-    ///   store the responder names by id.
-    func binaryKeyBundle(withoutOneTimePrekey: Bool = false) -> BinaryKeyBundle {
+    /// field the core needs to trust the key is carried, so none can be dropped on the way. Which
+    /// one-time keys an open uses is the core's (`opens_without_one_time_prekey`, todo/253).
+    func binaryKeyBundle() -> BinaryKeyBundle {
         return BinaryKeyBundle(
             identityPublic: identityPublic,
             signedPrekeyPublic: signedPrekeyPublic,
             signature: signature,
             verifyingKey: verifyingKey,
             suiteId: suiteId,
-            oneTimePrekeyPublic: withoutOneTimePrekey ? nil : oneTimePreKeyPublic,
-            oneTimePrekeyId: withoutOneTimePrekey ? nil : oneTimePreKeyId,
+            oneTimePrekeyPublic: oneTimePreKeyPublic,
+            oneTimePrekeyId: oneTimePreKeyId,
             spkUploadedAt: spkUploadedAt,
             spkRotationEpoch: spkRotationEpoch,
             kyberSpkUploadedAt: kyberSpkUploadedAt,

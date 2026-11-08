@@ -152,9 +152,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 "SESSION_STATE[session_retired]: \(peer) could not read our state — the next send opens a new one\(withoutOneTimePrekey ? ", without a one-time prekey" : "")",
                 category: "SessionInit"
             )
-            if withoutOneTimePrekey {
-                SessionReinitHintStore.shared.requestThreeDHReinit(for: peer.account)
-            }
+            // Nothing to keep: since core 0.64 the core remembers it for the device and its next
+            // open goes without a one-time prekey (todo/253).
         }
         // The peer could not read one message we sent it: send that message again, to that device.
         SessionActionExecutor.shared.onResendMessage = { [weak self] deviceId, messageId in

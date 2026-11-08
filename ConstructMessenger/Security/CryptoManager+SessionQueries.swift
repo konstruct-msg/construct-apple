@@ -21,6 +21,14 @@ extension CryptoManager {
     /// account to the pinned device and answered about that one, which read as the whole person —
     /// a peer whose second device had a session and whose first did not was reported sessionless,
     /// and the paths that act on "no session" are the destructive ones.
+    /// Whether the next open with `deviceId` goes without a one-time prekey: the peer said it does
+    /// not hold the one it would be given. The core drops it on the open; this is for the fetch,
+    /// so as not to spend one of the peer's on the server (core 0.64, todo/253).
+    func opensWithoutOneTimePrekey(_ deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
+        return orchestratorCore?.opensWithoutOneTimePrekey(contactId: contactId) ?? false
+    }
+
     func hasSession(for deviceId: String) -> Bool {
         guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         return orchestratorCore?.hasSession(contactId: contactId) ?? false

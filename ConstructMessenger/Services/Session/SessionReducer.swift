@@ -171,22 +171,5 @@ enum SessionReducer {
     // session record keeps its previous states and any message with the handshake header opens,
     // so there is nothing to rank, announce or confirm (`decisions/sessions-renew-by-sending.md`).
 
-    // MARK: - OTPK-unreproducible recovery (the 3-DH loop-breaker)
-
-    /// DH mode for a session init. 4-DH mixes a one-time prekey (OTPK) into X3DH; 3-DH omits it.
-    enum DHMode: Equatable { case fourDH, threeDH }
-
-    /// The DH mode for the *next* INITIATOR init. Normally 4-DH; but when a force-3-DH hint is
-    /// pending — the peer, as our RESPONDER, told us in a decryption error (`SessionRetired`
-    /// `withoutOneTimePrekey`; an END_SESSION reason before 2026-09-27) that it could not reproduce
-    /// the one-time prekey our last X3DH used — the recovery init MUST drop
-    /// the OTPK and use 3-DH. **This is the loop-breaker:** re-fetching another OTPK (4-DH) would
-    /// hand the responder yet another key it also cannot back, looping forever; 3-DH derives from
-    /// identity + signed prekey only, which the responder can always reproduce. The hint is consumed
-    /// once (a later clean init uses 4-DH again). See `SessionReinitHintStore` / L2 of the
-    /// otpk-session-init-deadlock fix.
-    static func nextInitDHMode(forceThreeDHHintPending: Bool) -> DHMode {
-        forceThreeDHHintPending ? .threeDH : .fourDH
-    }
 
 }

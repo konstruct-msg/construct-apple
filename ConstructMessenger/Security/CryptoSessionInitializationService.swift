@@ -18,7 +18,6 @@ final class CryptoSessionInitializationService {
     func initializeSession(
         for userId: String,
         bundle: PublicKeyBundleData,
-        withoutOneTimePrekey: Bool = false,
         allowStale: Bool = false,
         core: OrchestratorCore?,
         saveSession: (String) -> Void
@@ -41,7 +40,7 @@ final class CryptoSessionInitializationService {
         Log.debug("INITIATOR bundle: ik=\(bundle.identityPublic.count)B spk=\(bundle.signedPrekeyPublic.count)B vk=\(bundle.verifyingKey.count)B kyberSpk=\(bundle.kyberPreKeyPublic?.count ?? 0)B kyberOtpk=\(bundle.kyberOneTimePreKeyPublic?.count ?? 0)B hybrid=\(bundle.hybridIdentityKey?.count ?? 0)B suite=\(bundle.suiteId)", category: "CryptoManager")
         #endif
 
-        let binary = bundle.binaryKeyBundle(withoutOneTimePrekey: withoutOneTimePrekey)
+        let binary = bundle.binaryKeyBundle()
 
         // Always the reopen: whether a session is held is the core's state, and the reopen reads it
         // there — nothing held, it opens; something held, it replaces it only once the new one is
