@@ -3654,6 +3654,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func openSealedToDevice(sealedBox: Data) throws  -> Data
     
+    func opensWithoutOneTimePrekey(contactId: String)  -> Bool
+    
     func peerHandshakeHeld(devices: [String])  -> Bool
     
     func pendingMessageCount(contactId: String)  -> UInt32
@@ -4392,6 +4394,15 @@ open func openSealedToDevice(sealedBox: Data)throws  -> Data  {
     uniffi_construct_core_fn_method_orchestratorcore_open_sealed_to_device(
             self.uniffiCloneHandle(),
         FfiConverterData.lower(sealedBox),$0
+    )
+})
+}
+    
+open func opensWithoutOneTimePrekey(contactId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_opens_without_one_time_prekey(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
     )
 })
 }
@@ -8867,7 +8878,9 @@ public enum CfeAction: Equatable, Hashable {
     )
     /**
      * The peer could not read our current state with `contact_id`; it is retired and the next
-     * send opens a new one — without a one-time prekey when `without_one_time_prekey`.
+     * send opens a new one — without a one-time prekey when `without_one_time_prekey`. Since 0.64
+     * the core applies that itself on the next open and the platform strips nothing; the flag is
+     * for the log, and `opens_without_one_time_prekey` is the question to ask before a fetch.
      */
     case sessionRetired(contactId: String, withoutOneTimePrekey: Bool
     )
@@ -15210,6 +15223,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_sealed_to_device() != 63797) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_opens_without_one_time_prekey() != 14083) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_peer_handshake_held() != 14228) {

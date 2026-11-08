@@ -96,19 +96,19 @@ final class PQXDHBundleConversionTests: XCTestCase {
         XCTAssertEqual(bob.getSessionHealth(contactId: aliceId)?.pqHandshake, .initialV2)
     }
 
-    /// A 3-DH re-init drops the classic one-time key only; the Kyber one is a separate store.
-    func testThreeDHReinitKeepsTheKyberOneTimeKey() throws {
+    /// Both one-time keys are carried to the core: which of them an open uses is the core's
+    /// (todo/253). Until core 0.64 a 3-DH re-init dropped the classical one here.
+    func testTheConversionCarriesBothOneTimeKeys() throws {
         let bob = try freshCore("bob-\(UUID().uuidString)")
         var proto = try served(by: bob)
         proto.oneTimePreKey = Data(repeating: 0x11, count: 32)
         proto.oneTimePreKeyID = 1_000_001
         let data = KeyServiceClient.bundleData(proto, userId: "bob", verifyingKey: Data(repeating: 1, count: 32))
 
-        let threeDH = data.binaryKeyBundle(withoutOneTimePrekey: true)
-        XCTAssertNil(threeDH.oneTimePrekeyPublic)
-        XCTAssertNil(threeDH.oneTimePrekeyId)
-        XCTAssertNotNil(threeDH.kyberOneTimePrekeyPublic)
-        XCTAssertEqual(data.binaryKeyBundle().oneTimePrekeyId, 1_000_001)
+        let binary = data.binaryKeyBundle()
+        XCTAssertEqual(binary.oneTimePrekeyId, 1_000_001)
+        XCTAssertNotNil(binary.oneTimePrekeyPublic)
+        XCTAssertNotNil(binary.kyberOneTimePrekeyPublic)
     }
 
     /// A bundle without the hybrid identity is refused before anything is created, and the app

@@ -390,12 +390,11 @@ class CryptoManager: @unchecked Sendable {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, bundle: PublicKeyBundleData, withoutOneTimePrekey: Bool = false, allowStale: Bool = false) throws {
+    func initializeSession(for userId: String, bundle: PublicKeyBundleData, allowStale: Bool = false) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
                 bundle: bundle,
-                withoutOneTimePrekey: withoutOneTimePrekey,
                 allowStale: allowStale,
                 core: orchestratorCore,
                 saveSession: { [weak self] deviceId in

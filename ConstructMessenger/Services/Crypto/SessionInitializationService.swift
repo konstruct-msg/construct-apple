@@ -192,20 +192,18 @@ class SessionInitializationService {
     func answerOpenSession(device: String, account: String) async -> [CfeAction] {
         let event: CfeIncomingEvent
         do {
+            // Not spending one of the peer's one-time prekeys on the server when the core will not
+            // use it: the peer said it does not hold the one it would be given.
             let bundle = try await fetchPublicKeyWithRetry(
-                userId: account, deviceId: device, consumeOneTimePrekey: true
+                userId: account, deviceId: device,
+                consumeOneTimePrekey: !CryptoManager.shared.opensWithoutOneTimePrekey(device)
             )
             // The core asked about one ratchet; a bundle for any other device answers nothing.
             guard SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic) == device else {
                 throw SessionError.bundleForAnotherDevice
             }
             try admit(bundle, for: account)
-            let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: account)
-            let threeDH = SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH
-            event = .sessionBundleFetched(
-                contactId: device,
-                bundle: bundle.binaryKeyBundle(withoutOneTimePrekey: threeDH)
-            )
+            event = .sessionBundleFetched(contactId: device, bundle: bundle.binaryKeyBundle())
         } catch {
             Log.info("SESSION_STATE[open_session_unavailable]: device \(device.prefix(8))… — \(error)", category: "SessionInit")
             event = .sessionBundleUnavailable(contactId: device)
@@ -241,24 +239,15 @@ class SessionInitializationService {
         // session either — the layer below archived whatever it found.)
 
         try admit(bundle, for: userId)
-
-        // 3-DH re-init: a prior END_SESSION from this peer signalled it could not reproduce our
-        // 4-DH one-time-prekey (otpk-session-init-deadlock lever L2). Drop the classic OTPK and
-        // do 3-DH, which the responder can always reproduce from identity + signed prekey —
-        // instead of handing it another OTPK it will also reject and looping. Consumed once; a
-        // later clean init uses 4-DH again. (The Kyber OTPK is a separate store and is left as-is.)
-        let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId)
-        let threeDH = SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH
-        if threeDH {
-            Log.info("SESSION_STATE[force_3dh_reinit]: \(userId.prefix(8))… — dropping one-time-prekey, using 3-DH", category: "SessionInit")
-        }
+        // A peer that said it does not hold the one-time prekey it would be given gets an open
+        // without one: the core keeps that for the device and applies it itself (core 0.64,
+        // todo/253). Until then this kept the hint per account and dropped only the classical key.
 
         do {
             PerformanceMetrics.shared.start(.sessionInitStart, label: String(userId.prefix(8)))
             try CryptoManager.shared.initializeSession(
                 for: userId,
                 bundle: bundle,
-                withoutOneTimePrekey: threeDH,
                 allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
