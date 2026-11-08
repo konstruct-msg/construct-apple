@@ -245,6 +245,46 @@ class CryptoManager: @unchecked Sendable {
         return (deviceId, bundle)
     }
 
+    /// Fresh device keys that are nowhere but here: not in the key record, not the bootstrap core.
+    /// What a recovery offers the server; they become this device's keys only through `adopt`.
+    struct UnsavedDeviceKeys {
+        let deviceId: String
+        let bundle: RegistrationBundleFields
+        fileprivate let core: ClassicCryptoCore
+    }
+
+    /// New keys for an account recovery, kept out of the key record until the server takes them.
+    ///
+    /// `generateRegistrationBundle` saves its keys at once, so a registration whose answer is lost
+    /// can authenticate with them later. A recovery cannot use that: a refused one left a key
+    /// record without a device id, read at the next launch as keys lost (todo/269), and the save
+    /// overwrote the record a device with unreadable keys recovers from — before the server had
+    /// said anything. A recovery whose answer is lost costs nothing kept: the next one revokes
+    /// every device the account had (`recovery::revoke_all_devices`).
+    func generateUnsavedDeviceKeys() throws -> UnsavedDeviceKeys {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        let core = try createCryptoCore()
+        let bundle = try core.getRegistrationBundleFields()
+        let deviceId = deriveDeviceId(identityPublicKey: bundle.identityPublic)
+        Log.info("Generated unsaved device keys: device_id=\(deviceId)", category: "CryptoManager")
+        return UnsavedDeviceKeys(deviceId: deviceId, bundle: bundle, core: core)
+    }
+
+    /// Make `keys` this device's keys: the key record, and the core that signs until the
+    /// orchestrator is up. Returns false, and changes nothing, when the record cannot be written.
+    func adopt(_ keys: UnsavedDeviceKeys) -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let record = try? keys.core.exportPrivateKeys(),
+              KeychainManager.shared.savePrivateKeys(record) else {
+            Log.error("Could not save the recovered device keys", category: "CryptoManager")
+            return false
+        }
+        bootstrapCoreStorage = keys.core
+        return true
+    }
+
     /// The NEGOTIATED crypto suite of the session with one device, from the Rust core (suite 3 is
     /// negotiated; the bundle only ever says 1/2). A session on disk is loaded first: the suite is
     /// in its own record. Returns 0 when there is no current state, so also after a retire.

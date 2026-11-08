@@ -132,6 +132,23 @@ final class AccountRecoveryViewModel {
     }
 
     var recoverStep: RecoverStep = .idle
+    /// `RecoverAccount`, replaceable in tests.
+    var recoverRequest: (
+        _ identifier: String,
+        _ claim: RecoveryKey.Signed,
+        _ deviceId: String,
+        _ deviceName: String,
+        _ publicKeys: Shared_Proto_Services_V1_DevicePublicKeys
+    ) async throws -> AuthResponse = { identifier, claim, deviceId, deviceName, publicKeys in
+        try await AuthServiceClient.shared.recoverAccount(
+            identifier: identifier,
+            claim: claim,
+            deviceId: deviceId,
+            deviceName: deviceName,
+            publicKeys: publicKeys
+        )
+    }
+
     var enteredWords: [String] = Array(repeating: "", count: 12)
     var recoverIdentifier: String = ""    // username or UUID to identify account
 
@@ -380,8 +397,10 @@ final class AccountRecoveryViewModel {
         guard enteredMnemonicValid, !recoverIdentifier.isEmpty else { return }
         recoverStep = .recovering
         do {
-            // 1. Generate fresh device keys
-            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
+            // 1. Fresh device keys, kept out of the key record until the server takes them: a
+            // refused recovery leaves this device as it was (todo/269).
+            let keys = try CryptoManager.shared.generateUnsavedDeviceKeys()
+            let (deviceId, bundle) = (keys.deviceId, keys.bundle)
 
             // 2. The phrase's key hands the account to exactly these keys: the claim names them,
             // so a request seen on the way cannot be replayed with others.
@@ -405,15 +424,16 @@ final class AccountRecoveryViewModel {
             // Defense-in-depth: the server now normalizes too, but this makes recovery work
             // against an older server and mirrors what the user actually registered.
             let identifier = recoverIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let response = try await AuthServiceClient.shared.recoverAccount(
-                identifier: identifier,
-                claim: claim,
-                deviceId: deviceId,
-                deviceName: DeviceInfo.deviceName,
-                publicKeys: publicKeys
+            let response = try await recoverRequest(
+                identifier,
+                claim,
+                deviceId,
+                DeviceInfo.deviceName,
+                publicKeys
             )
 
-            // 4. Persist the device id and tokens (the keys are in the record the bundle saved)
+            // 4. The account is these keys now: persist them, the device id and the tokens.
+            guard CryptoManager.shared.adopt(keys) else { throw RecoveryError.keysNotSaved }
             KeychainManager.shared.saveDeviceID(deviceId)
             AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
@@ -539,6 +559,14 @@ final class AccountRecoveryViewModel {
 
     enum RecoveryError: LocalizedError {
         case bundleGenerationFailed
-        var errorDescription: String? { "Failed to generate new device keys" }
+        /// The server took the keys and the Keychain would not keep them. Recovering again
+        /// replaces them: the next recovery revokes the device they made.
+        case keysNotSaved
+        var errorDescription: String? {
+            switch self {
+            case .bundleGenerationFailed: return "Failed to generate new device keys"
+            case .keysNotSaved: return "Failed to save the new device keys"
+            }
+        }
     }
 }
