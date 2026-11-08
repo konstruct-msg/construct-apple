@@ -204,6 +204,8 @@ final class ChatViewport {
     /// Whether a person has touched the transcript this visit. A touch outranks every heuristic
     /// here, and it is also what makes a quiet-tick count meaningful.
     @ObservationIgnored private(set) var userInteracted = false
+    /// The opening has been counted, as landed quietly or as a missing tail: once per mount.
+    @ObservationIgnored private var openingReported = false
 
     /// Consecutive geometry ticks with no inset movement and no touch.
     @ObservationIgnored private(set) var stableQuietTicks = 0
@@ -434,6 +436,24 @@ final class ChatViewport {
 
         stableQuietTicks = (insetSettling || userInteracted) ? 0 : stableQuietTicks + 1
 
+        if !openingReported, Self.shouldReportMissingTail(
+            stableQuietTicks: stableQuietTicks,
+            insetSettling: insetSettling,
+            messageCount: messageCount,
+            contentHeight: contentHeight,
+            // The container measures its own pad; geometry ticks arrive only once it is laid out.
+            padReady: true,
+            userInteracted: userInteracted,
+            alreadyPrimed: layoutPrimed,
+            distanceFromBottom: distance,
+            contentFits: contentFits,
+            visibleContentFraction: fraction
+        ) {
+            openingReported = true
+            Log.error("CHAT_VIEWPORT: the tail did not land on opening — \(messageCount) messages, fromBottom=\(Int(distance))", category: "ChatView")
+            PerformanceMetrics.shared.record(.viewportLastMessageMissingAfterOpen, label: "\(messageCount)")
+        }
+
         let next = Self.flags(
             current: ScrollFlags(following: mode == .following, showJumpButton: showJumpButton),
             distanceFromBottom: distance,
@@ -472,8 +492,13 @@ final class ChatViewport {
     /// `shouldPrime` stays — it is still the landing predicate the missing-tail metric asks, and
     /// it is what the lazy path uses. Here the container knows, so it says.
     func noteTailLanded() {
+        // A touched opening never gets here: `noteUserInteraction` primes the layout first.
         guard !layoutPrimed else { return }
         layoutPrimed = true
+        if !openingReported {
+            openingReported = true
+            PerformanceMetrics.shared.record(.viewportColdOpenQuiet)
+        }
     }
 
     /// The person has taken the transcript over. Outranks the landing heuristic in both

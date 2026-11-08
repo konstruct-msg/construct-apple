@@ -98,6 +98,17 @@ enum MetricEvent: String {
     /// real near-top scroll or a short-window `contentFits` fill. `label` = message count on screen.
     case loadMoreUnprompted = "load_more_unprompted"
 
+    /// The UIKit transcript (`ChatViewport`) opened a chat and the tail never landed: three quiet
+    /// ticks, nobody touching, no inset moving, and the newest message still not in view. The blank
+    /// chat the transcript migration exists to end; the soak needs zero of these
+    /// (`decisions/chat-viewport-owned-inset.md`). `label` = message count. Once per opening.
+    case viewportLastMessageMissingAfterOpen = "viewport_last_message_missing_after_open"
+
+    /// The UIKit transcript landed its tail on an opening nobody touched: the soak's denominator,
+    /// `cold_opens_quiet ≥ 50` in the decision. Wired 2026-11-08 with the path going to testers
+    /// (todo/257); until then neither this nor the metric above was recorded anywhere.
+    case viewportColdOpenQuiet = "viewport_cold_open_quiet"
+
     /// An END_SESSION or SESSION_RESET_INIT carrier reached the ordinary wire-payload path instead
     /// of early-exiting. The core would unpack the sentinel as a wire payload and never archive the
     /// session — a desync that only heals by luck. `label` = the content type that got through.

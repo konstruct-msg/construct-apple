@@ -14,7 +14,12 @@ enum ChatViewportConfiguration {
     /// Whether the transcript runs on the eager stack owned by `ChatViewport`, or the lazy stack
     /// owned by `ChatScrollManager`.
     ///
-    /// **Off by default on both configurations**, and that is a finding, not caution.
+    /// **On by default in Debug and Beta since 2026-11-08, off on the App Store** (owner, todo/257):
+    /// the soak the decision sets (`decisions/chat-viewport-owned-inset.md`) cannot start while
+    /// testers run the lazy path, and on the stand that day a 40-message chat opened on its newest
+    /// message. The Diagnostics toggle stays as the rollback, and an explicit choice there wins.
+    ///
+    /// Before that it was off everywhere, and that was a finding, not caution:
     ///
     /// The plan had DEBUG default on. The first live run of the eager path (stand, 2026-08-19)
     /// opened a 40-message chat on the *oldest* message: `.defaultScrollAnchor(.bottom)` lands on
@@ -35,8 +40,11 @@ enum ChatViewportConfiguration {
             if let stored = UserDefaults.standard.object(forKey: key) as? Bool {
                 return stored
             }
-            return false
+            return defaultValue
         }
         set { UserDefaults.standard.set(newValue, forKey: key) }
     }
+
+    /// What a device that never touched the toggle runs.
+    static var defaultValue: Bool { AppConstants.isNonProductionBuild }
 }
