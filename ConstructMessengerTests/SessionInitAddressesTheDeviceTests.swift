@@ -202,7 +202,7 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             saveSession: { saved.append($0) }
         )
 
-        XCTAssertEqual(core.initSendingContactIds, [bundleDevice])
+        XCTAssertEqual(core.reopenContactIds, [bundleDevice])
         XCTAssertEqual(saved, [bundleDevice],
                        "the INITIATOR path is the mirror image and had the same defect")
     }
@@ -228,7 +228,7 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         XCTAssertEqual(saved, [bundleDevice])
     }
 
-    /// With nothing held there is nothing to keep, and the degraded init opens.
+    /// With nothing held there is nothing to keep, and the core's reopen opens.
     func testADegradedInitWithNothingHeldOpens() throws {
         let core = RecordingCore()
         var saved: [String] = []
@@ -241,9 +241,28 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             saveSession: { saved.append($0) }
         )
 
-        XCTAssertEqual(core.initStaleContactIds, [bundleDevice])
-        XCTAssertEqual(core.reopenStaleContactIds, [])
+        XCTAssertEqual(core.reopenStaleContactIds, [bundleDevice])
+        XCTAssertEqual(core.initStaleContactIds, [])
         XCTAssertEqual(saved, [bundleDevice])
+    }
+
+    /// Whether a session is held is not asked here: the core's reopen reads it (todo/253). Neither
+    /// case reaches `init`, which would refuse over a held session and, refused, leave an `Opening`
+    /// to time out. Mutation: pick `init` when nothing is held — this reddens.
+    func testNoInitIsChosenHereEitherWay() throws {
+        for held in [false, true] {
+            for stale in [false, true] {
+                let core = RecordingCore()
+                core.sessionExistsFor = held ? [bundleDevice] : []
+
+                try CryptoSessionInitializationService().initializeSession(
+                    for: account, bundle: served(), allowStale: stale, core: core, saveSession: { _ in }
+                )
+
+                XCTAssertEqual(core.initSendingContactIds + core.initStaleContactIds, [], "held=\(held) stale=\(stale)")
+                XCTAssertEqual(core.reopenContactIds + core.reopenStaleContactIds, [bundleDevice], "held=\(held) stale=\(stale)")
+            }
+        }
     }
 
     /// A session held with the device is replaced by the core's reopen — built first — and kept
