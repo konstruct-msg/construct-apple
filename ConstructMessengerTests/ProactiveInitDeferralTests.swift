@@ -98,6 +98,19 @@ final class ProactiveInitDeferralTests: XCTestCase {
         }
     }
 
+    // MARK: - A stale signed pre-key
+
+    /// The boundary is the core's (todo/253): just past its 30 days the peer may have rotated, so
+    /// a run waits and refetches; past 30 days and six hours it opens degraded at once. Until
+    /// 2026-11-08 this app kept the boundary as its own 30.25.
+    ///
+    /// Mutation: ask the core with the age in days instead of seconds — this reddens.
+    func testTheCoreDecidesWhetherAStaleSpkIsWorthWaitingFor() {
+        XCTAssertEqual(SessionInitializationService.staleSpkPlan(ageDays: 30.1), .waitForRotation)
+        XCTAssertEqual(SessionInitializationService.staleSpkPlan(ageDays: 30.3), .openDegraded)
+        XCTAssertEqual(SessionInitializationService.staleSpkPlan(ageDays: 45), .openDegraded)
+    }
+
     // MARK: - Which devices a run touches
 
     /// A device we hold no session with is opened, whoever it is. That is the whole point of a
