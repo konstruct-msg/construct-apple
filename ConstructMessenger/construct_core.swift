@@ -12024,6 +12024,81 @@ public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) 
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What to do with a bundle refused as stale. See orchestration::stale_spk_plan.
+ */
+
+public enum StaleSpkPlan: Equatable, Hashable {
+    
+    /**
+     * The peer may have rotated already: refetch after a short wait, open degraded only if it is
+     * still stale.
+     */
+    case waitForRotation
+    /**
+     * The peer has been away longer than a rotation takes to reach the key server: open degraded now.
+     */
+    case openDegraded
+
+
+
+}
+
+#if compiler(>=6)
+extension StaleSpkPlan: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStaleSpkPlan: FfiConverterRustBuffer {
+    typealias SwiftType = StaleSpkPlan
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StaleSpkPlan {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .waitForRotation
+        
+        case 2: return .openDegraded
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StaleSpkPlan, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .waitForRotation:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .openDegraded:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStaleSpkPlan_lift(_ buf: RustBuffer) throws -> StaleSpkPlan {
+    return try FfiConverterTypeStaleSpkPlan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStaleSpkPlan_lower(_ value: StaleSpkPlan) -> RustBuffer {
+    return FfiConverterTypeStaleSpkPlan.lower(value)
+}
+
+
 
 
 
@@ -14080,6 +14155,13 @@ public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDe
     )
 })
 }
+public func planStaleSpk(ageSecs: UInt64) -> StaleSpkPlan  {
+    return try!  FfiConverterTypeStaleSpkPlan_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_plan_stale_spk(
+        FfiConverterUInt64.lower(ageSecs),$0
+    )
+})
+}
 /**
  * Blind a 32-byte nonce for OPRF token issuance.
  * Returns packed 64 bytes: blinded_point[0..32] || blind_factor[32..64].
@@ -14560,6 +14642,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_send() != 48521) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_plan_stale_spk() != 36049) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_pp_blind_token() != 33863) {

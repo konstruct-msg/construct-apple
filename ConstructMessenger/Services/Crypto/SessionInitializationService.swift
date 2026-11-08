@@ -279,9 +279,9 @@ class SessionInitializationService {
     /// `spk_uploaded_at`. In that case we wait `staleSPKRetryDelay` seconds and retry
     /// up to `staleSPKMaxRetries` times.
     ///
-    /// **Degrade path**: if `ageDays >= staleSPKFastFailDays` (30.25d = 6h past the Rust 30-day
-    /// limit), the peer has clearly not been online recently — waiting is pointless, so we go
-    /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
+    /// **Degrade path**: when the core says waiting will not help (`planStaleSpk` answers
+    /// `.openDegraded`: past its 30-day limit by more than a rotation takes to propagate), the run
+    /// goes straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
     /// Outcome of one proactive-init run, shared with every coalesced caller.
     private enum ProactiveInitOutcome {
         /// The devices sessions were opened with — each derived from the bundle's identity key,
@@ -424,6 +424,12 @@ class SessionInitializationService {
         case leave
     }
 
+    /// The core's answer for a bundle refused as stale `ageDays` old. The age came from the core in
+    /// seconds (`PeerSpkStale`), was turned into days for the logs, and goes back here.
+    nonisolated static func staleSpkPlan(ageDays: Double) -> StaleSpkPlan {
+        planStaleSpk(ageSecs: UInt64((ageDays * 86_400).rounded()))
+    }
+
     /// Whether a proactive init touches this device: it opens a device we hold no session with and
     /// leaves every held session alone. No caller of a run names a device, so a replace here would
     /// be a decision about a device nobody said was broken. A caller that means to replace one
@@ -553,12 +559,6 @@ class SessionInitializationService {
 
         let staleSPKMaxRetries = 2
         let staleSPKRetryDelay: UInt64 = 60 // seconds
-        /// Grace window above the Rust 30-day staleness limit. If the SPK is only ≤ 6 h past
-        /// the limit the peer may have just come online and rotated; the server bundle
-        /// cache may simply not have propagated yet. Beyond this window the peer has been
-        /// offline for a long time and no amount of waiting will help — degrade instead.
-        let staleSPKFastFailDays: Double = 30.25
-
         var opened: [String] = []
         /// A device we already hold a session with and left alone. Not an opening, and not a
         /// failure either: the caller's `onSuccess` is what flushes a queue, and a run that
@@ -610,12 +610,12 @@ class SessionInitializationService {
             }
 
             // Everything that could open is open. What is left is a stale signed pre-key, which
-            // has two answers and they are told apart by how stale: barely past the limit means
-            // the peer may have just rotated and the server's cache has not caught up, so wait;
-            // well past it means the peer has been away and waiting changes nothing, so open a
-            // degraded (at-risk) session rather than dead-ending. See `stale-peer-reachability`.
-            let hopeless = stale.filter { $0.days >= staleSPKFastFailDays }
-            let waitable = stale.filter { $0.days < staleSPKFastFailDays }
+            // has two answers, and the core picks one by how stale (`planStaleSpk`, core 0.65):
+            // wait and refetch, or open a degraded (at-risk) session rather than dead-ending. The
+            // boundary was a copy of the core's limit kept here as 30.25 days until 2026-11-08
+            // (todo/253). See `stale-peer-reachability`.
+            let hopeless = stale.filter { Self.staleSpkPlan(ageDays: $0.days) == .openDegraded }
+            let waitable = stale.filter { Self.staleSpkPlan(ageDays: $0.days) == .waitForRotation }
             let outOfAttempts = attempt == staleSPKMaxRetries
             for entry in hopeless + (outOfAttempts ? waitable : []) {
                 Log.error("SESSION_STATE[stale_spk_degraded_init]: \(entry.target.deviceId.prefix(8))… SPK is \(String(format: "%.1f", entry.days))d old — initiating degraded (at-risk) session", category: "SessionInit")
