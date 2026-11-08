@@ -529,10 +529,10 @@ struct DiagnosticsView: View {
     /// PQXDH v2 carrier (msgNum=0, KEM ciphertext in the header) on a session they already have —
     /// the input a host used to mishandle (see decisions/host-dropped-action-returns).
     ///
-    /// `initializeSessionProactively` is exactly the right primitive: it fetches the bundle and
-    /// replaces the held session (`reopenSession`), and it does NOT send END_SESSION or a
-    /// SESSION_RESET_INIT — announcing is the coordinator's job, and announcing is precisely what
-    /// we must not do here.
+    /// The reopen is asked for by name: the bundle the key server serves names a device, and
+    /// `initializeSession` replaces our session with that device (`reopenSession`). A proactive run
+    /// would leave a held session alone (todo/253). Nothing is sent to the peer — announcing is
+    /// precisely what we must not do here.
     ///
     /// Send **two** messages afterwards. The first proves the carrier was decrypted; the second,
     /// which still carries the handshake header until the peer answers, proves the peer kept the
@@ -541,22 +541,20 @@ struct DiagnosticsView: View {
         reinitStatus = "re-initialising…"
         reinitOk = true
         Task { @MainActor in
-            await SessionInitializationService.shared.initializeSessionProactively(
-                userId: target.id,
-                // A person pressed a button that says "re-initialise". Deferring that would be
-                // a control that does nothing and says nothing.
-                hasOutboundWork: true,
-                onSuccess: {
-                    reinitStatus = "OK → \(target.name): now send TWO messages"
-                    reinitOk = true
-                    Log.info("DIAG[silent_reinit]: re-initialised with \(target.id.prefix(8))… — peer still holds the old session; next send is an X3DH carrier", category: "Diagnostics")
-                },
-                onFailure: { error in
-                    reinitStatus = "failed: \(error.localizedDescription)"
-                    reinitOk = false
-                    Log.error("DIAG[silent_reinit]: failed for \(target.id.prefix(8))…: \(error)", category: "Diagnostics")
-                }
-            )
+            do {
+                let service = SessionInitializationService.shared
+                let bundle = try await service.fetchPublicKeyWithRetry(
+                    userId: target.id, consumeOneTimePrekey: true
+                )
+                try service.initializeSession(userId: target.id, bundle: bundle)
+                reinitStatus = "OK → \(target.name): now send TWO messages"
+                reinitOk = true
+                Log.info("DIAG[silent_reinit]: re-initialised with \(target.id.prefix(8))… — peer still holds the old session", category: "Diagnostics")
+            } catch {
+                reinitStatus = "failed: \(error.localizedDescription)"
+                reinitOk = false
+                Log.error("DIAG[silent_reinit]: failed for \(target.id.prefix(8))…: \(error)", category: "Diagnostics")
+            }
         }
     }
 
