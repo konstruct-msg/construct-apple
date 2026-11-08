@@ -38,9 +38,42 @@ enum AccountWipeKeys {
         // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
         "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
-        // Notes not yet moved into the store (`NotesStore`). A key without the `construct.` prefix,
-        // so the classification test does not reach it; `NotesLiveInTheEncryptedStoreTests` does.
+        // Notes not yet moved into the store (`NotesStore`).
         NotesStore.storageKey,
+
+        // Named without the `construct.` prefix, so the scan did not require them until todo/281;
+        // on the stand of 2026-11-07 a wipe left `ct.device_link.fp.user.<account id>` behind.
+        // Owed to the server and sent by whoever is signed in next: blocks by contact id
+        // (`BlockSync`), contact-request acks (`ContactRequestAcks`), our profile to contacts.
+        "block_sync_pending",
+        "cr_accepted_acks",
+        "profileRebroadcastOwed",
+        // Account ids that finished orientation, and the flag before it was per account.
+        "orientation_completed_user_ids",
+        "orientation_completed",
+        // Removed by sign-out's own teardown too; listed so account deletion and the other wipe
+        // paths, which go straight to `LocalDataWipe`, remove them as well.
+        "local_display_name",
+        "recovery_is_setup",
+        "recovery_banner_dismissed",
+        "cr_pending_nav_user_ids",
+        // A restore the account chose and the next launch would carry out (`LocalBackupService`).
+        "ct.pending_restore",
+        // Senders this account suppressed, persisted until 2026-10-15 and cleared at launch since.
+        "com.construct.floodguard.suppressed",
+        // Bundled sticker packs seeded, and retired ones offered, to this account. The packs
+        // themselves go with the files; a mark left behind would keep the next account from ever
+        // getting them (`BundledStickerPacks`).
+        "stickers.bundled.seeded",
+        "stickers.bundled.retired",
+        // Keychain items, deleted by the calls that end an account rather than by `wipe(_:)`:
+        // the key record and the legacy private key (`CryptoManager.deleteAllCryptoKeys`), the
+        // contact-request mappings (`KeychainManager.deleteAllContactRequestMappings`), and the
+        // blind tokens this account was issued (`TokenWalletService.forget`).
+        "crypto_private_keys",
+        "private_key",
+        "cr_request_mappings",
+        "stealth_token_wallet_v2",
         // This account's intake key, and the note of which epoch we last published tags for.
         // Wiped together: a new account minting a fresh key while the old publish marker says
         // "already done today" would publish nothing until tomorrow, and every contact would pay
@@ -216,7 +249,16 @@ enum AccountWipeKeys {
         // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
         // (`commit_spk_rotation` is called only from its own tests), but a secret key that
         // appears must leave with the account, and classifying it now costs nothing.
-        "construct.kyber.spk.sk."
+        "construct.kyber.spk.sk.",
+        // The link pins (`DeviceLinkPendingPin`): the offering device's fingerprint by token and by
+        // account id, the "bundle only" mark, and a sibling's identity key by device id.
+        "ct.device_link.",
+        // Per peer: when an at-risk session last tried to upgrade.
+        "session.atRiskUpgrade.lastAttempt.",
+        // Keychain: every ratchet session blob (`KeychainManager.deleteAllKeys`). In
+        // `UserDefaults` the same prefix sweeps `session_last_activity_<peer>`, when a session last
+        // carried a message (`SessionActivityTracker`).
+        "session_"
     ]
 
     /// Survives a wipe, each for a stated reason. Being on this list is a claim that the value is
@@ -247,7 +289,89 @@ enum AccountWipeKeys {
         // Device-level app preferences.
         "customServerURL",
         "appTheme",
-        "tz_offset_min"
+        "tz_offset_min",
+        "textSize",
+        "chatTextFace",
+        "chat.ownedInsetStack",
+        "desktopShowTimestamps",
+        "continuousVoicePlayback",
+        "voice.playbackRate",
+        "gallery.videoPlaybackRate",
+        "composer.sendOriginalPhotos",
+        "composer.videoQuality",
+        "media.autoDownload",
+        "media.evictAfterDays",
+        "media.maxDiskCacheBytes",
+        "call.audio.inputUID",
+        "call.audio.outputUID",
+        "notificationsEnabled",
+        "pushNotificationsEnabled",
+        "showMessageNotifications",
+        "notificationPreviewType",
+        "notificationSound",
+        "notificationVibration",
+        "sendDeliveryReceipts",
+        "backgroundFetchEnabled",
+        "stt_auto_transcribe",
+        "stt_engine",
+        "stt_language",
+        "stt_preferred_model",
+        "stt_translate",
+
+        // The app lock: the person's PIN, duress PIN and biometrics, kept in the Keychain and
+        // removed only by turning the lock off (`SecurityViewModel.disablePin`). A lock on the
+        // phone, not on the account, as it was before this list named it.
+        "app_pin_hash",
+        "app_pin_hash_version",
+        "app_pin_salt",
+        "app_pin_length",
+        "app_duress_pin_hash",
+        "app_duress_pin_hash_version",
+        "app_duress_pin_salt",
+        "security.lockDelay",
+        "security.useBiometrics",
+
+        // The network path this device found: relays, fronts, their scores and the keys VEIL
+        // uses, the same for whoever is signed in. Wiped, the next connect on a censored network
+        // starts from nothing.
+        "veilActiveRelay",
+        "veil_access_key",
+        "veil_auto_detected_dpi",
+        "veil_bridge_cert",
+        "veil_front_enabled",
+        "veil_front_native_tls",
+        "veil_last_successful_path",
+        "veil_learned_fronts",
+        "veil_relay_quality_scores_v1",
+        "veil_scores_key",
+        "veil.voucher.unavailable_until",
+        "com.construct.ice.webTunnelBlockedPenalty",
+        "grpcCustomHost",
+        "grpcCustomPort",
+
+        // Developer and test switches, and Studio's, set by hand on this device.
+        "developerModeEnabled",
+        "ff.callsVideo",
+        "ff.engineQuicExperimental",
+        "ff.engineQuicObfuscated",
+        "stealth_mode_enabled",
+        "StudioDebug",
+        "StudioSendsScreen",
+        "StudioSourceBundleID",
+        "StudioTalkbackMode",
+
+        // Done once per install. The store marks describe a store a wipe replaces with a new one;
+        // the key repairs describe keys a new identity is created without the defect they repair.
+        "synaps_contact_migration_v1",
+        "storage.controlArtifactCleanup.v1.done",
+        "hybrid_spk_sig_heal_v1",
+        "pqcKyberSPKMigrationV1Done",
+        "crash_diagnostics_recorded_v1",
+        // Built by interpolation (`VeilProxyStore`), so no scan finds it; seen on the stand of
+        // 2026-11-08 among what a wipe left, and about the network path, like the VEIL keys above.
+        "veil_mode_migration_v1",
+        // Removed at launch by `StealthPolicy`; nothing writes it.
+        "stealth_per_message"
     ]
 
     /// In the `construct.` namespace but **not a `UserDefaults` key at all**, so neither list above
@@ -292,7 +416,25 @@ enum AccountWipeKeys {
         "construct.localStore.legacyMediaBodiesConverted.v1",
 
         // Notification names.
-        "construct.reaction.didChange"
+        "construct.reaction.didChange",
+
+        // Found by the wider scan of todo/281, which reads constants named `…Key` or `…Prefix`:
+        // prefixes of wire ids and transport names, a URL, a gRPC metadata key, a WebRTC field
+        // trial, a JSON key, a notification's `userInfo` key, resource and localization names.
+        "KNST1:",
+        "direct:",
+        "veil:",
+        "konstruct://add",
+        "construct-device-refusal",
+        "WebRTC-EnableDtlsPqc",
+        "presentation",
+        "callId",
+        "sticker-pack-",
+        "history_sync_body_local_network",
+        "history_sync_body_local_network_mac",
+        // Constants nothing reads or writes (`APIConstants`).
+        "last_username",
+        "user_id"
     ]
 
     /// Apply the wipe to `defaults`.

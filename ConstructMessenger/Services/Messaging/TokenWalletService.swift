@@ -66,6 +66,12 @@ final class TokenWalletService {
     /// Returns true if at least one token is available.
     var hasToken: Bool { balance > 0 }
 
+    /// The account is gone from this device: so are the tokens it was issued (`LocalDataWipe`).
+    func forget() {
+        KeychainManager.shared.deleteData(forKey: Self.keychainKey)
+        balance = 0
+    }
+
     // MARK: - Storage for tokens
 
     private func loadTokens() -> [BlindToken] {
