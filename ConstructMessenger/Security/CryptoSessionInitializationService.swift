@@ -42,23 +42,17 @@ final class CryptoSessionInitializationService {
         #endif
 
         let binary = bundle.binaryKeyBundle(withoutOneTimePrekey: withoutOneTimePrekey)
-        // `contactId`, not `userId`: the question is about **this** device. Passed the account,
-        // an archive resolves through the pinned key and reaches a different device of the same
-        // peer — or, right after a prune, none at all (measured 2026-09-06 12:29:37).
-        let held = core.hasSession(contactId: contactId)
 
+        // Always the reopen: whether a session is held is the core's state, and the reopen reads it
+        // there — nothing held, it opens; something held, it replaces it only once the new one is
+        // built. Until 2026-11-08 this asked `hasSession` and picked `init` or `reopen` itself
+        // (todo/253), a lifecycle decision in Swift over state the core already had. The only
+        // difference on the `init` side: a refused open now also ends an `Opening` the machine
+        // granted (`reopen_refused`), which the `init` left to time out.
         do {
-            let sessionId: String
-            switch (held, allowStale) {
-            case (true, false):
-                sessionId = try core.reopenSession(contactId: contactId, recipientBundle: binary)
-            case (true, true):
-                sessionId = try core.reopenSessionAllowingStale(contactId: contactId, recipientBundle: binary)
-            case (false, false):
-                sessionId = try core.initSession(contactId: contactId, recipientBundle: binary)
-            case (false, true):
-                sessionId = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: binary)
-            }
+            let sessionId = allowStale
+                ? try core.reopenSessionAllowingStale(contactId: contactId, recipientBundle: binary)
+                : try core.reopenSession(contactId: contactId, recipientBundle: binary)
             // The NEGOTIATED suite (always 3 since PQXDH v2), not the bundle's: that only ever says 1/2.
             let negotiatedSuite = core.getSessionSuiteId(contactId: contactId)
             // `contactId`, for the reason this whole function names a device rather than an
@@ -69,7 +63,7 @@ final class CryptoSessionInitializationService {
             // init succeeded. Measured 2026-09-06 on three of three inits that opened against a
             // device other than the pinned one, and on none of the inits that did not.
             saveSession(contactId)
-            Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(bundle.suiteId), negotiated=\(negotiatedSuite)\(held ? ", replaced held session" : "")", category: "SessionInit")
+            Log.info("SESSION_STATE[suite_negotiated]: peer=\(userId.prefix(8))…, bundleSuite=\(bundle.suiteId), negotiated=\(negotiatedSuite)", category: "SessionInit")
             Log.info("INITIATOR session created\(allowStale ? " (degraded/at-risk)" : ""): \(sessionId.prefix(16))...", category: "CryptoManager")
         } catch CryptoError.PeerSpkStale(let ageSecs) {
             let ageDays = Double(ageSecs) / 86400.0
