@@ -420,26 +420,18 @@ class SessionInitializationService {
     enum InitAction: Equatable {
         /// No session: open one.
         case open
-        /// A session is there and this is the device the caller's reason is about.
-        case replace
-        /// A session is there and nothing said it was broken.
+        /// A session is there. A run does not replace it.
         case leave
     }
 
-    /// Whether a proactive init touches this device, and whether it tears down what is there.
-    ///
-    /// **The one remaining privilege, stated rather than implicit.** No caller names a device —
-    /// they say "re-establish with this person" — so the device the account resolves to is the one
-    /// a heal is taken to be about, and it keeps the replace-and-reopen behaviour it has always
-    /// had. Every other device is only ever **added**: a session with a sibling is not torn down
-    /// by a decision taken about another device, which is the rule the 2026-09-22 reset cut
-    /// established on the receive side and the same rule here.
-    ///
-    /// Naming the device in the call removes the asymmetry, and that is the machine's job —
-    /// `decisions/session-is-one-state-machine.md`.
-    nonisolated static func initAction(device: String, resolvedDevice: String?, hasSession: Bool) -> InitAction {
-        guard hasSession else { return .open }
-        return device == resolvedDevice ? .replace : .leave
+    /// Whether a proactive init touches this device: it opens a device we hold no session with and
+    /// leaves every held session alone. No caller of a run names a device, so a replace here would
+    /// be a decision about a device nobody said was broken. A caller that means to replace one
+    /// fetches its bundle and calls `initializeSession`, which names the device by the bundle's key
+    /// (KEY_SYNC, the diagnostics re-init). Until 2026-11-08 the device the account resolved to was
+    /// replaced here (todo/253); Android never did.
+    nonisolated static func initAction(hasSession: Bool) -> InitAction {
+        hasSession ? .leave : .open
     }
 
     /// What one device's init did.
@@ -515,26 +507,14 @@ class SessionInitializationService {
         return targets
     }
 
-    /// Open a session with one device, or say why not.
-    ///
-    /// **Which device is replaced and which is only added.** A session already held is left alone
-    /// unless it is the one the account currently resolves to — the device today's callers mean
-    /// when they say "re-establish with this person", since none of them names a device. So a
-    /// heal keeps the behaviour it has, and a sibling is never torn down by a decision taken about
-    /// another device (the rule the 2026-09-22 reset cut established). Naming the device in the
-    /// call is the machine's job: `decisions/session-is-one-state-machine.md`.
+    /// Open a session with one device, or say why not. A held session is left alone (`initAction`).
     private func initSession(
         with target: InitTarget,
         userId: String,
-        resolvedDevice: String?,
         hasOutboundWork: Bool,
         allowStale: Bool
     ) -> DeviceInitResult {
-        let action = Self.initAction(
-            device: target.deviceId,
-            resolvedDevice: resolvedDevice,
-            hasSession: CryptoManager.shared.hasSession(for: target.deviceId)
-        )
+        let action = Self.initAction(hasSession: CryptoManager.shared.hasSession(for: target.deviceId))
         guard action != .leave else { return .skipped("session exists") }
         // Asked per device. The context no longer names the pair: `plan_initiation` never read the
         // two device ids, and core 0.54 removed them (TODO 202). `peerInitInFlight` is still
@@ -579,7 +559,6 @@ class SessionInitializationService {
         /// offline for a long time and no amount of waiting will help — degrade instead.
         let staleSPKFastFailDays: Double = 30.25
 
-        let resolvedDevice = SessionAddressing.pinnedDevice(ofPeer: userId)
         var opened: [String] = []
         /// A device we already hold a session with and left alone. Not an opening, and not a
         /// failure either: the caller's `onSuccess` is what flushes a queue, and a run that
@@ -614,7 +593,7 @@ class SessionInitializationService {
             for target in targets where attempt == 0 || retryOnly.contains(target.deviceId) {
                 guard !opened.contains(target.deviceId) else { continue }
                 switch initSession(
-                    with: target, userId: userId, resolvedDevice: resolvedDevice,
+                    with: target, userId: userId,
                     hasOutboundWork: hasOutboundWork, allowStale: false
                 ) {
                 case .opened:
@@ -641,7 +620,7 @@ class SessionInitializationService {
             for entry in hopeless + (outOfAttempts ? waitable : []) {
                 Log.error("SESSION_STATE[stale_spk_degraded_init]: \(entry.target.deviceId.prefix(8))… SPK is \(String(format: "%.1f", entry.days))d old — initiating degraded (at-risk) session", category: "SessionInit")
                 switch initSession(
-                    with: entry.target, userId: userId, resolvedDevice: resolvedDevice,
+                    with: entry.target, userId: userId,
                     hasOutboundWork: hasOutboundWork, allowStale: true
                 ) {
                 case .opened:
