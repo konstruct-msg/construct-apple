@@ -333,6 +333,10 @@ final class CallManager: CallUIManaging {
         end(callUUID: active.session.uuid, source: .inAppDeclineButton)
     }
 
+    /// When the current call was answered — the one value the call screen and the call history
+    /// both count the call's time from.
+    var answeredAt: Date? { active?.answeredAt }
+
     /// Mute or unmute the local microphone.
     func setMuted(_ muted: Bool) {
         active?.webrtc?.setMuted(muted)

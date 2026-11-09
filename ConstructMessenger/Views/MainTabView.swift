@@ -300,7 +300,8 @@ private struct ObservedInCallView: View {
             onMinimize: onMinimize,
             video: manager.video,
             onCameraChanged: { manager.setCameraOn($0) },
-            onSwitchCamera: { manager.switchCamera() }
+            onSwitchCamera: { manager.switchCamera() },
+            answeredAt: manager.answeredAt
         )
     }
 }
