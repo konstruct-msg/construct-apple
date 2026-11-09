@@ -1002,9 +1002,9 @@ uint64_t uniffi_construct_core_fn_constructor_mailboxgapstate_new(RustCallStatus
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MAILBOXGAPSTATE_CLOSE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MAILBOXGAPSTATE_CLOSE
-void uniffi_construct_core_fn_method_mailboxgapstate_close(uint64_t ptr, RustCallStatus *_Nonnull out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MAILBOXGAPSTATE_DISMISS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MAILBOXGAPSTATE_DISMISS
+void uniffi_construct_core_fn_method_mailboxgapstate_dismiss(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MAILBOXGAPSTATE_INTERVAL
@@ -3455,9 +3455,9 @@ uint16_t uniffi_construct_core_checksum_method_localstore_wipe(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MAILBOXGAPSTATE_CLOSE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MAILBOXGAPSTATE_CLOSE
-uint16_t uniffi_construct_core_checksum_method_mailboxgapstate_close(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MAILBOXGAPSTATE_DISMISS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MAILBOXGAPSTATE_DISMISS
+uint16_t uniffi_construct_core_checksum_method_mailboxgapstate_dismiss(void
     
 );
 #endif

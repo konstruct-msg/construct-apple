@@ -67,7 +67,7 @@ final class MailboxGapNotice {
     }
 
     func dismiss() {
-        state.close()
+        state.dismiss()
         changed()
     }
 
@@ -112,7 +112,7 @@ final class MailboxGapNotice {
             for report in reports.closed {
                 _ = state.record(afterCursor: report.afterCursor, resumesAt: report.resumesAt)
             }
-            state.close()
+            state.dismiss()
             for report in reports.open {
                 _ = state.record(afterCursor: report.afterCursor, resumesAt: report.resumesAt)
             }
