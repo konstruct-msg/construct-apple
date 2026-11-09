@@ -61,7 +61,9 @@ final class InAppNotificationService {
     /// 2026-11-09 it was a second carrier here, registered by `ChatViewModel` on its first appear
     /// and cleared only in its `deinit`: a chat left while its view model lived on stayed
     /// "visible", so what arrived next was neither counted unread nor announced (todo 288).
-    static func isChatVisible(_ chatId: String) -> Bool {
+    /// `appIsActive` is a parameter only so a test can hold it: under a full test run the live
+    /// `applicationState` is not always `.active`.
+    static func isChatVisible(_ chatId: String, appIsActive: Bool = InAppNotificationService.appIsActive) -> Bool {
         isChatVisible(chatId, chatOnScreen: ChatOnScreen.shared.chatId, appIsActive: appIsActive)
     }
 
