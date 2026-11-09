@@ -371,7 +371,9 @@ final class GRPCCallExecutor: Sendable {
             // "already used / revoked" then means *this* attempt lost the race, NOT that the
             // session is dead. If we now hold a valid session, retry with the new token instead
             // of wiping it — wiping here was the launch-time death spiral (good tokens nuked by
-            // a stale racer). Applies to both transport paths.
+            // a stale racer). Applies to both transport paths. A refusal that names this device
+            // as removed is no race: the coordinator has already dropped the session for it, so
+            // this guard falls through to the device auth that wipes (todo 265).
             let haveValidSession = await MainActor.run {
                 AuthSessionManager.shared.sessionToken != nil && AuthSessionManager.shared.isSessionValid
             }
