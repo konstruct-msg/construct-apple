@@ -67,9 +67,9 @@ final class BackgroundPushNotificationTests: XCTestCase {
             if let before { ChatOnScreen.shared.appeared(before) }
         }
         ChatOnScreen.shared.appeared("chat-288")
-        XCTAssertTrue(InAppNotificationService.isChatVisible("chat-288"), "the chat on screen is visible")
+        XCTAssertTrue(InAppNotificationService.isChatVisible("chat-288", appIsActive: true), "the chat on screen is visible")
 
         ChatOnScreen.shared.disappeared("chat-288")
-        XCTAssertFalse(InAppNotificationService.isChatVisible("chat-288"), "a chat left is not visible")
+        XCTAssertFalse(InAppNotificationService.isChatVisible("chat-288", appIsActive: true), "a chat left is not visible")
     }
 }
