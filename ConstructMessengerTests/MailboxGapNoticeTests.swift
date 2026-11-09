@@ -2,10 +2,11 @@
 //  MailboxGapNoticeTests.swift
 //  ConstructMessengerTests
 //
-//  What the person is told when the server's queue trimmed messages this device never collected
-//  (decisions/mailbox-gap-is-reported.md, TODO 79), and that a notice they closed stays closed
-//  while the server keeps reporting the same loss (todo 290). Canon: construct-client
-//  `mailbox_gap.rs`.
+//  The notice above the chat list when the server's queue trimmed messages this device never
+//  collected (decisions/mailbox-gap-is-reported.md). The rule is the core's (construct-rules
+//  `mailbox_gap`, tested and mutation-checked there); these check what this app does with it: the
+//  stream's event reaches it, a closed notice stays closed through the store, the state an
+//  earlier build kept moves in, and the JSON reading of that state has an end (todo 290).
 //
 
 import XCTest
@@ -14,94 +15,70 @@ import XCTest
 @MainActor
 final class MailboxGapNoticeTests: XCTestCase {
 
-    private typealias Report = MailboxGapNotice.Report
-
-    private func report(_ after: String, _ resumes: String) -> Report {
-        Report(afterCursor: after, resumesAt: resumes)
+    /// A cursor no earlier test used, so the shared notice has never seen it.
+    private func freshCursor() -> String {
+        "\(UInt64(Date().timeIntervalSince1970 * 1000) + UInt64.random(in: 1...1_000_000))-0"
     }
 
-    func testACursorNamesItsMoment() {
-        XCTAssertEqual(MailboxGapNotice.date(ofCursor: "1700000000000-3"), Date(timeIntervalSince1970: 1_700_000_000))
-        XCTAssertEqual(MailboxGapNotice.date(ofCursor: "1700000000500"), Date(timeIntervalSince1970: 1_700_000_000.5))
-        XCTAssertNil(MailboxGapNotice.date(ofCursor: "not-a-cursor"))
-        XCTAssertNil(MailboxGapNotice.date(ofCursor: ""))
+    private func waitUntilShown() async throws {
+        for _ in 0..<100 where MailboxGapNotice.shared.interval == nil {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
     }
 
-    /// Nothing held to resume from: the interval is open, "since …". A report whose cursor names
-    /// no moment is no notice.
-    func testAnEmptyResumeIsAnOpenInterval() {
-        var reports = MailboxGapNotice.Reports()
-        XCTAssertTrue(reports.record(report("1700000000000-0", "")))
-        XCTAssertEqual(reports.interval, .init(from: Date(timeIntervalSince1970: 1_700_000_000), until: nil))
-
-        var garbage = MailboxGapNotice.Reports()
-        XCTAssertFalse(garbage.record(report("garbage", "1700000000000-0")), "no start, no notice")
-        XCTAssertNil(garbage.interval)
-    }
-
-    /// Several reports — the fetch and the stream, or two reconnects — are one notice, as wide
-    /// as all of them. Mutation that reddens it: take the first report's interval only.
-    func testReportsWidenTheOneNotice() {
-        var reports = MailboxGapNotice.Reports()
-        reports.record(report("200000-0", "300000-0"))
-        reports.record(report("100000-0", "250000-0"))
-        XCTAssertEqual(reports.interval, .init(from: Date(timeIntervalSince1970: 100), until: Date(timeIntervalSince1970: 300)))
-        reports.record(report("150000-0", ""))
-        XCTAssertNil(reports.interval?.until, "an open report keeps the notice open")
-    }
-
-    /// The owner's phone, 2026-11-09: nothing held after the cursor, so the cursor never moved and
-    /// every connection reported the same loss; the closed notice came back each time.
-    /// Mutation that reddens it: drop `!closed.contains(report)` from `record`.
-    func testAClosedReportDoesNotComeBack() {
-        var reports = MailboxGapNotice.Reports()
-        let loss = report("1793460840000-0", "")
-        XCTAssertTrue(reports.record(loss))
-        reports.close()
-        XCTAssertNil(reports.interval, "closed")
-
-        XCTAssertFalse(reports.record(loss), "the same report on the next connection")
-        XCTAssertNil(reports.interval, "stays closed")
-    }
-
-    /// A new loss after a closed one is shown. Mutation that reddens it: ignore every report once
-    /// anything was closed.
-    func testANewLossAfterAClosedOneIsShown() {
-        var reports = MailboxGapNotice.Reports()
-        reports.record(report("1793460840000-0", ""))
-        reports.close()
-        XCTAssertTrue(reports.record(report("1794000000000-0", "")))
-        XCTAssertEqual(reports.interval?.from, Date(timeIntervalSince1970: 1_794_000_000))
-    }
-
-    /// The same report twice is one report. Mutation that reddens it: drop `!open.contains`.
-    func testTheSameReportTwiceChangesNothing() {
-        var reports = MailboxGapNotice.Reports()
-        XCTAssertTrue(reports.record(report("1700000000000-0", "")))
-        XCTAssertFalse(reports.record(report("1700000000000-0", "")))
-        XCTAssertEqual(reports.open.count, 1)
-    }
-
-    /// The stream's event reaches the notice through the real parser, is kept in the account's
-    /// store, and closing it keeps it closed there too.
-    func testTheStreamEventRaisesTheNoticeAndClosingIsKept() async throws {
-        let after = "\(UInt64(Date().timeIntervalSince1970 * 1000))-0"
+    /// The stream's event reaches the notice through the real parser and the core's rule; closed,
+    /// it stays closed for the same report, also as the store keeps it.
+    /// Mutations that redden it: skip `record` in `MessageStreamParser`; keep v2 JSON instead of
+    /// the core's bytes in `changed()`.
+    func testTheStreamEventRaisesTheNoticeAndAClosedOneStaysClosed() async throws {
+        MailboxGapNotice.shared.dismiss()
+        let after = freshCursor()
         var gap = Shared_Proto_Services_V1_MailboxGap()
         gap.afterCursor = after
         gap.resumesAt = ""
         var response = Shared_Proto_Services_V1_MessageStreamResponse()
         response.mailboxGap = gap
         XCTAssertNil(MessageStreamParser.parse(response), "nothing to deliver")
-        for _ in 0..<100 where !MailboxGapNotice.shared.reports.open.contains(report(after, "")) {
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        XCTAssertTrue(MailboxGapNotice.shared.reports.open.contains(report(after, "")))
-        XCTAssertNotNil(try LocalRepositories.keyValue.get(MailboxGapNotice.key), "kept until seen")
+        try await waitUntilShown()
+        XCTAssertNotNil(MailboxGapNotice.shared.interval, "shown")
 
         MailboxGapNotice.shared.dismiss()
         XCTAssertNil(MailboxGapNotice.shared.interval)
-        let stored = try XCTUnwrap(LocalRepositories.keyValue.get(MailboxGapNotice.key))
-        let kept = try JSONDecoder().decode(MailboxGapNotice.Reports.self, from: stored)
-        XCTAssertTrue(kept.closed.contains(report(after, "")), "closed survives a restart")
+
+        // What the store keeps is the core's state: read back, the same report is not news.
+        let kept = try XCTUnwrap(LocalRepositories.keyValue.get(MailboxGapNotice.key))
+        let state = MailboxGapState.fromBytes(kept: kept)
+        XCTAssertFalse(state.record(afterCursor: after, resumesAt: ""), "closed survives the store")
+        XCTAssertNil(state.interval())
+    }
+
+    /// What #490 kept as v2 JSON moves into the core's state once: closed stays closed, open stays
+    /// open, and v2 is gone. Mutation that reddens it: drop the v2 branch in `load`.
+    func testTheStateAnEarlierBuildKeptMovesIn() throws {
+        let closed = freshCursor()
+        let open = "\(UInt64(closed.dropLast(2))! + 1)-0"
+        let v2 = #"{"open":[{"afterCursor":"\#(open)","resumesAt":""}],"closed":[{"afterCursor":"\#(closed)","resumesAt":""}]}"#
+        try LocalRepositories.keyValue.remove(MailboxGapNotice.key)
+        try LocalRepositories.keyValue.put(MailboxGapNotice.legacyKeys[1], Data(v2.utf8))
+
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+
+        XCTAssertEqual(
+            MailboxGapNotice.shared.interval?.from,
+            Date(timeIntervalSince1970: TimeInterval(UInt64(open.dropLast(2))!) / 1000),
+            "the open report is shown"
+        )
+        let state = MailboxGapState.fromBytes(kept: try XCTUnwrap(LocalRepositories.keyValue.get(MailboxGapNotice.key)))
+        XCTAssertFalse(state.record(afterCursor: closed, resumesAt: ""), "the closed one stays closed")
+        XCTAssertNil(try LocalRepositories.keyValue.get(MailboxGapNotice.legacyKeys[1]), "v2 is gone")
+        MailboxGapNotice.shared.dismiss()
+    }
+
+    /// Rule 11: reading v2 JSON is temporary, and this fails on the day it should be gone.
+    func testTheJSONReadingHasAnEnd() {
+        XCTAssertLessThan(
+            Date(), MailboxGapNotice.legacyJSONUntil,
+            "2027-01-31 has passed: remove the v2 reading in MailboxGapNotice.load and this test"
+        )
     }
 }

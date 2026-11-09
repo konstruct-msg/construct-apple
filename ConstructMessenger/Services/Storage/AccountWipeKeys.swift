@@ -204,6 +204,7 @@ enum AccountWipeKeys {
         // moved to construct.db, where this wipe is what removes it.
         "construct.mailboxGap.v1",
         "construct.mailboxGap.v2",
+        "construct.mailboxGap.v3",
         // How far each chat is read, per partner (`ReadBoundaries`, TODO 152): this account's
         // reading, which another account must not inherit.
         "construct.readBoundaries.v1",
