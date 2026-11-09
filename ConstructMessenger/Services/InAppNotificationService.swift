@@ -17,10 +17,9 @@
 //  bail out just because the app is backgrounded: a silent push wakes both paths, and the
 //  stream frequently wins, in which case nobody else would notify.
 //
-//  Active chat tracking:
-//    ChatViewModel calls activeChatId = chat.id  on appear
-//    ChatViewModel calls activeChatId = nil       on disappear
-//    Backgrounding does NOT clear it — hence the applicationState test in isChatVisible.
+//  Which chat is open: `ChatOnScreen.chatId`, set and cleared by the chat screen itself
+//  (`ChatView` / `DesktopChatView` appear and disappear). Backgrounding does NOT clear it —
+//  hence the applicationState test in isChatVisible.
 //
 
 import Foundation
@@ -37,38 +36,13 @@ final class InAppNotificationService {
 
     static let shared = InAppNotificationService()
 
-    // MARK: - Active chat
-
-    /// Set by ChatViewModel to suppress banners for the currently open conversation.
-    var activeChatId: String? = nil
-
-    /// Instance ID of the ChatViewModel that last registered as active.
-    /// Prevents a SwiftUI-diffing copy of ChatViewModel from clearing the
-    /// activeChatId that was set by the "real" retained ViewModel.
-    private var activeChatOwnerID: UUID? = nil
-
-    /// Register the current chat as active. Only the most recently registered
-    /// instance (by ownerID) may later clear it.
-    func registerActiveChat(_ chatId: String, ownerID: UUID) {
-        activeChatId = chatId
-        activeChatOwnerID = ownerID
-    }
-
-    /// Deregister the active chat. No-op if `ownerID` is not the current owner
-    /// (i.e., a stale SwiftUI-diffing copy tried to clear it).
-    func unregisterActiveChat(ownerID: UUID) {
-        guard activeChatOwnerID == ownerID else { return }
-        activeChatId = nil
-        activeChatOwnerID = nil
-    }
-
     // MARK: - Incoming message
 
     /// Called from MessageRouter after saving an incoming message.
     /// Privacy: always generic text — no sender name, no content preview.
     ///
-    /// Suppression requires the chat to be open **and** the app to be on screen. `activeChatId`
-    /// is cleared by ChatViewModel on disappear, which never happens when the user simply
+    /// Suppression requires the chat to be open **and** the app to be on screen. The open chat
+    /// is cleared when its screen disappears, which never happens when the user simply
     /// backgrounds the app with a chat open — so the flag stayed set for the whole background
     /// period and silently swallowed every banner for that conversation (observed 2026-07-31:
     /// 20+ minutes backgrounded, three messages, no notification, `unreadCount` stuck at 0).
@@ -83,15 +57,19 @@ final class InAppNotificationService {
     /// True only when `chatId` is the open conversation AND the app is actually on screen.
     /// The single authority for "the user can already see this message".
     ///
+    /// The open conversation is `ChatOnScreen`'s, the one the screen sets and clears. Until
+    /// 2026-11-09 it was a second carrier here, registered by `ChatViewModel` on its first appear
+    /// and cleared only in its `deinit`: a chat left while its view model lived on stayed
+    /// "visible", so what arrived next was neither counted unread nor announced (todo 288).
     static func isChatVisible(_ chatId: String) -> Bool {
-        isChatVisible(chatId, activeChatId: shared.activeChatId, appIsActive: appIsActive)
+        isChatVisible(chatId, chatOnScreen: ChatOnScreen.shared.chatId, appIsActive: appIsActive)
     }
 
     /// Pure decision, split from the live reads so the backgrounded branch is reachable from
     /// tests — `UIApplication.applicationState` is always `.active` under XCTest, and that is
     /// exactly the term whose absence caused the bug.
-    nonisolated static func isChatVisible(_ chatId: String, activeChatId: String?, appIsActive: Bool) -> Bool {
-        chatId == activeChatId && appIsActive
+    nonisolated static func isChatVisible(_ chatId: String, chatOnScreen: String?, appIsActive: Bool) -> Bool {
+        chatId == chatOnScreen && appIsActive
     }
 
     /// Live app-foreground state.
@@ -117,7 +95,7 @@ final class InAppNotificationService {
     /// Called when the burst detector fires for the first time for a sender.
     /// Privacy: generic title — no sender name exposed in notification.
     func handleFloodAlert(chatId: String, senderName: String, messageCount: Int) {
-        guard chatId != activeChatId else { return }
+        guard chatId != ChatOnScreen.shared.chatId else { return }
 
         #if canImport(UIKit)
         guard UIApplication.shared.applicationState == .active else { return }
