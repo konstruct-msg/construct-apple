@@ -2937,6 +2937,212 @@ public func FfiConverterTypeLocalStore_lower(_ value: LocalStore) -> UInt64 {
 
 
 /**
+ * The state of the "messages may not have arrived" notice, one rule for every client
+ * (construct-rules `mailbox_gap`, decisions/client-rules-shared-in-rust.md). It keeps the server's
+ * reports, open and closed: the server reports the same loss on every stream until the cursor
+ * moves, and a report the person closed does not raise the notice again. The platform keeps
+ * `to_bytes` (a CFE envelope) and shows `interval`. Named `…State`, not `…Notice`: the platform's
+ * own notice type, which holds it, keeps that name.
+ */
+public protocol MailboxGapStateProtocol: AnyObject, Sendable {
+    
+    /**
+     * The person closed the notice.
+     */
+    func close() 
+    
+    /**
+     * What to show; null when nothing is open.
+     */
+    func interval()  -> MailboxGapInterval?
+    
+    /**
+     * A `MailboxGap` the server sent. Whether the notice changed: the same report again, one
+     * already closed, or one whose cursor names no moment changes nothing.
+     */
+    func record(afterCursor: String, resumesAt: String)  -> Bool
+    
+    /**
+     * The notice to keep.
+     */
+    func toBytes() throws  -> Data
+    
+}
+/**
+ * The state of the "messages may not have arrived" notice, one rule for every client
+ * (construct-rules `mailbox_gap`, decisions/client-rules-shared-in-rust.md). It keeps the server's
+ * reports, open and closed: the server reports the same loss on every stream until the cursor
+ * moves, and a report the person closed does not raise the notice again. The platform keeps
+ * `to_bytes` (a CFE envelope) and shows `interval`. Named `…State`, not `…Notice`: the platform's
+ * own notice type, which holds it, keeps that name.
+ */
+open class MailboxGapState: MailboxGapStateProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_mailboxgapstate(self.handle, $0) }
+    }
+    /**
+     * An empty notice.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_mailboxgapstate_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_mailboxgapstate(handle, $0) }
+    }
+
+    
+    /**
+     * The notice as it was kept. Bytes that are not one start it empty (the reason is logged):
+     * a notice nobody can read is one nobody can show.
+     */
+public static func fromBytes(kept: Data) -> MailboxGapState  {
+    return try!  FfiConverterTypeMailboxGapState_lift(try! rustCall() {
+    uniffi_construct_core_fn_constructor_mailboxgapstate_from_bytes(
+        FfiConverterData.lower(kept),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * The person closed the notice.
+     */
+open func close()  {try! rustCall() {
+    uniffi_construct_core_fn_method_mailboxgapstate_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * What to show; null when nothing is open.
+     */
+open func interval() -> MailboxGapInterval?  {
+    return try!  FfiConverterOptionTypeMailboxGapInterval.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_mailboxgapstate_interval(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * A `MailboxGap` the server sent. Whether the notice changed: the same report again, one
+     * already closed, or one whose cursor names no moment changes nothing.
+     */
+open func record(afterCursor: String, resumesAt: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_mailboxgapstate_record(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(afterCursor),
+        FfiConverterString.lower(resumesAt),$0
+    )
+})
+}
+    
+    /**
+     * The notice to keep.
+     */
+open func toBytes()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_mailboxgapstate_to_bytes(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMailboxGapState: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = MailboxGapState
+
+    public static func lift(_ handle: UInt64) throws -> MailboxGapState {
+        return MailboxGapState(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: MailboxGapState) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MailboxGapState {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MailboxGapState, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMailboxGapState_lift(_ handle: UInt64) throws -> MailboxGapState {
+    return try FfiConverterTypeMailboxGapState.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMailboxGapState_lower(_ value: MailboxGapState) -> UInt64 {
+    return FfiConverterTypeMailboxGapState.lower(value)
+}
+
+
+
+
+
+
+/**
  * Device-level MLS store (RFC 9420): ONE long-lived OpenMLS storage holding
  * all group states plus key-package private material. A Welcome can only be
  * decrypted by the store that generated the KeyPackage it addresses, so key
@@ -7503,6 +7709,63 @@ public func FfiConverterTypeMLKEMEncapsulation_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeMLKEMEncapsulation_lower(_ value: MlkemEncapsulation) -> RustBuffer {
     return FfiConverterTypeMLKEMEncapsulation.lower(value)
+}
+
+
+/**
+ * What the "messages may not have arrived" notice says: messages sent from `from_ms` to
+ * `until_ms` (Unix ms) may not have arrived; `until_ms` is null when the mailbox held nothing to
+ * resume from ("since …").
+ */
+public struct MailboxGapInterval: Equatable, Hashable {
+    public var fromMs: Int64
+    public var untilMs: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(fromMs: Int64, untilMs: Int64?) {
+        self.fromMs = fromMs
+        self.untilMs = untilMs
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension MailboxGapInterval: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMailboxGapInterval: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MailboxGapInterval {
+        return
+            try MailboxGapInterval(
+                fromMs: FfiConverterInt64.read(from: &buf), 
+                untilMs: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MailboxGapInterval, into buf: inout [UInt8]) {
+        FfiConverterInt64.write(value.fromMs, into: &buf)
+        FfiConverterOptionInt64.write(value.untilMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMailboxGapInterval_lift(_ buf: RustBuffer) throws -> MailboxGapInterval {
+    return try FfiConverterTypeMailboxGapInterval.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMailboxGapInterval_lower(_ value: MailboxGapInterval) -> RustBuffer {
+    return FfiConverterTypeMailboxGapInterval.lower(value)
 }
 
 
@@ -12892,6 +13155,30 @@ fileprivate struct FfiConverterOptionTypeLocalPeerDevice: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeMailboxGapInterval: FfiConverterRustBuffer {
+    typealias SwiftType = MailboxGapInterval?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMailboxGapInterval.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMailboxGapInterval.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeSenderCertificate: FfiConverterRustBuffer {
     typealias SwiftType = SenderCertificate?
 
@@ -15109,6 +15396,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_wipe() != 12838) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_mailboxgapstate_close() != 19005) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mailboxgapstate_interval() != 47731) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mailboxgapstate_record() != 49711) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mailboxgapstate_to_bytes() != 48255) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_mlsstore_add_member() != 60309) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15395,6 +15694,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_localstore_new() != 34198) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_mailboxgapstate_from_bytes() != 42302) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_mailboxgapstate_new() != 17540) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_notificationpeek_new() != 3700) {

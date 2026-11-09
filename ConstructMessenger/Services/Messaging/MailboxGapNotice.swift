@@ -3,17 +3,17 @@
 //  Construct Messenger
 //
 //  The server's queue keeps messages for a limited time and count; when this device comes back
-//  later than that, what it trimmed is gone. The server now says so (`MailboxGap`, on a fetch
-//  and once on the stream) and this keeps the interval until the person has seen it: one notice
-//  above the chat list (construct-docs decisions/mailbox-gap-is-reported.md, TODO 79). Whose
-//  messages they were nobody knows — the server only knows the interval.
+//  later than that, what it trimmed is gone. The server says so (`MailboxGap`, on a fetch and on
+//  the stream) and the person is told with one notice above the chat list until they close it
+//  (construct-docs decisions/mailbox-gap-is-reported.md, TODO 79). Whose messages they were
+//  nobody knows — the server only knows the interval.
 //
-//  The notice keeps the reports it was made of, not just their dates. The server reports again
-//  on every stream it opens until the cursor moves, and the cursor does not move while the mailbox
-//  holds nothing to deliver. Until 2026-11-09 only the dates were kept, so a closed notice came
-//  back on the next connection, every time (owner's phone, "since 31 Oct 13:14"). A report the
-//  person already closed is the same loss, named by the same cursors, and does not raise the
-//  notice again (todo 290). Canon: construct-client `mailbox_gap.rs`.
+//  The rule is the core's (`MailboxGapState`, construct-rules `mailbox_gap`), one for every
+//  client: it keeps the server's reports, open and closed, and a report the person closed does not
+//  raise the notice again — the server repeats it on every stream until the cursor moves (todo
+//  290). This class only holds that state for the UI, keeps its bytes (a CFE envelope) in the
+//  account's key-value store, and shows its interval. Until 2026-11-09 the rule was written here
+//  in Swift, twice over (dates only, then reports as JSON); `decisions/client-rules-shared-in-rust.md`.
 //
 
 import Foundation
@@ -25,13 +25,6 @@ final class MailboxGapNotice {
 
     static let shared = MailboxGapNotice()
 
-    /// One report as the server made it: the cursor this device read from, and the oldest
-    /// position still held (empty when nothing is).
-    struct Report: Codable, Equatable, Sendable {
-        var afterCursor: String
-        var resumesAt: String
-    }
-
     /// What the notice says: from the last position this device had to where delivery resumed;
     /// `until` nil when the mailbox held nothing at all to resume from.
     struct Interval: Equatable, Sendable {
@@ -39,99 +32,107 @@ final class MailboxGapNotice {
         var until: Date?
     }
 
-    /// The notice as the account's store keeps it. Pure: the rule lives here.
-    struct Reports: Codable, Equatable, Sendable {
-        /// Reported and not yet closed.
-        var open: [Report] = []
-        /// Closed by the person: these again are not a new loss.
-        var closed: [Report] = []
+    /// Read through `LocalRepositories.keyValue`, so it goes with the account's store. The bytes
+    /// are the core's (`MailboxGapState.toBytes`).
+    nonisolated static let key = "construct.mailboxGap.v3"
+    /// Before the rule moved to the core: v1 kept dates, v2 the reports as JSON (#490). v2 is read
+    /// once into the core's state, until `legacyJSONUntil`; v1 cannot tell a closed report from a
+    /// new one and is dropped.
+    nonisolated static let legacyKeys = ["construct.mailboxGap.v1", "construct.mailboxGap.v2"]
 
-        /// Take a report in. Whether the notice changed: a report already open or already closed,
-        /// or one whose cursor names no moment, changes nothing.
-        mutating func record(_ report: Report) -> Bool {
-            guard MailboxGapNotice.date(ofCursor: report.afterCursor) != nil,
-                  !open.contains(report), !closed.contains(report) else { return false }
-            open.append(report)
-            return true
-        }
+    /// 2027-01-31: after it `load` stops reading v2 JSON (rule 11); `MailboxGapNoticeTests`
+    /// fails on that day until the reading is removed.
+    nonisolated static let legacyJSONUntil = Date(timeIntervalSince1970: 1_801_353_600)
 
-        /// The person closed the notice. Only the reports it showed are remembered as seen: the
-        /// cursor never goes back, so older closed ones cannot be reported again.
-        mutating func close() {
-            closed = open
-            open = []
-        }
+    /// The rule's state; `interval` mirrors it for observation.
+    @ObservationIgnored private var state: MailboxGapState
 
-        /// What is shown: one interval as wide as every open report, open-ended if any of them is.
-        var interval: Interval? {
-            guard let from = open.compactMap({ MailboxGapNotice.date(ofCursor: $0.afterCursor) }).min() else {
-                return nil
-            }
-            var until: Date? = .distantPast
-            for report in open {
-                guard let current = until, let resumes = MailboxGapNotice.date(ofCursor: report.resumesAt) else {
-                    until = nil
-                    continue
-                }
-                until = max(current, resumes)
-            }
-            return Interval(from: from, until: until)
-        }
-    }
-
-    /// Read through `LocalRepositories.keyValue`, so it goes with the account's store.
-    nonisolated static let key = "construct.mailboxGap.v2"
-    /// Dates only, before 2026-11-09: it cannot tell a closed report from a new one, so it is
-    /// dropped; the next report raises the notice again, once.
-    nonisolated static let legacyKey = "construct.mailboxGap.v1"
-
-    private(set) var reports: Reports
-
-    var interval: Interval? { reports.interval }
+    private(set) var interval: Interval?
 
     private init() {
-        reports = Self.load()
+        state = Self.load()
+        interval = Self.shown(by: state)
         NotificationCenter.default.addObserver(forName: .localStoreReplaced, object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { MailboxGapNotice.shared.reports = Self.load() }
+            MainActor.assumeIsolated {
+                let shared = MailboxGapNotice.shared
+                shared.state = Self.load()
+                shared.interval = Self.shown(by: shared.state)
+            }
         }
     }
 
     /// What the server reported, from any thread.
     nonisolated static func record(afterCursor: String, resumesAt: String) {
-        let report = Report(afterCursor: afterCursor, resumesAt: resumesAt)
-        Task { @MainActor in
-            guard shared.reports.record(report) else {
-                Log.debug("Mailbox gap reported again: \(afterCursor) — already shown or closed", category: "MessageStream")
-                return
-            }
-            Log.info("Mailbox gap reported: \(afterCursor) → \(resumesAt.isEmpty ? "nothing held" : resumesAt)", category: "MessageStream")
-            shared.save()
-        }
+        Task { @MainActor in shared.take(afterCursor: afterCursor, resumesAt: resumesAt) }
     }
 
     func dismiss() {
-        reports.close()
-        save()
+        state.close()
+        changed()
     }
 
-    private func save() {
-        if let data = try? JSONEncoder().encode(reports) {
-            try? LocalRepositories.keyValue.put(Self.key, data)
+    private func take(afterCursor: String, resumesAt: String) {
+        guard state.record(afterCursor: afterCursor, resumesAt: resumesAt) else {
+            Log.debug("Mailbox gap reported again: \(afterCursor) — already shown or closed", category: "MessageStream")
+            return
+        }
+        Log.info("Mailbox gap reported: \(afterCursor) → \(resumesAt.isEmpty ? "nothing held" : resumesAt)", category: "MessageStream")
+        changed()
+    }
+
+    private func changed() {
+        interval = Self.shown(by: state)
+        do {
+            try LocalRepositories.keyValue.put(Self.key, try state.toBytes())
+        } catch {
+            Log.error("Mailbox gap notice not kept: \(error)", category: "MessageStream")
         }
     }
 
-    // MARK: - The rule, pure
-
-    /// A stream cursor `ms-seq` as the moment it names; nil for anything else.
-    nonisolated static func date(ofCursor cursor: String) -> Date? {
-        let ms = cursor.split(separator: "-", maxSplits: 1).first.flatMap { UInt64($0) }
-        return ms.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000) }
+    nonisolated private static func shown(by state: MailboxGapState) -> Interval? {
+        state.interval().map {
+            Interval(
+                from: Date(timeIntervalSince1970: TimeInterval($0.fromMs) / 1000),
+                until: $0.untilMs.map { Date(timeIntervalSince1970: TimeInterval($0) / 1000) }
+            )
+        }
     }
 
-    private static func load() -> Reports {
-        try? LocalRepositories.keyValue.remove(legacyKey)
-        guard let data = try? LocalRepositories.keyValue.get(key),
-              let reports = try? JSONDecoder().decode(Reports.self, from: data) else { return Reports() }
-        return reports
+    // MARK: - Kept state
+
+    private static func load() -> MailboxGapState {
+        if let kept = try? LocalRepositories.keyValue.get(key) {
+            return MailboxGapState.fromBytes(kept: kept)
+        }
+        let state = MailboxGapState()
+        if let v2 = try? LocalRepositories.keyValue.get(legacyKeys[1]),
+           let reports = try? JSONDecoder().decode(LegacyReports.self, from: v2) {
+            // The closed reports, a close, then the open ones: the core's state is the one v2 kept.
+            // JSON by rule 6's exception — an earlier build's format, read once.
+            for report in reports.closed {
+                _ = state.record(afterCursor: report.afterCursor, resumesAt: report.resumesAt)
+            }
+            state.close()
+            for report in reports.open {
+                _ = state.record(afterCursor: report.afterCursor, resumesAt: report.resumesAt)
+            }
+            if let bytes = try? state.toBytes() {
+                try? LocalRepositories.keyValue.put(key, bytes)
+            }
+        }
+        for legacy in legacyKeys {
+            try? LocalRepositories.keyValue.remove(legacy)
+        }
+        return state
+    }
+
+    /// v2 as #490 wrote it — read only, to move it into the core's state.
+    private struct LegacyReports: Decodable {
+        struct Report: Decodable {
+            var afterCursor: String
+            var resumesAt: String
+        }
+        var open: [Report]
+        var closed: [Report]
     }
 }

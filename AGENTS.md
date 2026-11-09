@@ -62,7 +62,11 @@ Silence is the worst failure: a message that never appears raises no error.
    touches, or a session's lifecycle phase — it is a `construct-core` API, written first. This
    app does network, Core Data, Keychain, UI, and the account → device-set mapping. Before
    writing a session or crypto decision in Swift, open `construct_core.udl`: it is already there
-   more often than not. Known exceptions still in Swift, with their destination (the core
+   more often than not. **Client rules too:** a pure decision over protocol data or this app's own state that
+   two clients or more make and that must behave the same (the mailbox-gap notice, the stream
+   cursor, a retry queue, delivery-status transitions) lives once in the core's `construct-rules`
+   and is called here (`MailboxGapState` is the first); a third copy in Swift is not written
+   (`decisions/client-rules-shared-in-rust.md`). Known exceptions still in Swift, with their destination (the core
    machine): `sessionPhases` (keyed by `SessionScope`) and the account-keyed `proactiveInitTasks`
    init lock — do not extend them.
 3. **A control message names the state it refers to** (epoch, ratchet key, number), so the
@@ -162,6 +166,10 @@ the same change, or is removed; a handler no producer reaches is wired up or del
 
 - No base64 except at true text boundaries (QR, deep links, `mailto:`); no JSON for binary
   payloads — protobuf `bytes` or CFE.
+- **Persisted state is CFE** (Keychain, key-value store, files): a core-written envelope with a
+  message type of its own (the core's registry). JSON or any other format only with a written reason next to the
+  code — an external format, or a file a person edits by hand. "Simpler" is not a reason. State
+  an earlier build kept as JSON is read once, with an end date and a test that fails after it.
 - The UniFFI boundary passes `bytes` (Swift `Data`), never `sequence<u8>` or `String`
   (`construct-core/tests/udl_bytes_test.rs` fails on a new one). A value from the core is already
   `Data`: do not wrap it in `Data(…)`.
