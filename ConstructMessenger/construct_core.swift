@@ -2947,9 +2947,10 @@ public func FfiConverterTypeLocalStore_lower(_ value: LocalStore) -> UInt64 {
 public protocol MailboxGapStateProtocol: AnyObject, Sendable {
     
     /**
-     * The person closed the notice.
+     * The person closed the notice. Not `close`: Kotlin objects already have `close()`, which
+     * frees them (`tests/udl_reserved_names_test.rs`).
      */
-    func close() 
+    func dismiss() 
     
     /**
      * What to show; null when nothing is open.
@@ -3047,10 +3048,11 @@ public static func fromBytes(kept: Data) -> MailboxGapState  {
 
     
     /**
-     * The person closed the notice.
+     * The person closed the notice. Not `close`: Kotlin objects already have `close()`, which
+     * frees them (`tests/udl_reserved_names_test.rs`).
      */
-open func close()  {try! rustCall() {
-    uniffi_construct_core_fn_method_mailboxgapstate_close(
+open func dismiss()  {try! rustCall() {
+    uniffi_construct_core_fn_method_mailboxgapstate_dismiss(
             self.uniffiCloneHandle(),$0
     )
 }
@@ -15396,7 +15398,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_wipe() != 12838) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mailboxgapstate_close() != 19005) {
+    if (uniffi_construct_core_checksum_method_mailboxgapstate_dismiss() != 9993) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_mailboxgapstate_interval() != 47731) {
