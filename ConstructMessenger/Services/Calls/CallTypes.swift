@@ -394,6 +394,9 @@ protocol CallUIManaging: AnyObject {
     var lastError: String? { get }
     var callQuality: CallQuality { get }
     var video: CallVideoState { get }
+    /// When the current call was answered; nil before that and without a call. The call screen
+    /// counts its time from it (`CallDuration`).
+    var answeredAt: Date? { get }
 
     func clearLastError()
     func startOutgoingCall(to userId: String, displayName: String, hasVideo: Bool) async

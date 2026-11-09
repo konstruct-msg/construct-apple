@@ -33,9 +33,13 @@ struct InCallView: View {
     var video = CallVideoState()
     var onCameraChanged: (Bool) -> Void = { _ in }
     var onSwitchCamera: () -> Void = {}
+    /// When the call was answered (`CallManager.ActiveCall.answeredAt`) — what the time on screen
+    /// counts from, and what the call history's duration is computed from too.
+    var answeredAt: Date? = nil
 
     @State private var isMuted = false
-    @State private var elapsed: Int = 0
+    /// Advanced once a second while the call runs; only redraws the time, counts nothing.
+    @State private var now = Date()
     @State private var timer: Timer? = nil
 
     private var isEnded: Bool { endReason != nil }
@@ -241,16 +245,15 @@ struct InCallView: View {
     // MARK: - Timer
 
     private var formattedElapsed: String {
-        let m = elapsed / 60
-        let s = elapsed % 60
-        return String(format: "%02d:%02d", m, s)
+        CallDuration.text(answeredAt: answeredAt, now: now)
     }
 
     private func startTimer() {
+        now = Date()
         guard timer == nil else { return }
         // Scheduled on the main run loop, so the tick is on the main actor.
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            MainActor.assumeIsolated { elapsed += 1 }
+            MainActor.assumeIsolated { now = Date() }
         }
     }
 
@@ -491,5 +494,20 @@ struct AVRoutePickerViewRepresentable: UIViewRepresentable {
         peerName: "田中 あかり",
         direction: .outgoing
     )
-    InCallView(session: session, isConnecting: false)
+    InCallView(session: session, isConnecting: false, answeredAt: Date(timeIntervalSinceNow: -83))
+}
+
+/// The time a call has run, as the call screen shows it: from the moment it was answered to now.
+///
+/// Until 2026-11-09 the screen counted its own ticks from 0 each time it appeared, so leaving the
+/// call screen and coming back started the time over (todo 287). Two dates, so a screen that comes
+/// back shows the call's time, and a busy main thread that skips ticks loses none of it.
+enum CallDuration {
+    /// "mm:ss". Before an answer is known it reads 00:00; a clock that moved back reads 00:00
+    /// rather than a negative time.
+    static func text(answeredAt: Date?, now: Date) -> String {
+        guard let answeredAt else { return "00:00" }
+        let seconds = max(0, Int(now.timeIntervalSince(answeredAt)))
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
 }
