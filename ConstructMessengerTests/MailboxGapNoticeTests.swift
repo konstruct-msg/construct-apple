@@ -3,7 +3,9 @@
 //  ConstructMessengerTests
 //
 //  What the person is told when the server's queue trimmed messages this device never collected
-//  (decisions/mailbox-gap-is-reported.md, TODO 79).
+//  (decisions/mailbox-gap-is-reported.md, TODO 79), and that a notice they closed stays closed
+//  while the server keeps reporting the same loss (todo 290). Canon: construct-client
+//  `mailbox_gap.rs`.
 //
 
 import XCTest
@@ -12,12 +14,10 @@ import XCTest
 @MainActor
 final class MailboxGapNoticeTests: XCTestCase {
 
-    override func setUp() async throws {
-        MailboxGapNotice.shared.dismiss()
-    }
+    private typealias Report = MailboxGapNotice.Report
 
-    override func tearDown() async throws {
-        MailboxGapNotice.shared.dismiss()
+    private func report(_ after: String, _ resumes: String) -> Report {
+        Report(afterCursor: after, resumesAt: resumes)
     }
 
     func testACursorNamesItsMoment() {
@@ -27,45 +27,81 @@ final class MailboxGapNoticeTests: XCTestCase {
         XCTAssertNil(MailboxGapNotice.date(ofCursor: ""))
     }
 
-    /// Nothing held to resume from: the interval is open, "since …".
+    /// Nothing held to resume from: the interval is open, "since …". A report whose cursor names
+    /// no moment is no notice.
     func testAnEmptyResumeIsAnOpenInterval() {
-        let open = MailboxGapNotice.interval(afterCursor: "1700000000000-0", resumesAt: "")
-        XCTAssertEqual(open, .init(from: Date(timeIntervalSince1970: 1_700_000_000), until: nil))
-        XCTAssertNil(MailboxGapNotice.interval(afterCursor: "garbage", resumesAt: "1700000000000-0"),
-                     "no start, no notice")
+        var reports = MailboxGapNotice.Reports()
+        XCTAssertTrue(reports.record(report("1700000000000-0", "")))
+        XCTAssertEqual(reports.interval, .init(from: Date(timeIntervalSince1970: 1_700_000_000), until: nil))
+
+        var garbage = MailboxGapNotice.Reports()
+        XCTAssertFalse(garbage.record(report("garbage", "1700000000000-0")), "no start, no notice")
+        XCTAssertNil(garbage.interval)
     }
 
     /// Several reports — the fetch and the stream, or two reconnects — are one notice, as wide
-    /// as all of them.
+    /// as all of them. Mutation that reddens it: take the first report's interval only.
     func testReportsWidenTheOneNotice() {
-        let notice = MailboxGapNotice.shared
-        notice.merge(.init(from: Date(timeIntervalSince1970: 200), until: Date(timeIntervalSince1970: 300)))
-        notice.merge(.init(from: Date(timeIntervalSince1970: 100), until: Date(timeIntervalSince1970: 250)))
-        XCTAssertEqual(notice.interval, .init(from: Date(timeIntervalSince1970: 100), until: Date(timeIntervalSince1970: 300)))
-        notice.merge(.init(from: Date(timeIntervalSince1970: 150), until: nil))
-        XCTAssertEqual(notice.interval?.until, nil, "an open report keeps the notice open")
+        var reports = MailboxGapNotice.Reports()
+        reports.record(report("200000-0", "300000-0"))
+        reports.record(report("100000-0", "250000-0"))
+        XCTAssertEqual(reports.interval, .init(from: Date(timeIntervalSince1970: 100), until: Date(timeIntervalSince1970: 300)))
+        reports.record(report("150000-0", ""))
+        XCTAssertNil(reports.interval?.until, "an open report keeps the notice open")
     }
 
-    func testClosingRemovesItForGood() throws {
-        MailboxGapNotice.shared.merge(.init(from: Date(timeIntervalSince1970: 100), until: nil))
-        XCTAssertNotNil(try LocalRepositories.keyValue.get(MailboxGapNotice.key), "kept until seen")
-        MailboxGapNotice.shared.dismiss()
-        XCTAssertNil(MailboxGapNotice.shared.interval)
-        XCTAssertNil(try LocalRepositories.keyValue.get(MailboxGapNotice.key))
+    /// The owner's phone, 2026-11-09: nothing held after the cursor, so the cursor never moved and
+    /// every connection reported the same loss; the closed notice came back each time.
+    /// Mutation that reddens it: drop `!closed.contains(report)` from `record`.
+    func testAClosedReportDoesNotComeBack() {
+        var reports = MailboxGapNotice.Reports()
+        let loss = report("1793460840000-0", "")
+        XCTAssertTrue(reports.record(loss))
+        reports.close()
+        XCTAssertNil(reports.interval, "closed")
+
+        XCTAssertFalse(reports.record(loss), "the same report on the next connection")
+        XCTAssertNil(reports.interval, "stays closed")
     }
 
-    /// The stream's event reaches the notice through the real parser.
-    func testTheStreamEventRaisesTheNotice() async throws {
+    /// A new loss after a closed one is shown. Mutation that reddens it: ignore every report once
+    /// anything was closed.
+    func testANewLossAfterAClosedOneIsShown() {
+        var reports = MailboxGapNotice.Reports()
+        reports.record(report("1793460840000-0", ""))
+        reports.close()
+        XCTAssertTrue(reports.record(report("1794000000000-0", "")))
+        XCTAssertEqual(reports.interval?.from, Date(timeIntervalSince1970: 1_794_000_000))
+    }
+
+    /// The same report twice is one report. Mutation that reddens it: drop `!open.contains`.
+    func testTheSameReportTwiceChangesNothing() {
+        var reports = MailboxGapNotice.Reports()
+        XCTAssertTrue(reports.record(report("1700000000000-0", "")))
+        XCTAssertFalse(reports.record(report("1700000000000-0", "")))
+        XCTAssertEqual(reports.open.count, 1)
+    }
+
+    /// The stream's event reaches the notice through the real parser, is kept in the account's
+    /// store, and closing it keeps it closed there too.
+    func testTheStreamEventRaisesTheNoticeAndClosingIsKept() async throws {
+        let after = "\(UInt64(Date().timeIntervalSince1970 * 1000))-0"
         var gap = Shared_Proto_Services_V1_MailboxGap()
-        gap.afterCursor = "1700000000000-0"
-        gap.resumesAt = "1700000600000-0"
+        gap.afterCursor = after
+        gap.resumesAt = ""
         var response = Shared_Proto_Services_V1_MessageStreamResponse()
         response.mailboxGap = gap
         XCTAssertNil(MessageStreamParser.parse(response), "nothing to deliver")
-        for _ in 0..<100 where MailboxGapNotice.shared.interval == nil {
+        for _ in 0..<100 where !MailboxGapNotice.shared.reports.open.contains(report(after, "")) {
             try await Task.sleep(nanoseconds: 10_000_000)
         }
-        XCTAssertEqual(MailboxGapNotice.shared.interval,
-                       .init(from: Date(timeIntervalSince1970: 1_700_000_000), until: Date(timeIntervalSince1970: 1_700_000_600)))
+        XCTAssertTrue(MailboxGapNotice.shared.reports.open.contains(report(after, "")))
+        XCTAssertNotNil(try LocalRepositories.keyValue.get(MailboxGapNotice.key), "kept until seen")
+
+        MailboxGapNotice.shared.dismiss()
+        XCTAssertNil(MailboxGapNotice.shared.interval)
+        let stored = try XCTUnwrap(LocalRepositories.keyValue.get(MailboxGapNotice.key))
+        let kept = try JSONDecoder().decode(MailboxGapNotice.Reports.self, from: stored)
+        XCTAssertTrue(kept.closed.contains(report(after, "")), "closed survives a restart")
     }
 }
