@@ -47,7 +47,7 @@ final class MacOnScreenTests: XCTestCase {
     /// The banner decision with the Mac's answer: the open chat makes a banner once it is hidden.
     func testTheOpenChatGetsABannerWhenTheWindowIsMinimised() {
         let onScreen = MacOnScreen.isOnScreen(appIsActive: true, windows: [window(minimised: true)])
-        XCTAssertFalse(InAppNotificationService.isChatVisible("chat-1", activeChatId: "chat-1", appIsActive: onScreen))
+        XCTAssertFalse(InAppNotificationService.isChatVisible("chat-1", chatOnScreen: "chat-1", appIsActive: onScreen))
     }
 
     /// Hidden → shown marks the open chat read; staying shown or going away does not.

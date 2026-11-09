@@ -45,7 +45,6 @@ class ChatViewModel {
 
     // MARK: - Lifecycle state
 
-    private let instanceID = UUID()
     private var isSetupCalled = false
 
     // MARK: - Init
@@ -69,7 +68,6 @@ class ChatViewModel {
 
     isolated deinit {
         observationTasks.forEach { $0.cancel() }
-        InAppNotificationService.shared.unregisterActiveChat(ownerID: instanceID)
         Log.debug("ChatViewModel deinitialized", category: "ChatViewModel")
     }
 
@@ -83,7 +81,6 @@ class ChatViewModel {
             transcript.start()
             sessionManager.checkExistingSession()
             setupSubscribers()
-            InAppNotificationService.shared.registerActiveChat(conversation.chatId, ownerID: instanceID)
             Log.debug("ChatViewModel initialized with viewContext", category: "ChatViewModel")
         }
         sessionManager.fetchRecipientPublicKey()
