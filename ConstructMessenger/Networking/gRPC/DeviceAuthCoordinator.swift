@@ -26,23 +26,24 @@ enum DeviceAuthOutcome: Sendable {
     /// only when this is true.
     /// `refusal`: the server's reason, read as a number (`DeviceRefusal.of`); `.unspecified` when
     /// it gave none or the failure was not a refusal at all.
-    case failed(message: String, overDirectTLS: Bool, refusal: Shared_Proto_Services_V1_DeviceRefusal)
+    case failed(message: String, overDirectTLS: Bool, refusal: DeviceRefusalKind)
 }
 
 /// Why the server refused this device, from the trailing metadata key `construct-device-refusal`
 /// of an UNAUTHENTICATED status (construct-protos `DeviceRefusal`). Read as a number because a
 /// client erases itself on `.removed`, and until 2026-10-06 it decided that by matching the status
-/// text — the second carrier `decisions/signals-are-numbers-not-text.md` exists to remove.
+/// text — the second carrier `decisions/signals-are-numbers-not-text.md` exists to remove. The
+/// reading is the core's (construct-rules `device_refusal`), one for every client: construct-client
+/// read the text until 2026-11-10 (todo 292). This only hands it the status code and the trailer.
 enum DeviceRefusalReading {
     static let metadataKey = "construct-device-refusal"
 
-    static func refusal(of error: any Error) -> Shared_Proto_Services_V1_DeviceRefusal {
-        guard let rpc = error as? RPCError, rpc.code == .unauthenticated,
-              let value = Array(rpc.metadata[stringValues: metadataKey]).first,
-              let number = Int(value),
-              let refusal = Shared_Proto_Services_V1_DeviceRefusal(rawValue: number)
-        else { return .unspecified }
-        return refusal
+    static func refusal(of error: any Error) -> DeviceRefusalKind {
+        guard let rpc = error as? RPCError else { return .unspecified }
+        return deviceRefusalOf(
+            statusCode: UInt32(rpc.code.rawValue),
+            trailer: Array(rpc.metadata[stringValues: metadataKey]).first
+        )
     }
 }
 

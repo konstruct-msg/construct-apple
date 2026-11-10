@@ -1558,6 +1558,11 @@ void uniffi_construct_core_fn_init_callback_vtable_peeksessionsource(const Uniff
 void uniffi_construct_core_fn_init_callback_vtable_powprogresscallback(const UniffiVTableCallbackInterfacePowProgressCallback* _Nonnull vtable
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_AFTER_SEND_FAILURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_AFTER_SEND_FAILURE
+RustBuffer uniffi_construct_core_fn_func_after_send_failure(RustBuffer failure, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW
 RustBuffer uniffi_construct_core_fn_func_compute_pow(RustBuffer challenge, uint32_t difficulty, RustCallStatus *_Nonnull out_status
@@ -1599,6 +1604,11 @@ RustBuffer uniffi_construct_core_fn_func_derive_device_id(RustBuffer identity_pu
 RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_REFUSAL_OF
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_REFUSAL_OF
+RustBuffer uniffi_construct_core_fn_func_device_refusal_of(uint32_t status_code, RustBuffer trailer, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FORMAT_FEDERATED_ID
 RustBuffer uniffi_construct_core_fn_func_format_federated_id(RustBuffer device_id, RustBuffer server_hostname, RustCallStatus *_Nonnull out_status
@@ -1625,6 +1635,11 @@ RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, R
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_PRIVATE_KEYS
 RustBuffer uniffi_construct_core_fn_func_generate_private_keys(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATED_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATED_NAME
+RustBuffer uniffi_construct_core_fn_func_generated_name(RustBuffer user_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HISTORY_DISCOVERY_INSTANCE_NAME
@@ -1755,6 +1770,11 @@ RustBuffer uniffi_construct_core_fn_func_intake_offer(RustBuffer held, RustBuffe
 RustBuffer uniffi_construct_core_fn_func_intake_tag(RustBuffer intake_key, RustBuffer recipient_account_id, uint64_t epoch, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_GENERATED_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_GENERATED_NAME
+int8_t uniffi_construct_core_fn_func_is_generated_name(RustBuffer name, RustBuffer user_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 RustBuffer uniffi_construct_core_fn_func_knst_encode_chunks(RustBuffer payload, uint8_t content_type, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -1868,6 +1888,11 @@ uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_
 RustBuffer uniffi_construct_core_fn_func_recovery_public_key(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REFUSAL_ERASES_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REFUSAL_ERASES_DEVICE
+int8_t uniffi_construct_core_fn_func_refusal_erases_device(RustBuffer refusal, int8_t over_direct_tls, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 RustBuffer uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(RustBuffer keys, RustCallStatus *_Nonnull out_status
@@ -1891,6 +1916,11 @@ RustBuffer uniffi_construct_core_fn_func_sealed_seal_sender_cert(RustBuffer cert
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_VERIFY_SENDER_CERT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEALED_VERIFY_SENDER_CERT
 int8_t uniffi_construct_core_fn_func_sealed_verify_sender_cert(RustBuffer user_id, RustBuffer domain, RustBuffer identity_key, RustBuffer device_id, int64_t issued_at, int64_t expires_at, RustBuffer signature, RustBuffer server_verifying_key, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHOWN_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHOWN_NAME
+RustBuffer uniffi_construct_core_fn_func_shown_name(RustBuffer alias, RustBuffer display_name, RustBuffer username, RustBuffer user_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SIGN_BUNDLE_DATA_WITH_KEYS
@@ -2219,6 +2249,12 @@ void ffi_construct_core_rust_future_free_void(uint64_t handle
 void ffi_construct_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_AFTER_SEND_FAILURE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_AFTER_SEND_FAILURE
+uint16_t uniffi_construct_core_checksum_func_after_send_failure(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
 uint16_t uniffi_construct_core_checksum_func_compute_pow(void
@@ -2267,6 +2303,12 @@ uint16_t uniffi_construct_core_checksum_func_derive_recovery_keypair(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_REFUSAL_OF
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_REFUSAL_OF
+uint16_t uniffi_construct_core_checksum_func_device_refusal_of(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_FORMAT_FEDERATED_ID
 uint16_t uniffi_construct_core_checksum_func_format_federated_id(void
@@ -2294,6 +2336,12 @@ uint16_t uniffi_construct_core_checksum_func_generate_mnemonic(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_PRIVATE_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_PRIVATE_KEYS
 uint16_t uniffi_construct_core_checksum_func_generate_private_keys(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATED_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATED_NAME
+uint16_t uniffi_construct_core_checksum_func_generated_name(void
     
 );
 #endif
@@ -2447,6 +2495,12 @@ uint16_t uniffi_construct_core_checksum_func_intake_tag(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_GENERATED_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_GENERATED_NAME
+uint16_t uniffi_construct_core_checksum_func_is_generated_name(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 uint16_t uniffi_construct_core_checksum_func_knst_encode_chunks(void
@@ -2579,6 +2633,12 @@ uint16_t uniffi_construct_core_checksum_func_recovery_public_key(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REFUSAL_ERASES_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REFUSAL_ERASES_DEVICE
+uint16_t uniffi_construct_core_checksum_func_refusal_erases_device(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 uint16_t uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys(void
@@ -2606,6 +2666,12 @@ uint16_t uniffi_construct_core_checksum_func_sealed_seal_sender_cert(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_VERIFY_SENDER_CERT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEALED_VERIFY_SENDER_CERT
 uint16_t uniffi_construct_core_checksum_func_sealed_verify_sender_cert(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHOWN_NAME
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHOWN_NAME
+uint16_t uniffi_construct_core_checksum_func_shown_name(void
     
 );
 #endif
