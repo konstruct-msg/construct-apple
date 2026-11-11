@@ -2,28 +2,23 @@
 //  StreamCursorTracker.swift
 //  Construct Messenger
 //
-//  ACK-driven advance of the Redis-stream resume cursor (`StreamCursorStore`, sent as
-//  SubscribeRequest.since_cursor — the position the server trims the offline stream up to).
+//  The Redis-stream resume cursor (`StreamCursorStore`, sent as SubscribeRequest.since_cursor —
+//  the position the server trims the offline stream up to).
 //
-//  THE INVARIANT: the committed cursor must never advance past a message that is not yet
-//  durably handled. Advancing past a message tells the server to delete it (XTRIM ≤ cursor);
-//  if that message was only waiting in the core's in-memory queue (no session yet)
-//  and the app died, it would be lost forever. (The catastrophic trim-on-read loss is already
-//  fixed server-side; this closes the remaining received-but-not-durable window.)
+//  THE INVARIANT: the committed cursor never advances past a message that is not yet durably
+//  handled. Advancing past a message tells the server to delete it (XTRIM ≤ cursor); if that
+//  message was only waiting in the core's in-memory queue (no session yet) and the app died, it
+//  would be lost forever.
 //
-//  Model: a FIFO of stream entries in arrival order. An entry is resolved once its message
-//  reaches a durable terminal (persisted to Core Data, or a control message fully handled,
-//  or definitively given up). The committed cursor advances over the longest *contiguous*
-//  run of resolved entries from the front — never skipping a still-pending/deferred one.
-//  A deferred (queued-for-session-init) entry holds the watermark until it is later drained
-//  (re-routed → durable) or discarded (give-up), both of which resolve it.
+//  The rule is the core's (construct-rules `stream_cursor`, `StreamCursorState`), one for every
+//  client: entries in arrival order, the cursor over the longest contiguous run of resolved entries
+//  at the front, never past a pending or deferred one. It was written here first (2026-06-16) and
+//  ported to Android; construct-client's third copy had drifted and stored the cursor of whichever
+//  message finished last (todo 299). What stays here: persisting the cursor, and the log lines.
 //
-//  Missing a resolve() degrades to a STALL (cursor stops advancing → server re-delivers,
-//  client dedups) — a safe, observable failure mode, never message loss. The stall self-heals
-//  on the next reconnect: re-delivery from the un-advanced cursor re-tracks the entries.
-//
-//  Pure and synchronous; the only side effect is persisting the committed cursor, injected so
-//  it is unit-testable without touching UserDefaults.
+//  Missing a resolve() degrades to a STALL (cursor stops advancing → server re-delivers, client
+//  dedups) — a safe, observable failure mode, never message loss. The stall self-heals on the next
+//  reconnect: re-delivery from the un-advanced cursor re-tracks the entries.
 //
 
 import Foundation
@@ -42,18 +37,17 @@ final class StreamCursorTracker {
         /// Not this caller's message to resolve (duplicate already in flight, not-ready) →
         /// leave the entry untouched so the owning path resolves it.
         case skip
+
+        fileprivate var core: StreamCursorOutcome {
+            switch self {
+            case .durable: return .durable
+            case .deferred: return .deferred
+            case .skip: return .skip
+            }
+        }
     }
 
-    private enum State: String { case pending, deferred, resolved }
-    private struct Entry {
-        let messageId: String
-        let cursor: String
-        var state: State
-        let trackedAt: Date
-    }
-
-    private var entries: [Entry] = []
-    private var committed: String?
+    private let entries = StreamCursorState()
 
     /// Persists the committed cursor. Injected for tests.
     private let persist: (String) -> Void
@@ -66,15 +60,12 @@ final class StreamCursorTracker {
     /// `StreamCursorStore` is the source of truth for since_cursor, and re-delivery from there
     /// re-tracks any un-advanced entries.
     func reset() {
-        entries.removeAll()
-        committed = nil
+        entries.reset()
     }
 
     /// Record a stream entry in arrival order. Dedups by message id; ignores empties.
     func track(messageId: String, cursor: String) {
-        guard !messageId.isEmpty, !cursor.isEmpty else { return }
-        guard !entries.contains(where: { $0.messageId == messageId }) else { return }
-        entries.append(Entry(messageId: messageId, cursor: cursor, state: .pending, trackedAt: Date()))
+        entries.track(messageId: messageId, cursor: cursor, nowMs: Self.nowMs())
     }
 
     /// Report the terminal outcome for a tracked message and advance the committed cursor over
@@ -82,16 +73,9 @@ final class StreamCursorTracker {
     /// messages, which carry no stream cursor). Returns the new committed cursor, or nil.
     @discardableResult
     func report(messageId: String, _ outcome: Outcome) -> String? {
-        guard let idx = entries.firstIndex(where: { $0.messageId == messageId }) else { return nil }
-        switch outcome {
-        case .durable:
-            entries[idx].state = .resolved
-        case .deferred:
-            if entries[idx].state == .pending { entries[idx].state = .deferred }
-        case .skip:
-            break
-        }
-        return advance()
+        let moved = entries.report(messageId: messageId, outcome: outcome.core)
+        if let moved { persist(moved) }
+        return moved
     }
 
     /// Force-resolve a (possibly deferred) message — used when a queued message is finally
@@ -99,18 +83,6 @@ final class StreamCursorTracker {
     @discardableResult
     func resolve(messageId: String) -> String? {
         report(messageId: messageId, .durable)
-    }
-
-    private func advance() -> String? {
-        var newCommitted: String?
-        while let first = entries.first, first.state == .resolved {
-            newCommitted = first.cursor
-            entries.removeFirst()
-        }
-        guard let c = newCommitted, c != committed else { return nil }
-        committed = c
-        persist(c)
-        return c
     }
 
     /// Abandon everything currently held and jump the committed cursor to the furthest entry the
@@ -135,17 +107,16 @@ final class StreamCursorTracker {
     /// has piled up, at the risk of dropping messages that were never delivered.
     @discardableResult
     func skipHeldBacklog() -> String? {
-        guard let furthest = entries.last else { return nil }
-        let held = entries.count
-        let blocker = headBlocker()
-        entries.removeAll()
-        committed = furthest.cursor
-        persist(furthest.cursor)
+        guard let skipped = entries.skipHeldBacklog() else { return nil }
+        persist(skipped.cursor)
+        let head = skipped.head.map {
+            "\($0.messageId.prefix(8))… (\(Self.name($0.hold)), \(Int(Self.age(of: $0)))s)"
+        }
         Log.error(
-            "STREAM_CURSOR[skipped]: user skipped \(held) held entr\(held == 1 ? "y" : "ies") — cursor forced to \(furthest.cursor); head was \(blocker.map { "\($0.messageId.prefix(8))… (\($0.state), \(Int($0.age))s)" } ?? "none"). Anything unresolved in that range is now unrecoverable.",
+            "STREAM_CURSOR[skipped]: user skipped \(skipped.held) held entr\(skipped.held == 1 ? "y" : "ies") — cursor forced to \(skipped.cursor); head was \(head ?? "none"). Anything unresolved in that range is now unrecoverable.",
             category: "StreamReplay"
         )
-        return furthest.cursor
+        return skipped.cursor
     }
 
     /// The entry currently holding the committed cursor back, if any.
@@ -156,12 +127,27 @@ final class StreamCursorTracker {
     /// is invisible with two testers and ruinous with a thousand users, so the head entry names
     /// itself instead of being inferred from a redelivery count. See `StreamReplayAudit`.
     func headBlocker() -> (messageId: String, state: String, age: TimeInterval)? {
-        guard let first = entries.first, first.state != .resolved else { return nil }
-        return (first.messageId, first.state.rawValue, Date().timeIntervalSince(first.trackedAt))
+        guard let head = entries.headBlocker() else { return nil }
+        return (head.messageId, Self.name(head.hold), Self.age(of: head))
+    }
+
+    private static func name(_ hold: StreamCursorHold) -> String {
+        switch hold {
+        case .pending: return "pending"
+        case .deferred: return "deferred"
+        }
+    }
+
+    private static func age(of head: StreamCursorBlocker) -> TimeInterval {
+        max(0, Double(nowMs() - head.trackedAtMs) / 1000)
+    }
+
+    private static func nowMs() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
     }
 
     // MARK: - Test hooks
 
     /// Number of entries still in flight (pending or deferred or resolved-but-blocked).
-    var inFlightCount: Int { entries.count }
+    var inFlightCount: Int { Int(entries.inFlight()) }
 }

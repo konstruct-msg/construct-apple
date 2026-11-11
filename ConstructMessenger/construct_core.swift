@@ -5084,6 +5084,262 @@ public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 
 
 
 
+
+
+/**
+ * The stream resume cursor of one connection: it never moves past a message that has not reached
+ * a durable end, since the server trims its queue up to it. Every method that can move it returns
+ * the cursor to store (`since_cursor`), or null when it did not move. Not kept itself.
+ */
+public protocol StreamCursorStateProtocol: AnyObject, Sendable {
+    
+    /**
+     * The entry holding the cursor back, if any.
+     */
+    func headBlocker()  -> StreamCursorBlocker?
+    
+    /**
+     * Entries still held.
+     */
+    func inFlight()  -> UInt32
+    
+    /**
+     * How a tracked message ended.
+     */
+    func report(messageId: String, outcome: StreamCursorOutcome)  -> String?
+    
+    /**
+     * A new connection: drop what was held; the stored cursor is where it resumes.
+     */
+    func reset() 
+    
+    /**
+     * A message finished: a waiting one drained and kept, or given up.
+     */
+    func resolve(messageId: String)  -> String?
+    
+    /**
+     * A person's explicit action only — never a timer: abandon everything held and commit the
+     * furthest cursor delivered. What was held is trimmed on the server without being kept.
+     */
+    func skipHeldBacklog()  -> StreamCursorSkip?
+    
+    /**
+     * A stream entry, in arrival order, before it is handled. The same id again keeps its place.
+     */
+    func track(messageId: String, cursor: String, nowMs: Int64) 
+    
+    /**
+     * A frame with nothing to keep (a receipt): takes its place in line so its cursor cannot
+     * pass an earlier message still held.
+     */
+    func trackResolved(cursor: String, nowMs: Int64)  -> String?
+    
+}
+/**
+ * The stream resume cursor of one connection: it never moves past a message that has not reached
+ * a durable end, since the server trims its queue up to it. Every method that can move it returns
+ * the cursor to store (`since_cursor`), or null when it did not move. Not kept itself.
+ */
+open class StreamCursorState: StreamCursorStateProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_streamcursorstate(self.handle, $0) }
+    }
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_streamcursorstate_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_streamcursorstate(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * The entry holding the cursor back, if any.
+     */
+open func headBlocker() -> StreamCursorBlocker?  {
+    return try!  FfiConverterOptionTypeStreamCursorBlocker.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_head_blocker(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Entries still held.
+     */
+open func inFlight() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_in_flight(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * How a tracked message ended.
+     */
+open func report(messageId: String, outcome: StreamCursorOutcome) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_report(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterTypeStreamCursorOutcome_lower(outcome),$0
+    )
+})
+}
+    
+    /**
+     * A new connection: drop what was held; the stored cursor is where it resumes.
+     */
+open func reset()  {try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_reset(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * A message finished: a waiting one drained and kept, or given up.
+     */
+open func resolve(messageId: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_resolve(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * A person's explicit action only — never a timer: abandon everything held and commit the
+     * furthest cursor delivered. What was held is trimmed on the server without being kept.
+     */
+open func skipHeldBacklog() -> StreamCursorSkip?  {
+    return try!  FfiConverterOptionTypeStreamCursorSkip.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_skip_held_backlog(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * A stream entry, in arrival order, before it is handled. The same id again keeps its place.
+     */
+open func track(messageId: String, cursor: String, nowMs: Int64)  {try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_track(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(cursor),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+}
+}
+    
+    /**
+     * A frame with nothing to keep (a receipt): takes its place in line so its cursor cannot
+     * pass an earlier message still held.
+     */
+open func trackResolved(cursor: String, nowMs: Int64) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_streamcursorstate_track_resolved(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(cursor),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamCursorState: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = StreamCursorState
+
+    public static func lift(_ handle: UInt64) throws -> StreamCursorState {
+        return StreamCursorState(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: StreamCursorState) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamCursorState {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: StreamCursorState, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorState_lift(_ handle: UInt64) throws -> StreamCursorState {
+    return try FfiConverterTypeStreamCursorState.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorState_lower(_ value: StreamCursorState) -> UInt64 {
+    return FfiConverterTypeStreamCursorState.lower(value)
+}
+
+
+
+
 /**
  * Binary key bundle passed across the FFI boundary — no JSON encoding.
  * Replaces the former bytes JSON payload for init_session / init_receiving_session.
@@ -8763,6 +9019,125 @@ public func FfiConverterTypeSessionInitResult_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) -> RustBuffer {
     return FfiConverterTypeSessionInitResult.lower(value)
+}
+
+
+/**
+ * The entry holding the cursor back, for the log line that names a stall.
+ */
+public struct StreamCursorBlocker: Equatable, Hashable {
+    public var messageId: String
+    public var hold: StreamCursorHold
+    public var trackedAtMs: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, hold: StreamCursorHold, trackedAtMs: Int64) {
+        self.messageId = messageId
+        self.hold = hold
+        self.trackedAtMs = trackedAtMs
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension StreamCursorBlocker: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamCursorBlocker: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamCursorBlocker {
+        return
+            try StreamCursorBlocker(
+                messageId: FfiConverterString.read(from: &buf), 
+                hold: FfiConverterTypeStreamCursorHold.read(from: &buf), 
+                trackedAtMs: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamCursorBlocker, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterTypeStreamCursorHold.write(value.hold, into: &buf)
+        FfiConverterInt64.write(value.trackedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorBlocker_lift(_ buf: RustBuffer) throws -> StreamCursorBlocker {
+    return try FfiConverterTypeStreamCursorBlocker.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorBlocker_lower(_ value: StreamCursorBlocker) -> RustBuffer {
+    return FfiConverterTypeStreamCursorBlocker.lower(value)
+}
+
+
+/**
+ * What `skip_held_backlog` did: the cursor now committed, how many entries were abandoned, and
+ * the one that held them.
+ */
+public struct StreamCursorSkip: Equatable, Hashable {
+    public var cursor: String
+    public var held: UInt32
+    public var head: StreamCursorBlocker?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(cursor: String, held: UInt32, head: StreamCursorBlocker?) {
+        self.cursor = cursor
+        self.held = held
+        self.head = head
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension StreamCursorSkip: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamCursorSkip: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamCursorSkip {
+        return
+            try StreamCursorSkip(
+                cursor: FfiConverterString.read(from: &buf), 
+                held: FfiConverterUInt32.read(from: &buf), 
+                head: FfiConverterOptionTypeStreamCursorBlocker.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamCursorSkip, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.cursor, into: &buf)
+        FfiConverterUInt32.write(value.held, into: &buf)
+        FfiConverterOptionTypeStreamCursorBlocker.write(value.head, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorSkip_lift(_ buf: RustBuffer) throws -> StreamCursorSkip {
+    return try FfiConverterTypeStreamCursorSkip.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorSkip_lower(_ value: StreamCursorSkip) -> RustBuffer {
+    return FfiConverterTypeStreamCursorSkip.lower(value)
 }
 
 
@@ -12591,6 +12966,158 @@ public func FfiConverterTypeStaleSpkPlan_lower(_ value: StaleSpkPlan) -> RustBuf
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why the entry at the front holds the cursor.
+ */
+
+public enum StreamCursorHold: Equatable, Hashable {
+    
+    case pending
+    case deferred
+
+
+
+}
+
+#if compiler(>=6)
+extension StreamCursorHold: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamCursorHold: FfiConverterRustBuffer {
+    typealias SwiftType = StreamCursorHold
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamCursorHold {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .pending
+        
+        case 2: return .deferred
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StreamCursorHold, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .pending:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .deferred:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorHold_lift(_ buf: RustBuffer) throws -> StreamCursorHold {
+    return try FfiConverterTypeStreamCursorHold.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorHold_lower(_ value: StreamCursorHold) -> RustBuffer {
+    return FfiConverterTypeStreamCursorHold.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How the pipeline ended with a tracked stream message (construct-rules `stream_cursor`).
+ */
+
+public enum StreamCursorOutcome: Equatable, Hashable {
+    
+    /**
+     * Kept, a control applied, or given up for good.
+     */
+    case durable
+    /**
+     * Waiting (behind a session being opened, a retry): holds the cursor.
+     */
+    case deferred
+    /**
+     * Not this caller's to decide: leaves the entry as it is.
+     */
+    case skip
+
+
+
+}
+
+#if compiler(>=6)
+extension StreamCursorOutcome: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamCursorOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = StreamCursorOutcome
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamCursorOutcome {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .durable
+        
+        case 2: return .deferred
+        
+        case 3: return .skip
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StreamCursorOutcome, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .durable:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .deferred:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .skip:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorOutcome_lift(_ buf: RustBuffer) throws -> StreamCursorOutcome {
+    return try FfiConverterTypeStreamCursorOutcome.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamCursorOutcome_lower(_ value: StreamCursorOutcome) -> RustBuffer {
+    return FfiConverterTypeStreamCursorOutcome.lower(value)
+}
+
+
 
 
 
@@ -13448,6 +13975,54 @@ fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeSessionHealthReport.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeStreamCursorBlocker: FfiConverterRustBuffer {
+    typealias SwiftType = StreamCursorBlocker?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStreamCursorBlocker.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStreamCursorBlocker.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeStreamCursorSkip: FfiConverterRustBuffer {
+    typealias SwiftType = StreamCursorSkip?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStreamCursorSkip.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStreamCursorSkip.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -16009,6 +16584,30 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_head_blocker() != 49075) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_in_flight() != 6958) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_report() != 43547) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_reset() != 47862) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_resolve() != 51885) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_skip_held_backlog() != 7887) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_track() != 52313) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_streamcursorstate_track_resolved() != 7693) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_constructor_localstore_in_memory() != 10006) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -16025,6 +16624,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_streamcursorstate_new() != 13541) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstoreobserver_on_change() != 28445) {
