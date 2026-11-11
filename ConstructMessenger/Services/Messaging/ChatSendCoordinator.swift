@@ -1112,42 +1112,51 @@ final class ChatSendCoordinator {
 /// server arrives as a response, not an error, and is judged where the response is read.
 enum SendFailure {
     /// What a send that threw leaves the message as: queued when the path failed, failed
-    /// otherwise. Every send and retry path answers through this, so they cannot disagree.
+    /// otherwise. Every send and retry path answers through this, so they cannot disagree. The
+    /// decision is the core's (construct-rules `send_failure`), one for every client: Android
+    /// marked every failure failed until 2026-11-10. This only says what kind of failure it was.
     static func status(after error: Error) -> DeliveryStatus {
-        isRetryableTransport(error) ? .queued : .failed
+        switch afterSendFailure(failure: kind(of: error)) {
+        case .queued: return .queued
+        case .failed: return .failed
+        }
     }
 
     /// The send never got an answer: the path, not the message, failed, and the same ciphertext
     /// goes out again once there is a path.
     static func isRetryableTransport(_ error: Error) -> Bool {
+        status(after: error) == .queued
+    }
+
+    /// The failure as the core's rule takes it: no answer at all, or a gRPC status.
+    static func kind(of error: Error) -> SendFailureKind {
         // VEIL `on` with the tunnel still coming up: nothing went wrong with the message, it waits
         // for the tunnel (2026-10-14: a send in those seconds was marked failed and its payload
         // dropped).
-        if error is VeilTunnelNotUp { return true }
+        if error is VeilTunnelNotUp { return .noAnswer }
         // Our own deadline: no answer in time.
-        if error is GRPCClientError { return true }
-        if let rpcError = error as? RPCError {
-            switch rpcError.code {
-            case .deadlineExceeded, .unavailable, .cancelled: return true
-            default: return false
-            }
-        }
+        if error is GRPCClientError { return .noAnswer }
+        if let rpcError = error as? RPCError { return .status(code: UInt32(rpcError.code.rawValue)) }
         // The client the call went to was stopped under it — a route change or a relay rotation
         // replaced the channel mid-send (TODO 165, build 745: `clientIsStopped`, then three
         // retries with nothing to send).
         if let runtimeError = error as? RuntimeError {
             switch runtimeError.code {
-            case .clientIsStopped, .transportError: return true
-            default: return false
+            case .clientIsStopped, .transportError: return .noAnswer
+            default: return .status(code: unknownStatus)
             }
         }
         if let networkError = error as? NetworkError {
             switch networkError {
-            case .connectionFailed, .disconnected, .notConnected: return true
-            default: return false
+            case .connectionFailed, .disconnected, .notConnected: return .noAnswer
+            default: return .status(code: unknownStatus)
             }
         }
-        return false
+        return .status(code: unknownStatus)
     }
+
+    /// gRPC `UNKNOWN`: an error that is neither a missing answer nor a status — the message's, so
+    /// it fails, as before the rule moved.
+    private static let unknownStatus: UInt32 = 2
 }
 

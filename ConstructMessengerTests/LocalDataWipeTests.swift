@@ -76,7 +76,7 @@ final class LocalDataWipeTests: XCTestCase {
 
     // MARK: - Reading the refusal
 
-    private func refusal(_ code: RPCError.Code, _ message: String, trailer: String?) -> Shared_Proto_Services_V1_DeviceRefusal {
+    private func refusal(_ code: RPCError.Code, _ message: String, trailer: String?) -> DeviceRefusalKind {
         var metadata = Metadata()
         if let trailer { metadata.addString(trailer, forKey: DeviceRefusalReading.metadataKey) }
         return DeviceRefusalReading.refusal(of: RPCError(code: code, message: message, metadata: metadata))

@@ -416,10 +416,12 @@ class AuthViewModel {
     /// Only over a direct TLS connection to our server. Through VEIL the client speaks plaintext
     /// gRPC to the relay, and a relay able to forge this answer would be able to erase the device.
     /// A removed device reached only through VEIL keeps its data until it connects directly.
+    ///
+    /// The rule is the core's (construct-rules `device_refusal`), the same on every client.
     nonisolated static func isRemovedDevice(
-        _ refusal: Shared_Proto_Services_V1_DeviceRefusal, overDirectTLS: Bool
+        _ refusal: DeviceRefusalKind, overDirectTLS: Bool
     ) -> Bool {
-        overDirectTLS && refusal == .removed
+        refusalErasesDevice(refusal: refusal, overDirectTls: overDirectTLS)
     }
 
     /// Legacy method - kept for backward compatibility

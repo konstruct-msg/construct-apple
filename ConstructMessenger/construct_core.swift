@@ -10146,6 +10146,82 @@ public func FfiConverterTypeDeviceLinkEvidence_lower(_ value: DeviceLinkEvidence
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Why the server refused this device (construct-protos `DeviceRefusal`), as `device_refusal_of`
+ * reads it.
+ */
+
+public enum DeviceRefusalKind: Equatable, Hashable {
+    
+    case unspecified
+    case removed
+    case notFound
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceRefusalKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceRefusalKind: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceRefusalKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceRefusalKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unspecified
+        
+        case 2: return .removed
+        
+        case 3: return .notFound
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceRefusalKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unspecified:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .removed:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .notFound:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceRefusalKind_lift(_ buf: RustBuffer) throws -> DeviceRefusalKind {
+    return try FfiConverterTypeDeviceRefusalKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceRefusalKind_lower(_ value: DeviceRefusalKind) -> RustBuffer {
+    return FfiConverterTypeDeviceRefusalKind.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * What a session envelope's body is (first byte inside its ciphertext; the server never sees it).
  */
 
@@ -11477,6 +11553,80 @@ public func FfiConverterTypeLocalStoreTable_lower(_ value: LocalStoreTable) -> R
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What an outgoing message is after its send failed.
+ */
+
+public enum MessageAfterSendFailure: Equatable, Hashable {
+    
+    /**
+     * Waits for a path; the same ciphertext is sent again.
+     */
+    case queued
+    /**
+     * Refused; the person sees it did not go.
+     */
+    case failed
+
+
+
+}
+
+#if compiler(>=6)
+extension MessageAfterSendFailure: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMessageAfterSendFailure: FfiConverterRustBuffer {
+    typealias SwiftType = MessageAfterSendFailure
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MessageAfterSendFailure {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .queued
+        
+        case 2: return .failed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MessageAfterSendFailure, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .queued:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMessageAfterSendFailure_lift(_ buf: RustBuffer) throws -> MessageAfterSendFailure {
+    return try FfiConverterTypeMessageAfterSendFailure.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMessageAfterSendFailure_lower(_ value: MessageAfterSendFailure) -> RustBuffer {
+    return FfiConverterTypeMessageAfterSendFailure.lower(value)
+}
+
+
 
 /**
  * Errors that can occur during MLS group operations.
@@ -12286,6 +12436,83 @@ public func FfiConverterTypeReceivingInitKind_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) -> RustBuffer {
     return FfiConverterTypeReceivingInitKind.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A failed send, as a platform reports it to `after_send_failure`.
+ */
+
+public enum SendFailureKind: Equatable, Hashable {
+    
+    /**
+     * No answer came: our deadline, a broken or replaced connection, the VEIL tunnel not up yet.
+     */
+    case noAnswer
+    /**
+     * The server, or a relay on its behalf, answered with this gRPC status code.
+     */
+    case status(code: UInt32
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension SendFailureKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSendFailureKind: FfiConverterRustBuffer {
+    typealias SwiftType = SendFailureKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SendFailureKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .noAnswer
+        
+        case 2: return .status(code: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SendFailureKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .noAnswer:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .status(code):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt32.write(code, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSendFailureKind_lift(_ buf: RustBuffer) throws -> SendFailureKind {
+    return try FfiConverterTypeSendFailureKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSendFailureKind_lower(_ value: SendFailureKind) -> RustBuffer {
+    return FfiConverterTypeSendFailureKind.lower(value)
 }
 
 
@@ -13970,6 +14197,17 @@ fileprivate struct FfiConverterSequenceTypePeerDeviceVerdict: FfiConverterRustBu
         return seq
     }
 }
+/**
+ * What an outgoing message is after its send failed: queued when no answer came or the
+ * status says the path failed (CANCELLED, DEADLINE_EXCEEDED, UNAVAILABLE), failed otherwise.
+ */
+public func afterSendFailure(failure: SendFailureKind) -> MessageAfterSendFailure  {
+    return try!  FfiConverterTypeMessageAfterSendFailure_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_after_send_failure(
+        FfiConverterTypeSendFailureKind_lower(failure),$0
+    )
+})
+}
 public func computePow(challenge: String, difficulty: UInt32)throws  -> PowSolution  {
     return try  FfiConverterTypePowSolution_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_compute_pow(
@@ -14034,6 +14272,18 @@ public func deriveRecoveryKeypair(seed: Data)throws  -> RecoveryKeypair  {
     )
 })
 }
+/**
+ * Why the server refused this device: from the gRPC status code and the first value of the
+ * `construct-device-refusal` trailer. Only UNAUTHENTICATED (16) carries one; never the text.
+ */
+public func deviceRefusalOf(statusCode: UInt32, trailer: String?) -> DeviceRefusalKind  {
+    return try!  FfiConverterTypeDeviceRefusalKind_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_device_refusal_of(
+        FfiConverterUInt32.lower(statusCode),
+        FfiConverterOptionString.lower(trailer),$0
+    )
+})
+}
 public func formatFederatedId(deviceId: String, serverHostname: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_format_federated_id(
@@ -14067,6 +14317,17 @@ public func generateMnemonic(wordCount: UInt8)throws  -> String  {
 public func generatePrivateKeys()throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_generate_private_keys($0
+    )
+})
+}
+/**
+ * The name generated from an account id ("silent dolphin"), lower case: what a person who
+ * chose no name is called on every client.
+ */
+public func generatedName(userId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_generated_name(
+        FfiConverterString.lower(userId),$0
     )
 })
 }
@@ -14293,6 +14554,17 @@ public func intakeTag(intakeKey: Data, recipientAccountId: String, epoch: UInt64
         FfiConverterData.lower(intakeKey),
         FfiConverterString.lower(recipientAccountId),
         FfiConverterUInt64.lower(epoch),$0
+    )
+})
+}
+/**
+ * Whether `name` is only `user_id`'s generated name, in any case and trimmed.
+ */
+public func isGeneratedName(name: String, userId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_is_generated_name(
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(userId),$0
     )
 })
 }
@@ -14556,6 +14828,18 @@ public func recoveryPublicKey(mnemonic: String)throws  -> Data  {
 })
 }
 /**
+ * Whether that refusal erases this device: `Removed`, and the answer came over direct TLS
+ * before and after the call. Through VEIL a relay could forge it.
+ */
+public func refusalErasesDevice(refusal: DeviceRefusalKind, overDirectTls: Bool) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_refusal_erases_device(
+        FfiConverterTypeDeviceRefusalKind_lower(refusal),
+        FfiConverterBool.lower(overDirectTls),$0
+    )
+})
+}
+/**
  * The public registration bundle of a key record.
  */
 public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationBundleFields  {
@@ -14628,6 +14912,21 @@ public func sealedVerifySenderCert(userId: String, domain: String, identityKey: 
         FfiConverterInt64.lower(expiresAt),
         FfiConverterData.lower(signature),
         FfiConverterData.lower(serverVerifyingKey),$0
+    )
+})
+}
+/**
+ * The name a person is shown by: the one we gave them (`alias`), then the one they shared
+ * unless it is their generated name, then their username, then the generated name. Each
+ * trimmed; an empty one is none.
+ */
+public func shownName(alias: String?, displayName: String, username: String, userId: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_shown_name(
+        FfiConverterOptionString.lower(alias),
+        FfiConverterString.lower(displayName),
+        FfiConverterString.lower(username),
+        FfiConverterString.lower(userId),$0
     )
 })
 }
@@ -14780,6 +15079,9 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_construct_core_checksum_func_after_send_failure() != 17777) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_compute_pow() != 30246) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14804,6 +15106,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 51363) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_device_refusal_of() != 19311) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_format_federated_id() != 19004) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14817,6 +15122,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_generate_private_keys() != 4994) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_generated_name() != 23821) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_history_discovery_instance_name() != 37477) {
@@ -14894,6 +15202,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_intake_tag() != 36931) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_is_generated_name() != 37415) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_knst_encode_chunks() != 7537) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14960,6 +15271,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_recovery_public_key() != 59962) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_refusal_erases_device() != 22768) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14973,6 +15287,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 64198) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_shown_name() != 22785) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sign_bundle_data_with_keys() != 42671) {

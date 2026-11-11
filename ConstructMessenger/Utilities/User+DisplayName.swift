@@ -61,13 +61,11 @@ extension User {
 /// show the same contact under different names while both exist (`User.resolvedDisplayName` says
 /// why each step is where it is).
 enum ContactName {
+    /// The core's rule (construct-rules `names::shown`), one for every client: the alias, then the
+    /// shared name unless it is the generated one, then the username, then the generated name —
+    /// each trimmed, an empty one none.
     static func resolved(alias: String?, displayName: String, username: String, id: String) -> String {
-        if let alias = alias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
-            return alias
-        }
-        if !displayName.isEmpty, !DisplayNameGenerator.isGenerated(displayName, for: id) { return displayName }
-        if !username.isEmpty { return username }
-        return DisplayNameGenerator.generate(from: id)
+        shownName(alias: alias, displayName: displayName, username: username, userId: id)
     }
 
     /// A username as typed into a search: `@alias` and `alias` are the same handle.
