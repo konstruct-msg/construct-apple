@@ -164,7 +164,7 @@ final class ReadSyncTests: XCTestCase {
     func testAMarkerFromOurOtherDeviceLeavesOnlyTheRestUnread() throws {
         let (chatId, ids) = try chatWithFiveUnread()
         MessageRouter().applyReadMarkers(
-            marker(readUpTo: 2, of: ids), myUserId: "me", fromOwnAccount: true, boundaries: ReadBoundaries()
+            marker(readUpTo: 2, of: ids), myUserId: "me", fromOwnAccount: true, boundaries: ReadBoundaries.isolated()
         )
         XCTAssertEqual(try LocalRepositories.chats.chat(chatId)?.unreadCount, 2)
     }
@@ -173,7 +173,7 @@ final class ReadSyncTests: XCTestCase {
     /// drop the own-account term from the rule — this reddens.
     func testAMarkerFromAContactChangesNothing() throws {
         let (chatId, ids) = try chatWithFiveUnread()
-        let boundaries = ReadBoundaries()
+        let boundaries = ReadBoundaries.isolated()
         MessageRouter().applyReadMarkers(
             marker(readUpTo: 4, of: ids), myUserId: "me", fromOwnAccount: false, boundaries: boundaries
         )
@@ -200,7 +200,7 @@ final class ReadSyncTests: XCTestCase {
     /// An older marker after a newer one does not bring messages back as unread.
     func testAnOlderMarkerDoesNotMoveTheBoundaryBack() throws {
         let (chatId, ids) = try chatWithFiveUnread()
-        let boundaries = ReadBoundaries()
+        let boundaries = ReadBoundaries.isolated()
         MessageRouter().applyReadMarkers(marker(readUpTo: 3, of: ids), myUserId: "me", fromOwnAccount: true, boundaries: boundaries)
         MessageRouter().applyReadMarkers(marker(readUpTo: 1, of: ids), myUserId: "me", fromOwnAccount: true, boundaries: boundaries)
         XCTAssertEqual(try LocalRepositories.chats.chat(chatId)?.unreadCount, 1)
@@ -213,7 +213,7 @@ final class ReadSyncTests: XCTestCase {
     /// Mutation: send from `noteRead` directly — this reddens.
     func testReadingIsSentOnceForEverythingPending() async throws {
         let outbox = ReadSyncOutbox()
-        outbox.boundaries = ReadBoundaries()
+        outbox.boundaries = ReadBoundaries.isolated()
         var sent: [Data] = []
         outbox.send = { sent.append($0); return true }
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 1, messageId: "x"))
@@ -233,7 +233,7 @@ final class ReadSyncTests: XCTestCase {
     /// reddens.
     func testMarkersThatDidNotGoOutAreSentAgain() async throws {
         let outbox = ReadSyncOutbox()
-        outbox.boundaries = ReadBoundaries()
+        outbox.boundaries = ReadBoundaries.isolated()
         var attempts: [Data] = []
         var delivers = false
         outbox.send = { attempts.append($0); return delivers }
@@ -250,7 +250,7 @@ final class ReadSyncTests: XCTestCase {
     /// Reading what was already read sends nothing.
     func testReadingNothingNewSendsNothing() async {
         let outbox = ReadSyncOutbox()
-        outbox.boundaries = ReadBoundaries()
+        outbox.boundaries = ReadBoundaries.isolated()
         var sent = 0
         outbox.send = { _ in sent += 1; return true }
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 5, messageId: "x"))
@@ -259,5 +259,44 @@ final class ReadSyncTests: XCTestCase {
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 4, messageId: "z"))
         await outbox.flush()
         XCTAssertEqual(sent, 1)
+    }
+}
+
+/// The kept state is the core's CFE; v1 JSON is moved once; a marker not yet sent survives a new
+/// instance over the same store.
+final class ReadBoundariesKeptTests: XCTestCase {
+
+    private func store() -> DefaultsKeyValueStore {
+        DefaultsKeyValueStore(defaults: UserDefaults(suiteName: "construct.tests.readKept.\(UUID().uuidString)")!)
+    }
+
+    /// Mutation that reddens it: skip the v1 read, or keep v1 after it.
+    func testV1IsMovedOnce() throws {
+        let kv = store()
+        let v1 = ["bob": ReadSync.Boundary(sentAtMs: 10, messageId: "m")]
+        try kv.put(ReadBoundaries.legacyKey, try JSONEncoder().encode(v1))
+        let boundaries = ReadBoundaries(store: { kv })
+        XCTAssertEqual(boundaries.boundary(for: "BOB"), ReadSync.Boundary(sentAtMs: 10, messageId: "m"))
+        XCTAssertNil(try kv.get(ReadBoundaries.legacyKey), "v1 is gone")
+        let kept = try XCTUnwrap(try kv.get(ReadBoundaries.key))
+        XCTAssertNil(try? JSONSerialization.jsonObject(with: kept), "kept as CFE, not JSON")
+    }
+
+    /// Reading here waits to go out across a restart. Mutation that reddens it: skip the save in
+    /// `changing`.
+    func testAMarkerNotYetSentSurvivesARestart() throws {
+        let kv = store()
+        XCTAssertTrue(ReadBoundaries(store: { kv }).noteRead("bob", .init(sentAtMs: 5, messageId: "x")))
+        let reopened = ReadBoundaries(store: { kv })
+        XCTAssertTrue(reopened.hasPending)
+        XCTAssertEqual(reopened.takePending()["bob"], ReadSync.Boundary(sentAtMs: 5, messageId: "x"))
+    }
+
+    /// Rule 11: reading v1 JSON is temporary, and this fails on the day it should be gone.
+    func testTheJSONReadingHasAnEnd() {
+        XCTAssertLessThan(
+            Date(), ReadBoundaries.legacyJSONUntil,
+            "2027-01-31 has passed: remove the v1 reading in ReadBoundaries.load and this test"
+        )
     }
 }

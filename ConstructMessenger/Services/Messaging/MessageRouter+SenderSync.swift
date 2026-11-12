@@ -151,10 +151,8 @@ extension MessageRouter {
             Log.error("ReadSync: markers did not decode", category: "MessageRouter")
             return
         }
-        for (partner, boundary) in markers where partner != myUserId.lowercased() {
-            let held = boundaries.boundary(for: partner)
-            guard ReadSync.outcome(of: boundary, held: held, fromOwnAccount: fromOwnAccount) == .apply,
-                  boundaries.advance(partner, to: boundary),
+        for (partner, boundary) in markers {
+            guard boundaries.apply(partner, marker: boundary, fromOwnAccount: fromOwnAccount, ownAccount: myUserId) == .apply,
                   let chat = try? LocalRepositories.chats.chat(withPeer: partner) else { continue }
             let left = ReadSync.unreadLeft(
                 inChat: chat.id, unread: chat.unreadCount, boundary: boundary, messages: LocalRepositories.messages

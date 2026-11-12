@@ -209,6 +209,7 @@ enum AccountWipeKeys {
         // How far each chat is read, per partner (`ReadBoundaries`, TODO 152): this account's
         // reading, which another account must not inherit.
         "construct.readBoundaries.v1",
+        "construct.readBoundaries.v2",
         // Unread counts per chat at the last trip to the background (`UnreadSeen`, construct-ios
         // #248): chat ids of this account, and the baseline its banners are withdrawn against.
         "construct.notifications.unreadSeen",

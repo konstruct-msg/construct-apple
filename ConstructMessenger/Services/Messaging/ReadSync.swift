@@ -43,28 +43,34 @@ enum ReadSync {
                 messageId: message.id
             )
         }
+
+        init(_ core: ReadBoundary) {
+            self.init(sentAtMs: core.sentAtMs, messageId: core.messageId)
+        }
+
+        var core: ReadBoundary { ReadBoundary(sentAtMs: sentAtMs, messageId: messageId) }
     }
 
     enum Outcome: Equatable { case apply, ignore, drop }
 
-    // MARK: - The rule, pure (construct-protos conformance/knst_read_markers.json)
+    // MARK: - The rule (the core's: construct-rules `read_sync`; vectors knst_read_markers.json)
 
     /// Strictly after, on (sent_at_ms, message_id), the id compared as bytes.
     static func isLater(_ a: Boundary, than b: Boundary) -> Bool {
-        if a.sentAtMs != b.sentAtMs { return a.sentAtMs > b.sentAtMs }
-        return b.messageId.utf8.lexicographicallyPrecedes(a.messageId.utf8)
+        readBoundaryIsLater(a: a.core, b: b.core)
     }
 
     /// An incoming message is read when it is at or before the boundary.
     static func covers(_ boundary: Boundary, _ message: Boundary) -> Bool {
-        !isLater(message, than: boundary)
+        readBoundaryCovers(boundary: boundary.core, message: message.core)
     }
 
-    /// What a received marker does. One not from our own account is dropped, whatever it says.
+    /// What a received marker does — the core's answer for a boundary `held`. One not from our own
+    /// account is dropped, whatever it says.
     static func outcome(of marker: Boundary, held: Boundary?, fromOwnAccount: Bool) -> Outcome {
-        guard fromOwnAccount else { return .drop }
-        guard let held else { return .apply }
-        return isLater(marker, than: held) ? .apply : .ignore
+        let state = ReadMarkerState()
+        if let held { _ = state.advance(partner: "p", to: held.core) }
+        return Outcome(state.applyMarker(partner: "p", marker: marker.core, fromOwnAccount: fromOwnAccount, ownAccount: ""))
     }
 
     // MARK: - Payload
@@ -92,8 +98,9 @@ enum ReadSync {
 
     // MARK: - Unread
 
-    /// How many of the chat's unread messages a boundary leaves unread. Reads the newest messages
-    /// only: the unread ones are the newest `unread` incoming messages of the chat.
+    /// How many of the chat's unread messages a boundary leaves unread — the core's count
+    /// (`read_unread_left`): by the position of the boundary's message in the chat, by time when
+    /// it is not there (owner, 2026-11-12, as Android). Reads the newest messages only.
     static func unreadLeft(
         inChat chatId: String, unread: Int, boundary: Boundary, messages: any MessageStore
     ) -> Int {
@@ -101,64 +108,127 @@ enum ReadSync {
         // Outgoing messages sit between the incoming ones; a margin keeps them from crowding the
         // window out.
         let window = (try? messages.messages(inChat: chatId, before: nil, limit: unread * 2 + 50)) ?? []
-        let incoming = window.filter { !$0.isSentByMe }.suffix(unread)
-        return min(unread, incoming.filter { !covers(boundary, Boundary(of: $0)) }.count)
+        let incoming = window.filter { !$0.isSentByMe }.map {
+            ReadIncoming(messageId: $0.id, atMs: Boundary(of: $0).sentAtMs)
+        }
+        return Int(readUnreadLeft(unread: UInt32(unread), incoming: incoming, boundary: boundary.core))
+    }
+}
+
+private extension ReadSync.Outcome {
+    init(_ core: ReadMarkerOutcome) {
+        switch core {
+        case .apply: self = .apply
+        case .ignore: self = .ignore
+        case .drop: self = .drop
+        }
     }
 }
 
 // MARK: - Boundaries held
 
 /// The read boundary per partner (`ServerUserId`, lowercased) this device holds — moved by reading
-/// here and by markers from our other devices. Read from the receive path on any thread.
+/// here and by markers from our other devices — and the markers not yet sent to them. The core's
+/// state (`ReadMarkerState`), kept as its CFE. Read from the receive path on any thread.
 final class ReadBoundaries: @unchecked Sendable {
 
     static let shared = ReadBoundaries()
 
-    /// Through `LocalRepositories.keyValue`, so it goes with the account's store.
-    static let key = "construct.readBoundaries.v1"
+    /// Through the store's key-value pairs, so it goes with the account's store. The core's CFE.
+    static let key = "construct.readBoundaries.v2"
+    /// v1 kept the boundaries as JSON. Read once into the core's state, until `legacyJSONUntil`.
+    static let legacyKey = "construct.readBoundaries.v1"
+    /// 2027-01-31: after it `load` stops reading v1 (rule 11); `ReadSyncTests` fails on that day.
+    static let legacyJSONUntil = Date(timeIntervalSince1970: 1_801_353_600)
 
+    private let store: () -> any KeyValueStore
     private let lock = NSLock()
-    private var held: [String: ReadSync.Boundary]?
+    private var held: ReadMarkerState?
 
-    init() {
+    init(store: (() -> any KeyValueStore)? = nil) {
+        self.store = store ?? { LocalRepositories.keyValue }
         NotificationCenter.default.addObserver(forName: .localStoreReplaced, object: nil, queue: nil) { [weak self] _ in
             self?.lock.withLock { self?.held = nil }
         }
     }
 
+    /// Boundaries over a store of their own — a test's.
+    static func isolated() -> ReadBoundaries {
+        let suite = "construct.tests.readBoundaries.\(UUID().uuidString)"
+        let store = DefaultsKeyValueStore(defaults: UserDefaults(suiteName: suite)!)
+        return ReadBoundaries(store: { store })
+    }
+
     func boundary(for partner: String) -> ReadSync.Boundary? {
-        lock.withLock { load()[partner.lowercased()] }
+        lock.withLock { load().boundary(partner: partner).map(ReadSync.Boundary.init) }
     }
 
     /// Moves the boundary if `boundary` is later; true when it moved.
     @discardableResult
     func advance(_ partner: String, to boundary: ReadSync.Boundary) -> Bool {
-        lock.withLock {
-            var all = load()
-            let key = partner.lowercased()
-            if let current = all[key], !ReadSync.isLater(boundary, than: current) { return false }
-            all[key] = boundary
-            held = all
-            if let data = try? JSONEncoder().encode(all) {
-                try? LocalRepositories.keyValue.put(Self.key, data)
-            }
-            return true
-        }
+        changing { $0.advance(partner: partner, to: boundary.core) }
     }
 
     /// Whether an incoming message from `partner` is already read on another device of ours.
     func covers(_ partner: String, _ message: ReadSync.Boundary) -> Bool {
-        guard let boundary = boundary(for: partner) else { return false }
-        return ReadSync.covers(boundary, message)
+        lock.withLock { load().covers(partner: partner, message: message.core) }
+    }
+
+    /// A marker from another device: the core applies it when it is from our own account and later.
+    func apply(_ partner: String, marker: ReadSync.Boundary, fromOwnAccount: Bool, ownAccount: String) -> ReadSync.Outcome {
+        ReadSync.Outcome(changing {
+            $0.applyMarker(partner: partner, marker: marker.core, fromOwnAccount: fromOwnAccount, ownAccount: ownAccount)
+        })
+    }
+
+    /// Read here: the boundary moves and the marker waits to go out. True when it moved.
+    func noteRead(_ partner: String, _ boundary: ReadSync.Boundary) -> Bool {
+        changing { $0.noteRead(partner: partner, boundary: boundary.core) }
+    }
+
+    /// What is to be sent now; pending is emptied.
+    func takePending() -> [String: ReadSync.Boundary] {
+        let taken = changing { $0.takePending() }
+        return Dictionary(uniqueKeysWithValues: taken.map { ($0.partner, ReadSync.Boundary($0.boundary)) })
+    }
+
+    /// A send that failed: back into pending, unless reading moved further meanwhile.
+    func returnPending(_ unsent: [String: ReadSync.Boundary]) {
+        changing { $0.returnPending(unsent: unsent.map { PartnerBoundary(partner: $0.key, boundary: $0.value.core) }) }
+    }
+
+    var hasPending: Bool { lock.withLock { load().hasPending() } }
+
+    /// Change the state and keep it.
+    private func changing<T>(_ body: (ReadMarkerState) -> T) -> T {
+        lock.withLock {
+            let state = load()
+            let result = body(state)
+            if let bytes = try? state.toBytes() { try? store().put(Self.key, bytes) }
+            return result
+        }
     }
 
     /// Call under `lock`.
-    private func load() -> [String: ReadSync.Boundary] {
+    private func load() -> ReadMarkerState {
         if let held { return held }
-        let loaded = (try? LocalRepositories.keyValue.get(Self.key))
-            .flatMap { try? JSONDecoder().decode([String: ReadSync.Boundary].self, from: $0) } ?? [:]
-        held = loaded
-        return loaded
+        let state: ReadMarkerState
+        if let kept = try? store().get(Self.key) {
+            state = ReadMarkerState.fromBytes(kept: kept)
+        } else {
+            state = ReadMarkerState()
+            // JSON by rule 6's exception — an earlier build's format, read once.
+            if let v1 = try? store().get(Self.legacyKey),
+               let boundaries = try? JSONDecoder().decode([String: ReadSync.Boundary].self, from: v1) {
+                for (partner, boundary) in boundaries {
+                    _ = state.advance(partner: partner, to: boundary.core)
+                }
+                if let bytes = try? state.toBytes() { try? store().put(Self.key, bytes) }
+            }
+            try? store().remove(Self.legacyKey)
+        }
+        held = state
+        return state
     }
 }
 
@@ -166,7 +236,8 @@ final class ReadBoundaries: @unchecked Sendable {
 
 /// Boundaries moved by reading on this device, waiting to go to our other devices. Not on every
 /// read: at most every `interval` plus up to `jitter`, and at once when the app leaves the screen,
-/// so the relay sees one own-device envelope now and then rather than one per opened chat.
+/// so the relay sees one own-device envelope now and then rather than one per opened chat. What is
+/// waiting is kept with the boundaries (the core's state), so a restart before the send keeps it.
 @MainActor
 final class ReadSyncOutbox {
 
@@ -175,7 +246,6 @@ final class ReadSyncOutbox {
     static let interval: TimeInterval = 120
     static let jitter: TimeInterval = 60
 
-    private var pending: [String: ReadSync.Boundary] = [:]
     private var flushTask: Task<Void, Never>?
 
     init(observesLeaving: Bool = false) {
@@ -230,8 +300,7 @@ final class ReadSyncOutbox {
 
     /// The person has read the chat with `partner` up to `boundary` on this device.
     func noteRead(partner: String, boundary: ReadSync.Boundary) {
-        guard boundaries.advance(partner, to: boundary) else { return }
-        pending[partner.lowercased()] = boundary
+        guard boundaries.noteRead(partner, boundary) else { return }
         scheduleFlush()
     }
 
@@ -256,19 +325,15 @@ final class ReadSyncOutbox {
     func flush() async {
         flushTask?.cancel()
         flushTask = nil
-        guard !pending.isEmpty, let payload = ReadSync.encode(pending) else { return }
-        let sending = pending
-        pending = [:]
-        guard await send(payload) else {
-            // Back into the outbox, unless reading has moved a boundary further meanwhile.
-            for (partner, boundary) in sending {
-                if let newer = pending[partner], ReadSync.isLater(newer, than: boundary) { continue }
-                pending[partner] = boundary
-            }
+        let sending = boundaries.takePending()
+        guard !sending.isEmpty else { return }
+        guard let payload = ReadSync.encode(sending), await send(payload) else {
+            // Back into pending, unless reading has moved a boundary further meanwhile.
+            boundaries.returnPending(sending)
             scheduleFlush()
             return
         }
     }
 
-    var hasPending: Bool { !pending.isEmpty }
+    var hasPending: Bool { boundaries.hasPending }
 }
