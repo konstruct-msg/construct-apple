@@ -28,6 +28,7 @@
 //
 
 import Foundation
+import Security
 import SwiftProtobuf
 import GRPCCore
 
@@ -91,49 +92,39 @@ private let intakeKeyLength = 32
 /// without a Keychain, a clock or a network (`decisions/testing-by-pure-decision.md`).
 enum IntakePublishing {
 
-    /// How many epochs ahead to publish.
-    ///
-    /// Not a round number for its own sake: a device that has been offline for a week must not
-    /// break its *own* incoming traffic, because the tags its contacts present are the ones this
-    /// device published. Seven days of silence is ordinary for a second device. The server caps
-    /// one call at 14, so this stays inside a single publish.
-    static let windowEpochs = 7
+    /// How many epochs ahead to publish: a device offline for a week must not break its own
+    /// incoming traffic. The server caps one call at 14 (the core's `WINDOW_EPOCHS`).
+    static let windowEpochs = intakeWindow(current: 0).count
 
-    /// The epochs a publish should cover, starting at `currentEpoch`.
-    ///
-    /// Includes the current one: a fresh install has published nothing, and its first incoming
-    /// message is due today rather than tomorrow.
+    /// The epochs a publish covers, from `currentEpoch` (included: a fresh install's first incoming
+    /// message is due today).
     static func epochsToPublish(currentEpoch: UInt64) -> [UInt64] {
-        (0..<UInt64(windowEpochs)).map { currentEpoch + $0 }
+        intakeWindow(current: currentEpoch)
     }
 
-    /// Should we publish again, given when we last did and what epoch it is now?
-    ///
-    /// Re-publishing every launch would be a needless authenticated RPC on a hot path; never
-    /// re-publishing would let the window drain silently until incoming traffic started paying
-    /// again, with nothing visible on this device to say why. Once per epoch is the smallest
-    /// cadence that keeps the window full.
-    static func shouldPublish(lastPublishedEpoch: UInt64?, currentEpoch: UInt64) -> Bool {
-        guard let last = lastPublishedEpoch else { return true }
-        // A clock that moved backwards is not a reason to skip: `last > current` means we cannot
-        // reason about the window at all, and publishing is cheap where being wrong is not.
-        return last != currentEpoch
+    /// What a publish of `key` for `accountId` in `epoch` covers.
+    static func marker(accountId: String, epoch: UInt64, key: Data) -> IntakePublished {
+        IntakePublished(accountId: accountId, epoch: epoch, keyId: intakeKeyId(key: key))
+    }
+
+    /// Once per epoch per account and key; a clock set back is no reason to skip. The core's rule:
+    /// until 2026-11-12 this compared the epoch only and relied on the marker being cleared when
+    /// the key changed (todo 300).
+    static func shouldPublish(last: IntakePublished?, due: IntakePublished) -> Bool {
+        intakeShouldPublish(last: last, due: due)
     }
 
     /// How often a running process asks `shouldPublish` again. A process that lives for days —
     /// Konstruct Desktop keeps running with its window closed (0.3.23+) — published once at its
-    /// first stream start until 2026-10-29, and after a week its window had lapsed: every contact
-    /// holding its key was "unrecognised" on the server. An hour is far below the epoch and costs
-    /// nothing in between, because the RPC runs only when the epoch has changed.
-    static let recheckInterval: Duration = .seconds(3600)
+    /// first stream start until 2026-10-29, and after a week its window had lapsed. The RPC runs
+    /// only when the epoch, the key or the account has changed.
+    static let recheckInterval: Duration = .milliseconds(Int64(intakeRecheckMs()))
 
-    /// Whether the server holds the key we published, `currentEpoch` being today. The marker goes
-    /// whenever our key changes, so a marker names the current key; its tags cover `windowEpochs`
-    /// from the epoch it was set in. A contact card names only a key the server holds: one it does
-    /// not gets `NOT_ACCEPTED`, and the contact suspends the key for the rest of the epoch.
-    static func serverHolds(lastPublishedEpoch: UInt64?, currentEpoch: UInt64) -> Bool {
-        guard let last = lastPublishedEpoch, currentEpoch >= last else { return false }
-        return currentEpoch - last < UInt64(windowEpochs)
+    /// Whether the server holds the tags of `keyId` for `accountId` in `currentEpoch`: the last
+    /// publish it took was that key's, for that account, and its window still covers today. A card
+    /// names only such a key; one the server does not hold gets `NOT_ACCEPTED`.
+    static func serverHolds(last: IntakePublished?, accountId: String, keyId: String, currentEpoch: UInt64) -> Bool {
+        intakeServerHolds(last: last, accountId: accountId, keyId: keyId, current: currentEpoch)
     }
 }
 
@@ -143,30 +134,30 @@ enum IntakePublishing {
 /// the person did it — a block adopted from the server or a sibling does not come through here.
 enum IntakeRotation {
     /// The new key is minted above both what we hold and what the server has, so a sibling's
-    /// rotation we have not heard of yet is not undercut. A server that could not be asked counts
-    /// as 0: the rotation still happens, because the old key must not stay ours.
-    static func mintAbove(held: UInt32?, serverGeneration: UInt32) -> UInt32 {
-        max(held ?? 0, serverGeneration)
+    /// rotation we have not heard of yet is not undercut. A server that could not be asked is nil:
+    /// the rotation still happens, because the old key must not stay ours.
+    static func mintAbove(held: UInt32?, serverGeneration: UInt32?) -> UInt32 {
+        intakeMintAbove(held: held, server: serverGeneration)
     }
 
     /// The server refused our publish as stale: a sibling rotated in the same minute. Mint once
-    /// above the generation it named — an address, not a retry budget. Nil when nothing is redone.
-    static func reMintAbove(minted: UInt32, currentGeneration: UInt32) -> UInt32? {
-        currentGeneration > minted ? currentGeneration : nil
+    /// above the generation it named — an address, not a retry budget — and only when it is above
+    /// what was minted. Nil when nothing is redone.
+    static func reMintAbove(minted: UInt32, currentGeneration: UInt32, alreadyReMinted: Bool) -> UInt32? {
+        intakeReMintAbove(minted: minted, current: currentGeneration, alreadyReMinted: alreadyReMinted)
     }
 
-    /// Who gets the new card: everyone we hold a row for except the person dropped, the blocked and
-    /// ourselves. Blocking is asked again at each send; this is only who is scheduled.
-    static func sweep(_ people: [ContactRecord], dropping: String, ownAccountId: String) -> [String] {
-        let dropped = dropping.lowercased(), own = ownAccountId.lowercased()
-        return people
-            .filter { !$0.isBlocked && $0.id.lowercased() != dropped && $0.id.lowercased() != own }
-            .map(\.id)
+    /// Who gets the new card and when: everyone we hold a row for except the person dropped, the
+    /// blocked and ourselves, once each, each at its own moment within the hour — a burst right
+    /// after a block would say on the wire that one happened. Blocking is asked again at each send.
+    static func schedule(
+        _ people: [ContactRecord], dropping: String, ownAccountId: String, seed: Data
+    ) -> [(contact: String, delay: TimeInterval)] {
+        intakeCardSchedule(
+            contacts: people.map(\.id), dropped: dropping,
+            blocked: people.filter(\.isBlocked).map(\.id), ownAccount: ownAccountId, seed: seed
+        ).map { ($0.contact, Double($0.delayMs) / 1000) }
     }
-
-    /// Cards to contacts go out at random moments within this window, never as a batch: a burst
-    /// right after a block would say on the wire that one happened.
-    static let sweepWindow: TimeInterval = 3600
 }
 
 /// What the sender does with the server's verdict on a tag it presented
@@ -179,7 +170,7 @@ enum IntakeRotation {
 /// down): acting on it would make every sender throw away working keys during an outage.
 enum IntakeVerdictReaction {
     static func suspendsKey(_ verdict: Shared_Proto_Services_V1_IntakeVerdict) -> Bool {
-        verdict == .notAccepted
+        intakeVerdictSuspendsKey(verdict: Int32(verdict.rawValue))
     }
 }
 
@@ -190,24 +181,12 @@ enum IntakeVerdictReaction {
 /// 2026-10-29, which had no generation: it reads as generation 0, so nothing needs migrating.
 /// Anything else is damaged.
 enum IntakeKeyRecord {
-    static let keyLength = 32
-    private static let length = 4 + keyLength
-
     static func encode(_ state: IntakeKeyState) -> Data {
-        var g = state.generation.bigEndian
-        return Data(bytes: &g, count: 4) + state.key
+        intakeKeyRecordEncode(state: state)
     }
 
     static func decode(_ data: Data) -> IntakeKeyState? {
-        switch data.count {
-        case keyLength:
-            return IntakeKeyState(generation: 0, key: data)
-        case length:
-            let generation = data.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
-            return IntakeKeyState(generation: generation, key: Data(data.suffix(keyLength)))
-        default:
-            return nil
-        }
+        intakeKeyRecordDecode(kept: data)
     }
 }
 
@@ -251,15 +230,16 @@ enum IntakeOwnKey {
 
     /// `held` is this device's key (nil if none); `serverGeneration` and `serverHasLiveTags` are
     /// `GetIntakeState` for our account. Each case is named by state — never by a key being late.
+    /// The core's decision (construct-rules `intake::own_key`); this attaches the held key.
     static func next(held: IntakeKeyState?, serverGeneration: UInt32, serverHasLiveTags: Bool) -> Next {
-        if let held, held.generation > 0 { return .use(held) }
-        let accountIsLive = serverGeneration > 0 && serverHasLiveTags
-        if let held {
-            // Generation 0: the migration.
-            if serverGeneration == 0 { return .promote(IntakeKeyState(generation: 1, key: held.key)) }
-            return accountIsLive ? .wait : .mint(above: serverGeneration)
+        switch intakeOwnKey(
+            heldGeneration: held?.generation, serverGeneration: serverGeneration, serverHasLiveTags: serverHasLiveTags
+        ) {
+        case .use: return held.map { .use($0) } ?? .mint(above: serverGeneration)
+        case .promote: return held.map { .promote(IntakeKeyState(generation: 1, key: $0.key)) } ?? .mint(above: serverGeneration)
+        case .mint(let above): return .mint(above: above)
+        case .wait: return .wait
         }
-        return accountIsLive ? .wait : .mint(above: serverGeneration)
     }
 }
 
@@ -287,7 +267,11 @@ final class IntakeCredentialService {
     /// card once, lazily, the next time the two devices talk.
     private static let sentToKey = "construct.intake.sentTo.v3"
     private static let legacySentToKeys = ["construct.intake.sentTo.v2", "construct.intake.sentTo.v1"]
-    private static let lastPublishedEpochKey = "construct.intake.lastPublishedEpoch.v1"
+    /// What the last publish covered: the core's CFE (`IntakePublished`), account, epoch and key.
+    private static let publishedKey = "construct.intake.published.v2"
+    /// v1 kept the epoch alone. Not read: without the key it cannot say what the server holds, and
+    /// dropping it costs one publish (todo 300).
+    private static let legacyPublishedKey = "construct.intake.lastPublishedEpoch.v1"
     /// Peers whose credential the server refused, keyed by account, valued by the epoch it was
     /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
     private static let rejectedKey = "construct.intake.rejected.v1"
@@ -368,7 +352,7 @@ final class IntakeCredentialService {
             return nil
         }
         forgetWhoHasOurKey()
-        defaults.removeObject(forKey: Self.lastPublishedEpochKey)
+        defaults.removeObject(forKey: Self.publishedKey)
         Log.info("Intake: \(why)", category: "Intake")
         return state
     }
@@ -406,10 +390,12 @@ final class IntakeCredentialService {
         defer { isPublishing = false }
 
         let currentEpoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
-        let last = defaults.object(forKey: Self.lastPublishedEpochKey) as? NSNumber
-        guard IntakePublishing.shouldPublish(
-            lastPublishedEpoch: last?.uint64Value, currentEpoch: currentEpoch
-        ) else { return }
+        // Asked without the network: the key this device holds names what is due.
+        if let held = currentOwnKey(),
+           !IntakePublishing.shouldPublish(
+               last: lastPublished(),
+               due: IntakePublishing.marker(accountId: accountId, epoch: currentEpoch, key: held.key)
+           ) { return }
 
         guard let own = await resolveOwnKey() else { return }
         _ = await publish(own, accountId: accountId, currentEpoch: currentEpoch)
@@ -445,7 +431,8 @@ final class IntakeCredentialService {
             guard currentOwnKey() == own else { return .failed }
             // Recorded only on success. Recording the attempt would mean one failed publish costs
             // a whole epoch of tokens, because nothing would try again until tomorrow.
-            defaults.set(NSNumber(value: currentEpoch), forKey: Self.lastPublishedEpochKey)
+            let marker = IntakePublishing.marker(accountId: accountId, epoch: currentEpoch, key: own.key)
+            defaults.set(try? intakePublishedToBytes(published: marker), forKey: Self.publishedKey)
             Log.info("Intake: published \(result.accepted)/\(entries.count) tag(s), generation \(own.generation), for epoch \(currentEpoch)+", category: "Intake")
             await offerOwnKeyToOwnDevices(own)
             return .stored
@@ -459,10 +446,20 @@ final class IntakeCredentialService {
     /// published yet — the contact stays owed and gets the card with the first message after the
     /// publish lands.
     func publishedOwnKey(now: Date = Date()) -> IntakeKeyState? {
-        let last = defaults.object(forKey: Self.lastPublishedEpochKey) as? NSNumber
+        guard let accountId = AuthSessionManager.shared.currentUserId, let own = currentOwnKey() else { return nil }
         let epoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
-        guard IntakePublishing.serverHolds(lastPublishedEpoch: last?.uint64Value, currentEpoch: epoch) else { return nil }
-        return currentOwnKey()
+        guard IntakePublishing.serverHolds(
+            last: lastPublished(), accountId: accountId, keyId: intakeKeyId(key: own.key), currentEpoch: epoch
+        ) else { return nil }
+        return own
+    }
+
+    /// The last publish the server took, or nil. The v1 epoch-only marker is dropped on the way.
+    private func lastPublished() -> IntakePublished? {
+        if defaults.object(forKey: Self.legacyPublishedKey) != nil {
+            defaults.removeObject(forKey: Self.legacyPublishedKey)
+        }
+        return defaults.data(forKey: Self.publishedKey).flatMap { intakePublishedFromBytes(kept: $0) }
     }
 
     // MARK: - Rotation
@@ -473,18 +470,20 @@ final class IntakeCredentialService {
         // An unreadable key is replaced all the same: what we cannot read, we cannot keep handing out.
         let held: UInt32?
         if case .use(let state) = IntakeOwnKey.decide(keychain.readOwnIntakeKey()) { held = state.generation } else { held = nil }
-        let serverGeneration = (try? await MessagingServiceClient.shared.getIntakeState().generation) ?? 0
+        let serverGeneration = try? await MessagingServiceClient.shared.getIntakeState().generation
 
         let epoch = intakeEpoch(unixSeconds: UInt64(Date().timeIntervalSince1970))
         var above = IntakeRotation.mintAbove(held: held, serverGeneration: serverGeneration)
         var outcome = PublishOutcome.failed
-        for _ in 0..<2 {
+        for pass in 0..<2 {
             guard let minted = try? intakeMint(aboveGeneration: above),
                   adoptAsOwn(minted, why: "rotated to generation \(minted.generation) — a contact was dropped") != nil
             else { return }
             outcome = await publish(minted, accountId: myId, currentEpoch: epoch)
             guard case .stale(let current) = outcome,
-                  let next = IntakeRotation.reMintAbove(minted: minted.generation, currentGeneration: current)
+                  let next = IntakeRotation.reMintAbove(
+                      minted: minted.generation, currentGeneration: current, alreadyReMinted: pass > 0
+                  )
             else { break }
             above = next
         }
@@ -492,10 +491,11 @@ final class IntakeCredentialService {
         guard outcome == .stored else { return }
 
         let people = (try? LocalRepositories.contacts.everyContact(except: myId)) ?? []
-        let recipients = IntakeRotation.sweep(people, dropping: accountId, ownAccountId: myId)
-        Log.info("Intake: new key goes to \(recipients.count) contact(s) within the hour", category: "Intake")
-        for contactId in recipients {
-            let delay = Double.random(in: 0..<IntakeRotation.sweepWindow)
+        var seed = Data(count: 32)
+        _ = seed.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+        let schedule = IntakeRotation.schedule(people, dropping: accountId, ownAccountId: myId, seed: seed)
+        Log.info("Intake: new key goes to \(schedule.count) contact(s) within the hour", category: "Intake")
+        for (contactId, delay) in schedule {
             Task {
                 try? await Task.sleep(for: .seconds(delay))
                 await OutboundSessionService.shared.sendContactCard(to: contactId)

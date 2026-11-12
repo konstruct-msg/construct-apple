@@ -45,23 +45,23 @@ final class IntakePublishingTests: XCTestCase {
     }
 
     func testAFreshInstallPublishes() {
-        XCTAssertTrue(IntakePublishing.shouldPublish(lastPublishedEpoch: nil, currentEpoch: 20_707))
+        XCTAssertTrue(IntakePublishing.shouldPublish(last: nil, due: mark(20_707)))
     }
 
     func testTheSameEpochDoesNotPublishTwice() {
         // Every launch otherwise spends an authenticated RPC on a hot path for no new tags.
-        XCTAssertFalse(IntakePublishing.shouldPublish(lastPublishedEpoch: 20_707, currentEpoch: 20_707))
+        XCTAssertFalse(IntakePublishing.shouldPublish(last: mark(20_707), due: mark(20_707)))
     }
 
     func testANewEpochPublishesAgain() {
-        XCTAssertTrue(IntakePublishing.shouldPublish(lastPublishedEpoch: 20_707, currentEpoch: 20_708))
+        XCTAssertTrue(IntakePublishing.shouldPublish(last: mark(20_707), due: mark(20_708)))
     }
 
     func testAClockThatWentBackwardsPublishesRatherThanSkipping() {
         // `last > current` means we cannot reason about the window at all. Publishing costs one
         // RPC; skipping costs every contact a token for as long as the confusion lasts, so the
         // comparison is inequality and deliberately not `current > last`.
-        XCTAssertTrue(IntakePublishing.shouldPublish(lastPublishedEpoch: 20_710, currentEpoch: 20_707))
+        XCTAssertTrue(IntakePublishing.shouldPublish(last: mark(20_710), due: mark(20_707)))
     }
 }
 
@@ -404,20 +404,20 @@ final class IntakeServerHoldsTests: XCTestCase {
     /// Mutation: `guard let last = lastPublishedEpoch` → `?? 0` — a never-published key reads as held.
     func testNothingPublishedIsNotHeld() {
         // An epoch inside a window counted from 0, so reading nil as epoch 0 would say "held".
-        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: nil, currentEpoch: 3))
-        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: nil, currentEpoch: 100))
+        XCTAssertFalse(holds(nil, 3))
+        XCTAssertFalse(holds(nil, 100))
     }
 
     /// Mutation: `<` → `<=` — the day after the window reads as held.
     func testHeldForTheWindowAndNotAfter() {
-        XCTAssertTrue(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 100))
-        XCTAssertTrue(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 106))
-        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: 100, currentEpoch: 107))
+        XCTAssertTrue(holds(mark(100), 100))
+        XCTAssertTrue(holds(mark(100), 106))
+        XCTAssertFalse(holds(mark(100), 107))
     }
 
     /// A clock that went backwards cannot reason about the window.
     func testAMarkerFromTheFutureIsNotHeld() {
-        XCTAssertFalse(IntakePublishing.serverHolds(lastPublishedEpoch: 101, currentEpoch: 100))
+        XCTAssertFalse(holds(mark(101), 100))
     }
 }
 
@@ -433,21 +433,25 @@ final class IntakeRotationTests: XCTestCase {
     /// Mutation: → `serverGeneration` — this reddens.
     func testMintsAboveWhatWeHoldWhenTheServerIsBehindOrUnreachable() {
         XCTAssertEqual(IntakeRotation.mintAbove(held: 3, serverGeneration: 0), 3)
-        XCTAssertEqual(IntakeRotation.mintAbove(held: nil, serverGeneration: 0), 0)
+        XCTAssertEqual(IntakeRotation.mintAbove(held: 3, serverGeneration: nil), 3)
+        XCTAssertEqual(IntakeRotation.mintAbove(held: nil, serverGeneration: nil), 0)
     }
 
     /// Mutation: `>` → `>=` — an equal generation (the server merges it) would re-mint.
     func testReMintsOnceAboveANewerAccount() {
-        XCTAssertEqual(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 6), 6)
-        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 4))
-        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 3))
+        XCTAssertEqual(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 6, alreadyReMinted: false), 6)
+        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 4, alreadyReMinted: false))
+        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 3, alreadyReMinted: false))
+        XCTAssertNil(IntakeRotation.reMintAbove(minted: 4, currentGeneration: 6, alreadyReMinted: true), "once")
     }
 
     /// Mutations, each reddens: drop `!$0.isBlocked`; drop the dropped-id check; drop the own-id check;
     /// compare without `lowercased()`.
     func testTheSweepSkipsTheDroppedTheBlockedAndOurselves() {
         let people = [record("a"), record("B-DROPPED"), record("c", blocked: true), record("me"), record("d")]
-        XCTAssertEqual(IntakeRotation.sweep(people, dropping: "b-dropped", ownAccountId: "ME"), ["a", "d"])
+        let schedule = IntakeRotation.schedule(people, dropping: "b-dropped", ownAccountId: "ME", seed: Data([1, 2, 3]))
+        XCTAssertEqual(schedule.map(\.contact), ["a", "d"])
+        XCTAssertTrue(schedule.allSatisfy { $0.delay >= 0 && $0.delay < 3600 }, "within the hour")
     }
 
     private func record(_ id: String, blocked: Bool = false) -> ContactRecord {
@@ -460,3 +464,29 @@ final class IntakeRotationTests: XCTestCase {
         )
     }
 }
+
+/// A publish marker for the test account and key in `epoch`.
+private func mark(_ epoch: UInt64, account: String = "me", key: Data = Data(repeating: 7, count: 32)) -> IntakePublished {
+    IntakePublishing.marker(accountId: account, epoch: epoch, key: key)
+}
+
+private func holds(_ last: IntakePublished?, _ epoch: UInt64) -> Bool {
+    IntakePublishing.serverHolds(
+        last: last, accountId: "me", keyId: intakeKeyId(key: Data(repeating: 7, count: 32)), currentEpoch: epoch
+    )
+}
+
+/// The marker names the account and the key as well as the epoch (owner, 2026-11-12, Android's).
+final class IntakeMarkerTests: XCTestCase {
+
+    /// Mutation that reddens it: build the marker without the key id, or compare epochs only.
+    func testANewKeyPublishesInTheSameEpochAndIsNotHeldUnderTheOld() {
+        let other = Data(repeating: 9, count: 32)
+        XCTAssertTrue(IntakePublishing.shouldPublish(last: mark(100), due: mark(100, key: other)))
+        XCTAssertTrue(IntakePublishing.shouldPublish(last: mark(100), due: mark(100, account: "other")))
+        XCTAssertFalse(IntakePublishing.serverHolds(
+            last: mark(100), accountId: "me", keyId: intakeKeyId(key: other), currentEpoch: 100
+        ))
+    }
+}
+
