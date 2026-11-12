@@ -142,6 +142,9 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     @ViewBuilder var sentinel: () -> Sentinel
     @ViewBuilder var rows: () -> Rows
 
+    /// One per transcript on screen, so a loop is reported once per chat opened.
+    @State private var loopProbe = TranscriptLayoutLoopProbe()
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -180,6 +183,12 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
                     safeAreaBottom: geo.contentInsets.bottom
                 )
             } action: { old, new in
+                if let report = loopProbe.detector.note(new, at: ProcessInfo.processInfo.systemUptime) {
+                    Log.error(
+                        report + " stack=\(usesEagerStack ? "eager" : "lazy")",
+                        category: "ChatTranscript"
+                    )
+                }
                 onGeometryChange(old, new)
             }
             .onScrollPhaseChange { _, phase in
