@@ -123,7 +123,8 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     /// Measured at 30 / 90 / 230 in the PR-3 merge gate; if it hitches, the flag goes off — that is
     /// what the flag is for.
     ///
-    /// Desktop passes `false` and keeps the lazy stack until its own step (PR-3b).
+    /// Desktop passes `true` since 2026-11-12, ahead of the iOS soak the decision waited for: its
+    /// lazy stack hung the window in a layout loop (`TranscriptLayoutLoopDetector`).
     var usesEagerStack: Bool = false
 
     /// Called once the `ScrollViewProxy` exists. The parent registers it with whoever owns scroll.
