@@ -59,10 +59,10 @@ class KeyValueStoreTests: XCTestCase {
         let queue = FanoutRetryQueue()
         queue.enqueue(baseMessageId: "message-1", recipientUserId: "account-1", senderUserId: "me", owed: ["device-1"])
 
-        XCTAssertNotNil(try store.get("construct.fanoutRetryQueue.v1"))
+        XCTAssertNotNil(try store.get(FanoutRetryQueue.storageKey))
         XCTAssertEqual(queue.all().map(\.owedDeviceIds), [["device-1"]])
         queue.remove(key: "message-1|account-1")
-        XCTAssertNil(try store.get("construct.fanoutRetryQueue.v1"), "an emptied queue leaves nothing behind")
+        XCTAssertNil(try store.get(FanoutRetryQueue.storageKey), "an emptied queue leaves nothing behind")
     }
 }
 

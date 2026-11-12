@@ -205,6 +205,43 @@ final class FanoutRetryQueueTests: XCTestCase {
         let reopened = FanoutRetryQueue(defaults: UserDefaults(suiteName: suiteName)!)
         XCTAssertEqual(reopened.all().first?.owedDeviceIds, ["dev-a"])
     }
+
+    // MARK: - The core's state, and v1
+
+    /// What is kept is the core's CFE, not JSON (rule 6). Mutation that reddens it: save the
+    /// entries with `JSONEncoder` again.
+    func testTheQueueIsKeptAsTheCoresState() throws {
+        enqueue(owed: ["dev-a"])
+        let kept = try XCTUnwrap(defaults.data(forKey: FanoutRetryQueue.storageKey))
+        XCTAssertNil(try? JSONSerialization.jsonObject(with: kept), "not JSON")
+        XCTAssertEqual(FanoutRetryState.fromBytes(kept: kept).all().map(\.owedDeviceIds), [["dev-a"]])
+    }
+
+    /// v1 JSON is read once into the core's state, attempts and times included, and removed.
+    /// Mutation that reddens it: skip the v1 read, or keep v1 after it.
+    func testV1IsMovedOnce() throws {
+        let created = Date().timeIntervalSince1970 - 60
+        let v1 = [FanoutRetryEntry(
+            baseMessageId: "m-old", recipientUserId: "p", senderUserId: "me",
+            owedDeviceIds: ["d1", "d2"], attempts: 2, nextAttemptAt: created + 600, createdAt: created
+        )]
+        defaults.set(try JSONEncoder().encode(v1), forKey: FanoutRetryQueue.legacyKey)
+        let moved = FanoutRetryQueue(defaults: defaults).all()
+        XCTAssertEqual(moved.map(\.key), ["m-old|p"])
+        XCTAssertEqual(moved.first?.attempts, 2)
+        XCTAssertEqual(moved.first?.owedDeviceIds, ["d1", "d2"])
+        XCTAssertEqual(moved.first?.createdAt ?? 0, created, accuracy: 0.001)
+        XCTAssertNil(defaults.data(forKey: FanoutRetryQueue.legacyKey), "v1 is gone")
+        XCTAssertNotNil(defaults.data(forKey: FanoutRetryQueue.storageKey))
+    }
+
+    /// Rule 11: reading v1 JSON is temporary, and this fails on the day it should be gone.
+    func testTheJSONReadingHasAnEnd() {
+        XCTAssertLessThan(
+            Date(), FanoutRetryQueue.legacyJSONUntil,
+            "2027-01-31 has passed: remove the v1 reading in FanoutRetryQueue.load and this test"
+        )
+    }
 }
 
 /// The drain runs when an owed copy comes due, not only when the network comes back (2026-10-15).

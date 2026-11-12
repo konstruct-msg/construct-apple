@@ -148,6 +148,7 @@ enum AccountWipeKeys {
         // the person signing out, and a drain after a re-registration would try to send them as
         // whoever signed in next.
         "construct.fanoutRetryQueue.v1",
+        "construct.fanoutRetryQueue.v2",
         // The invites this account minted (`IssuedInviteStore`). Left behind, the next account's
         // Settings would list codes it never issued and offer to revoke them — under a token that
         // is not theirs. `invite_journal_v1` is where they were kept until 2026-10-11, never in
@@ -393,7 +394,7 @@ enum AccountWipeKeys {
         "construct.app",
         "construct.OutgoingWirePayloadStore",
         // A serial dispatch queue's label, not a defaults key. Its store is
-        // `construct.fanoutRetryQueue.v1`, which is in `wiped` — the two live a few lines apart in
+        // `construct.fanoutRetryQueue.v2`, which is in `wiped` — the two live a few lines apart in
         // one file and mean opposite things here, which is why the scan reads literals rather than
         // trusting a name to say what it is.
         "construct.FanoutRetryQueue",
