@@ -81,6 +81,7 @@ enum AccountWipeKeys {
         // for a day with nothing on this device saying why.
         "construct.intake.own",
         "construct.intake.lastPublishedEpoch.v1",
+        "construct.intake.published.v2",
         // This account's address (its recovery public key). The next identity has another, and a
         // stale one here would go into every invite it mints — contacts would write to an
         // address that is not theirs, and the server would drop it silently.
