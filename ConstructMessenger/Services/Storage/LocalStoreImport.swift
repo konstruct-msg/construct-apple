@@ -198,7 +198,7 @@ enum LocalStoreImport {
 
     /// The key-value pairs the app keeps. A new key read through `LocalRepositories.keyValue` is
     /// added here, or an import leaves it behind.
-    static var keyValueKeys: [String] { [FanoutRetryQueue.storageKey, MailboxGapNotice.key, ReadBoundaries.key] }
+    static var keyValueKeys: [String] { [FanoutRetryQueue.storageKey, FanoutRetryQueue.legacyKey, MailboxGapNotice.key, ReadBoundaries.key] }
 
     // MARK: - Check
 

@@ -84,7 +84,7 @@ final class LocalStoreSwitchTests: XCTestCase {
         LocalRepositories.useLocalStoreForTesting(session)
 
         FanoutRetryQueue().enqueue(baseMessageId: "m-1", recipientUserId: "account-1", senderUserId: "me", owed: ["device-1"])
-        XCTAssertNotNil(try session.store.get(key: "construct.fanoutRetryQueue.v1"), "the fan-out queue is in the store's kv")
+        XCTAssertNotNil(try session.store.get(key: FanoutRetryQueue.storageKey), "the fan-out queue is in the store's kv")
 
         InviteJournal().recordCopiedLink(jti: "jti-\(UUID().uuidString.lowercased())", at: Date(), ttl: 600)
         XCTAssertEqual(try session.store.issuedInvites().count, 1, "the invite is a row of the store")

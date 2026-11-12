@@ -52,30 +52,66 @@ struct FanoutRetryEntry: Codable, Equatable {
     let createdAt: Double
 
     var key: String { "\(baseMessageId)|\(recipientUserId)" }
+
+    init(_ copy: OwedCopy) {
+        baseMessageId = copy.baseMessageId
+        recipientUserId = copy.recipientUserId
+        senderUserId = copy.senderUserId
+        owedDeviceIds = copy.owedDeviceIds
+        attempts = Int(copy.attempts)
+        nextAttemptAt = Double(copy.nextAttemptAtMs) / 1000
+        createdAt = Double(copy.createdAtMs) / 1000
+    }
+
+    /// The v1 JSON's shape, and how a test builds one.
+    init(
+        baseMessageId: String, recipientUserId: String, senderUserId: String,
+        owedDeviceIds: [String], attempts: Int, nextAttemptAt: Double, createdAt: Double
+    ) {
+        self.baseMessageId = baseMessageId
+        self.recipientUserId = recipientUserId
+        self.senderUserId = senderUserId
+        self.owedDeviceIds = owedDeviceIds
+        self.attempts = attempts
+        self.nextAttemptAt = nextAttemptAt
+        self.createdAt = createdAt
+    }
+
+    fileprivate var core: OwedCopy {
+        OwedCopy(
+            key: key,
+            baseMessageId: baseMessageId,
+            recipientUserId: recipientUserId,
+            senderUserId: senderUserId,
+            owedDeviceIds: owedDeviceIds,
+            attempts: UInt32(max(0, attempts)),
+            nextAttemptAtMs: Int64(nextAttemptAt * 1000),
+            createdAtMs: Int64(createdAt * 1000)
+        )
+    }
 }
 
-/// `@unchecked`: every load-modify-save of the stored entries runs on `queue`; `store` is set once.
+/// The rule is the core's (construct-rules `fanout_retry`, `FanoutRetryState`), one for every
+/// client: Android had its own copy until 2026-11-12 (todo 300). What stays here: where it is kept
+/// and when the drain runs.
+///
+/// `@unchecked`: every load-modify-save of the kept state runs on `queue`; `store` is set once.
 final class FanoutRetryQueue: @unchecked Sendable {
 
     static let shared = FanoutRetryQueue()
 
     private let store: () -> any KeyValueStore
-    static let storageKey = "construct.fanoutRetryQueue.v1"
+    /// The core's CFE (`FanoutRetryState.toBytes`).
+    static let storageKey = "construct.fanoutRetryQueue.v2"
+    /// v1 kept the entries as JSON. Read once into the core's state, until `legacyJSONUntil`.
+    static let legacyKey = "construct.fanoutRetryQueue.v1"
+    /// 2027-01-31: after it `load` stops reading v1 JSON (rule 11); `FanoutRetryQueueTests` fails
+    /// on that day.
+    static let legacyJSONUntil = Date(timeIntervalSince1970: 1_801_353_600)
     private let queue = DispatchQueue(label: "construct.FanoutRetryQueue")
 
-    /// Matches `OutgoingWirePayloadStore.entryTtl`. A copy owed for longer than a day is not worth
-    /// delivering: the recipient device has almost certainly healed by other means, and the
-    /// transcript gap it would fill is now old enough that arriving out of order is its own defect.
-    private let entryTtl: TimeInterval = 24 * 60 * 60
-
-    /// Five, then the entry is dropped and counted. The cap exists because a device that is
-    /// permanently unreachable — revoked, wiped, never coming back — is indistinguishable here
-    /// from one that is briefly offline, and retrying it forever would burn a one-time pre-key per
-    /// attempt against an account that has none to spare.
-    let maxAttempts = 5
-
-    private let baseBackoff: TimeInterval = 30
-    private let maxBackoff: TimeInterval = 3600
+    /// Five, then the entry is dropped and counted (`fanout_retry::MAX_ATTEMPTS`).
+    let maxAttempts = Int(fanoutRetryMaxAttempts())
 
     /// The app's store, resolved on each use so a test or the macOS switch can replace it.
     init() {
@@ -91,45 +127,23 @@ final class FanoutRetryQueue: @unchecked Sendable {
         self.store = { store }
     }
 
+    private static func ms(_ date: Date) -> Int64 { Int64(date.timeIntervalSince1970 * 1000) }
+
     // MARK: - Writing
 
-    /// Record that `owed` devices still need their copy.
-    ///
-    /// Merging rather than replacing on a repeated key: two chunks of one message can fail
-    /// independently, and the second enqueue must not erase what the first recorded. `createdAt`
-    /// is kept from the earlier entry so a message cannot extend its own TTL by failing again.
-    ///
-    /// An empty `owed` on an entry that already names devices is **not** widened back to a
-    /// re-plan: the named set is more precise, and losing it would re-send to devices that
-    /// already have the message.
+    /// Record that `owed` devices still need their copy. A repeated key merges; an empty `owed`
+    /// means plan again and never widens a named set (the core's rule).
     func enqueue(
         baseMessageId: String,
         recipientUserId: String,
         senderUserId: String,
         owed: [String]
     ) {
-        guard !baseMessageId.isEmpty, !recipientUserId.isEmpty else { return }
-        queue.sync {
-            var all = load()
-            let key = "\(baseMessageId)|\(recipientUserId)"
-            if let index = all.firstIndex(where: { $0.key == key }) {
-                var merged = all[index]
-                if !owed.isEmpty {
-                    merged.owedDeviceIds = Array(Set(merged.owedDeviceIds).union(owed)).sorted()
-                }
-                all[index] = merged
-            } else {
-                all.append(FanoutRetryEntry(
-                    baseMessageId: baseMessageId,
-                    recipientUserId: recipientUserId,
-                    senderUserId: senderUserId,
-                    owedDeviceIds: owed.sorted(),
-                    attempts: 0,
-                    nextAttemptAt: Date().timeIntervalSince1970 + baseBackoff,
-                    createdAt: Date().timeIntervalSince1970
-                ))
-            }
-            save(all)
+        change { state in
+            state.enqueue(
+                baseMessageId: baseMessageId, recipientUserId: recipientUserId,
+                senderUserId: senderUserId, owed: owed, nowMs: Self.ms(Date())
+            )
         }
     }
 
@@ -137,98 +151,73 @@ final class FanoutRetryQueue: @unchecked Sendable {
     /// has been removed — so the caller counts a give-up exactly once.
     @discardableResult
     func recordAttempt(key: String) -> FanoutRetryEntry? {
-        queue.sync {
-            var all = load()
-            guard let index = all.firstIndex(where: { $0.key == key }) else { return nil }
-            var entry = all[index]
-            entry.attempts += 1
-            guard entry.attempts < maxAttempts else {
-                all.remove(at: index)
-                save(all)
-                return nil
-            }
-            let backoff = min(baseBackoff * pow(2, Double(entry.attempts)), maxBackoff)
-            entry.nextAttemptAt = Date().timeIntervalSince1970 + backoff
-            all[index] = entry
-            save(all)
-            return entry
-        }
+        change { $0.recordAttempt(key: key, nowMs: Self.ms(Date())) }.map(FanoutRetryEntry.init)
     }
 
-    /// Narrow an entry to exactly the devices a retry just lost.
-    ///
-    /// Distinct from `enqueue`, which unions, and the difference is a duplicate copy: a re-plan
-    /// entry (`owed` empty) that reaches one device and loses another must come out of the attempt
-    /// naming only the one it lost. Unioning would leave it empty — still a re-plan — and the next
-    /// pass would send a second ciphertext of one message to the device that already has it.
-    ///
-    /// Only the drain calls this, and only for an entry it is holding; an empty `owed` here would
-    /// mean "re-plan again", so the caller removes the entry instead when nothing is left.
+    /// Narrow an entry to exactly the devices a retry just lost; nothing left removes it.
     func replaceOwed(key: String, owed: [String]) {
-        queue.sync {
-            var all = load()
-            guard let index = all.firstIndex(where: { $0.key == key }) else { return }
-            all[index].owedDeviceIds = owed.sorted()
-            save(all)
-        }
+        change { $0.replaceOwed(key: key, owed: owed) }
     }
 
     func remove(key: String) {
-        queue.sync {
-            var all = load()
-            all.removeAll { $0.key == key }
-            save(all)
-        }
+        change { $0.remove(key: key) }
     }
 
     /// Every owed copy dropped — the queue was the last account's (`AuthViewModel`'s ownership
     /// gate). Nothing is retried for an identity that no longer signs in here.
     func removeAll() {
-        queue.sync { save([]) }
+        change { $0.removeAll() }
     }
 
     // MARK: - Reading
 
-    /// Entries whose backoff has elapsed, oldest first. Expired ones are dropped on the way past —
-    /// the TTL is enforced on read so a queue nobody drains cannot grow without bound.
+    /// Entries whose backoff has elapsed, oldest first. Expired ones are dropped on the way past.
     func due(now: Date = Date()) -> [FanoutRetryEntry] {
-        queue.sync {
-            let t = now.timeIntervalSince1970
-            let live = load().filter { t - $0.createdAt < entryTtl }
-            save(live)
-            return live.filter { $0.nextAttemptAt <= t }.sorted { $0.createdAt < $1.createdAt }
-        }
+        change { $0.due(nowMs: Self.ms(now)) }.map(FanoutRetryEntry.init)
     }
 
     /// When the next live entry comes due; nil when nothing is owed. What the drain is scheduled by.
     func nextDue(now: Date = Date()) -> Date? {
-        queue.sync {
-            let t = now.timeIntervalSince1970
-            return load().filter { t - $0.createdAt < entryTtl }.map(\.nextAttemptAt).min()
-                .map { Date(timeIntervalSince1970: $0) }
-        }
+        queue.sync { load().nextDue(nowMs: Self.ms(now)) }
+            .map { Date(timeIntervalSince1970: Double($0) / 1000) }
     }
 
     func all() -> [FanoutRetryEntry] {
-        queue.sync { load() }
+        queue.sync { load().all() }.map(FanoutRetryEntry.init)
     }
 
     // MARK: - Storage
 
-    private func load() -> [FanoutRetryEntry] {
-        guard let data = try? store().get(Self.storageKey),
-              let decoded = try? JSONDecoder().decode([FanoutRetryEntry].self, from: data)
-        else { return [] }
-        return decoded
+    /// Load, change, save — under `queue`.
+    private func change<T>(_ body: (FanoutRetryState) -> T) -> T {
+        queue.sync {
+            let state = load()
+            let result = body(state)
+            save(state)
+            return result
+        }
     }
 
-    private func save(_ entries: [FanoutRetryEntry]) {
+    private func load() -> FanoutRetryState {
+        if let kept = try? store().get(Self.storageKey) {
+            return FanoutRetryState.fromBytes(kept: kept)
+        }
+        guard let v1 = try? store().get(Self.legacyKey) else { return FanoutRetryState() }
+        // JSON by rule 6's exception — an earlier build's format, read once into the core's state.
+        let entries = (try? JSONDecoder().decode([FanoutRetryEntry].self, from: v1)) ?? []
+        let state = FanoutRetryState.restore(entries: entries.map(\.core))
+        save(state)
+        try? store().remove(Self.legacyKey)
+        return state
+    }
+
+    private func save(_ state: FanoutRetryState) {
         do {
-            guard !entries.isEmpty else {
+            guard !state.all().isEmpty else {
                 try store().remove(Self.storageKey)
                 return
             }
-            try store().put(Self.storageKey, JSONEncoder().encode(entries))
+            try store().put(Self.storageKey, try state.toBytes())
         } catch {
             Log.error("FanoutRetryQueue: not saved — owed copies will not survive a restart: \(error)", category: "MultiDevice")
         }
