@@ -383,6 +383,13 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
         sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
         sec_protocol_options_add_tls_application_protocol(tls.securityProtocolOptions, "h2")
         sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, sni)
+        // Never resume a TLS session to a relay: the relay issued the ticket, so a resumed
+        // session names this device's previous connection to it — across an IP change,
+        // whatever AUTH carries (decisions/veil-relay-sees-no-stable-device-id.md, todo 311).
+        // Measured 2026-11-13 (scripts/veil_tls_resumption_probe): Network.framework sent no
+        // PSK on a reconnect with or without this line, and the ClientHello's extensions are
+        // the same with it — it fixes the behaviour without changing the fingerprint.
+        sec_protocol_options_set_tls_resumption_enabled(tls.securityProtocolOptions, false)
         sec_protocol_options_set_verify_block(
             tls.securityProtocolOptions,
             { [pinnedSpkiHex] _, trust, complete in
