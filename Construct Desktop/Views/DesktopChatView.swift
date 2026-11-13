@@ -69,6 +69,11 @@ struct DesktopChatView: View {
                 topContentPad: CTLayout.edgePad,
                 bottomContentPad: 130,
                 accessibilityIdentifier: nil,
+                // Eager, as iOS (decisions/chat-viewport-owned-inset.md). The lazy stack hung this
+                // window at 100 % CPU on 2026-11-12: a chat that almost fit, its content height
+                // cycling 605 → 584 → 567 pt inside one layout pass (TRANSCRIPT_LAYOUT_LOOP,
+                // stack=lazy, width and contentFits steady). An eager stack's height is its rows'.
+                usesEagerStack: true,
                 onProxyReady: registerTranscriptProxy,
                 onGeometryChange: handleTranscriptGeometry,
                 onScrollPhaseChange: handleTranscriptScrollPhase,
@@ -849,16 +854,11 @@ struct DesktopChatView: View {
                             onForward: { msg in startForward([msg]) }
                         ) }
                         .id(message.id)
-                        .onAppear {
-                            if index == filteredMessages.count - 1 {
-                                scrollManager.noteLastMessageVisible(true, searchActive: isSearchActive)
-                            }
-                        }
-                        .onDisappear {
-                            if index == filteredMessages.count - 1 {
-                                scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
-                            }
-                        }
+                        // No last-row visibility report (`noteLastMessageVisible`): in an eager
+                        // stack a row appears when it is built and disappears when it is removed,
+                        // not when it scrolls, so the report would say nothing about the viewport.
+                        // What it fed — recovering a tail the lazy stack had unmounted — has no
+                        // case left here: an eager stack does not unmount.
                         .opacity(replyFocusOpacity(for: message.id))
                         .animation(
                             .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),

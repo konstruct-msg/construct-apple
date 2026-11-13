@@ -123,7 +123,8 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     /// Measured at 30 / 90 / 230 in the PR-3 merge gate; if it hitches, the flag goes off — that is
     /// what the flag is for.
     ///
-    /// Desktop passes `false` and keeps the lazy stack until its own step (PR-3b).
+    /// Desktop passes `true` since 2026-11-12, ahead of the iOS soak the decision waited for: its
+    /// lazy stack hung the window in a layout loop (`TranscriptLayoutLoopDetector`).
     var usesEagerStack: Bool = false
 
     /// Called once the `ScrollViewProxy` exists. The parent registers it with whoever owns scroll.
@@ -141,6 +142,9 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
     /// its contents (ProgressView vs 1pt spacer, and its paddings) belong to the host's design.
     @ViewBuilder var sentinel: () -> Sentinel
     @ViewBuilder var rows: () -> Rows
+
+    /// One per transcript on screen, so a loop is reported once per chat opened.
+    @State private var loopProbe = TranscriptLayoutLoopProbe()
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -180,6 +184,12 @@ struct ChatTranscriptContainer<Sentinel: View, Rows: View>: View {
                     safeAreaBottom: geo.contentInsets.bottom
                 )
             } action: { old, new in
+                if let report = loopProbe.detector.note(new, at: ProcessInfo.processInfo.systemUptime) {
+                    Log.error(
+                        report + " stack=\(usesEagerStack ? "eager" : "lazy")",
+                        category: "ChatTranscript"
+                    )
+                }
                 onGeometryChange(old, new)
             }
             .onScrollPhaseChange { _, phase in
