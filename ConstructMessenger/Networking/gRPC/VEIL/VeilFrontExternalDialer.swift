@@ -505,10 +505,44 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
 
 // MARK: - Per-connection ferry session
 
+/// Why a ferry session ended — one log line per session, so a phone's export says how its relay
+/// sessions die (todo 315: after a suspend an RPC went into a session that no longer reached the
+/// relay and waited out its 15 s timeout, and nothing in the log said why).
+enum FerrySessionEnd: String, Equatable, Sendable {
+    /// The relay closed the stream (EOF).
+    case relayClosed = "relay-closed"
+    /// A receive from the relay failed.
+    case relayError = "relay-error"
+    /// The connection to the relay went `.failed` after it was ready.
+    case relayFailed = "relay-failed"
+    /// A send to the relay failed: what we wrote never left.
+    case sendFailed = "send-failed"
+    /// Our side closed (the gRPC connection behind the socketpair ended).
+    case localClosed = "local-closed"
+    /// VEIL stopped, or the session raced a stop.
+    case stopped = "stopped"
+
+    /// Whether a state the relay connection reports after `.ready` ends the session. `.failed` is
+    /// final: the connection will carry nothing more, and the gRPC connection behind it must hear
+    /// EOF now rather than wait out its own timeout. `.waiting` is not — Network.framework may
+    /// bring the same connection back — so it is only logged. `.cancelled` is our own teardown.
+    static func ending(_ state: NWConnection.State) -> FerrySessionEnd? {
+        if case .failed = state { return .relayFailed }
+        return nil
+    }
+
+    /// Whether a send's completion ends the session: any error does. Until 2026-11-14 the
+    /// completion was ignored, so a session whose relay connection had died kept taking bytes.
+    static func ending(sendError: NWError?) -> FerrySessionEnd? {
+        sendError == nil ? nil : .sendFailed
+    }
+}
+
 /// One accepted gRPC connection bridged to one native NWConnection. Owns the
 /// NWConnection and our socketpair end; pumps bytes both ways. When either side
 /// EOFs it tears down and calls `onClosed` so the dialer forgets it.
-/// `@unchecked Sendable`: `channel` / `swiftFD` / `closed` are guarded by `lock`; the rest are `let`.
+/// `@unchecked Sendable`: `channel` / `swiftFD` / `closed` / the counters are guarded by `lock`;
+/// the rest are `let`.
 private final class Session: @unchecked Sendable {
     private let queue = DispatchQueue(label: "veil.front.external.session", qos: .userInitiated)
     private let lock = NSLock()
@@ -517,6 +551,12 @@ private final class Session: @unchecked Sendable {
     private var swiftFD: Int32
     private var closed = false
     private let onClosed: @Sendable (Session) -> Void
+    // Wall clock on purpose: a suspend counts, and a session that lived through one is the case
+    // the end line is for.
+    private let startedAt = Date()
+    private var lastReceivedAt: Date?
+    private var bytesUp = 0
+    private var bytesDown = 0
 
     init(conn: NWConnection, swiftFD: Int32, onClosed: @escaping @Sendable (Session) -> Void) {
         self.conn = conn
@@ -527,6 +567,16 @@ private final class Session: @unchecked Sendable {
     /// Begin pumping: Rust→relay (socketpair→NWConnection) and relay→Rust
     /// (NWConnection→socketpair). Called once.
     func startPump() {
+        // The handshake cleared the handler at `.ready`; from here a state change is the
+        // connection's life after the handshake (`FerrySessionEnd.ending`).
+        conn.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            if case .waiting(let error) = state {
+                Log.info("VEIL native-TLS: relay session waiting: \(error)", category: "VEIL")
+            }
+            if let end = FerrySessionEnd.ending(state) { self.finish(end) }
+        }
+
         lock.lock()
         let fd = swiftFD
         lock.unlock()
@@ -537,7 +587,7 @@ private final class Session: @unchecked Sendable {
             self.lock.lock()
             if self.swiftFD >= 0 { close(self.swiftFD); self.swiftFD = -1 }
             self.lock.unlock()
-            self.finish()
+            self.finish(.localClosed)
         }
         ch.setLimit(lowWater: 1)   // deliver bytes as soon as any arrive
 
@@ -553,9 +603,14 @@ private final class Session: @unchecked Sendable {
         // Rust → relay: bytes Rust writes to its socketpair end arrive here; send them.
         ch.read(offset: 0, length: Int.max, queue: queue) { [weak self] done, data, _ in
             if let self, let data, !data.isEmpty {
-                self.conn.send(content: Data(data), completion: .contentProcessed { _ in })
+                self.lock.lock()
+                self.bytesUp += data.count
+                self.lock.unlock()
+                self.conn.send(content: Data(data), completion: .contentProcessed { [weak self] error in
+                    if let end = FerrySessionEnd.ending(sendError: error) { self?.finish(end) }
+                })
             }
-            if done { self?.finish() }   // EOF from Rust side → end session
+            if done { self?.finish(.localClosed) }   // EOF from Rust side → end session
         }
 
         // relay → Rust: decrypted bytes from NWConnection get written to our end.
@@ -568,14 +623,20 @@ private final class Session: @unchecked Sendable {
             if let data, !data.isEmpty {
                 self.lock.lock()
                 let ch = self.channel
+                self.bytesDown += data.count
+                self.lastReceivedAt = Date()
                 self.lock.unlock()
                 if let ch {
                     let dd = data.withUnsafeBytes { DispatchData(bytes: $0) }
                     ch.write(offset: 0, data: dd, queue: self.queue) { _, _, _ in }
                 }
             }
-            if isComplete || error != nil {
-                self.finish()    // relay closed → end session
+            if error != nil {
+                self.finish(.relayError)
+                return
+            }
+            if isComplete {
+                self.finish(.relayClosed)    // relay closed → end session
                 return
             }
             self.pumpDown()
@@ -583,21 +644,32 @@ private final class Session: @unchecked Sendable {
     }
 
     /// Tear down and notify the dialer. Safe to call multiple times / from either pump.
-    private func finish() {
-        teardown()
+    private func finish(_ end: FerrySessionEnd) {
+        teardown(end)
         onClosed(self)
     }
 
-    /// Cancel the NWConnection and close the socketpair end. Idempotent.
-    func teardown() {
+    /// Cancel the NWConnection and close the socketpair end. Idempotent; the first caller's
+    /// reason is the one logged.
+    func teardown(_ end: FerrySessionEnd = .stopped) {
         lock.lock()
         if closed { lock.unlock(); return }
         closed = true
         let ch = channel
         channel = nil
         let fd = swiftFD
+        let now = Date()
+        let age = Int(now.timeIntervalSince(startedAt))
+        let quiet = lastReceivedAt.map { Int(now.timeIntervalSince($0)) }
+        let up = bytesUp, down = bytesDown
         lock.unlock()
 
+        // Counts and times only — no address, no identifier.
+        Log.info(
+            "VEIL native-TLS: session ended reason=\(end.rawValue) age=\(age)s up=\(up)B down=\(down)B quiet=\(quiet.map { "\($0)s" } ?? "never")",
+            category: "VEIL"
+        )
+        conn.stateUpdateHandler = nil
         conn.cancel()
         if let ch {
             ch.close(flags: .stop)   // its cleanup handler closes swiftFD
