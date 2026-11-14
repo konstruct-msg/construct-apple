@@ -37,4 +37,28 @@ final class ManifestFetchPolicyTests: XCTestCase {
         XCTAssertFalse(fetch(urgent: true, accepted: ago(60), urgentAt: ago(120)))
         XCTAssertTrue(fetch(urgent: true, accepted: ago(60), urgentAt: ago(ManifestFetchPolicy.urgentInterval)))
     }
+
+    private let https = [URL(string: "https://example.invalid/.well-known/construct-server")!]
+
+    private func source(urgent: Bool = false, accepted: Date? = nil, urgentAt: Date? = nil,
+                        cache: Bool = true, sources: [URL]) -> ManifestFetchPolicy.Source {
+        ManifestFetchPolicy.source(urgent: urgent, now: now, lastAccepted: accepted, lastUrgent: urgentAt,
+                                   hasCache: cache, httpsSources: sources)
+    }
+
+    /// Todo 315: under `on` (no HTTPS source) the refresh skipped the cache — an RPC on every
+    /// return to the app, which the stream waited for. Mutation: check for HTTPS sources before
+    /// the cache rule — the first assertion reddens.
+    func testUnderOnARecentCacheAnswersWithoutAskingTheServer() {
+        XCTAssertEqual(source(accepted: ago(3600), sources: []), .cache)
+        XCTAssertEqual(source(accepted: ago(ManifestFetchPolicy.routineInterval), sources: []), .serverTrust)
+        XCTAssertEqual(source(urgent: true, accepted: ago(60), sources: []), .serverTrust)
+    }
+
+    /// Mutation: swap the two sources — either assertion reddens.
+    func testAFetchGoesOverHTTPSWhenThereIsASourceAndThroughTheTunnelWhenNot() {
+        XCTAssertEqual(source(cache: false, sources: https), .https(https))
+        XCTAssertEqual(source(cache: false, sources: []), .serverTrust)
+        XCTAssertEqual(source(accepted: ago(60), sources: https), .cache)
+    }
 }

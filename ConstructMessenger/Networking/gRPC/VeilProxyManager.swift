@@ -269,8 +269,12 @@ final class VeilProxyManager: ObservableObject {
         // The transport router handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
         // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
-        // networks. The relay manifest is still refreshed for AMS relay retirement.
-        await fetchConfigAndEvictIfRemoved()
+        // networks. The relay manifest is still refreshed for AMS relay retirement — without
+        // holding up the caller: the foreground resume awaits this function, and under `on` the
+        // refresh is an RPC that on a channel dead since the suspend waits out its timeout before
+        // the stream may open (todo 315: 17 s on the owner's phone). The cached manifest serves
+        // meanwhile; retirement is not urgent to the second.
+        Task { await self.fetchConfigAndEvictIfRemoved() }
     }
 
     /// Floor between capability-pipeline sweeps. See `ensureCapabilitiesForActiveRelay`.
