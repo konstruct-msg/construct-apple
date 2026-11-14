@@ -244,6 +244,10 @@ enum HistoryCoreStream {
         progress: HistoryProgressReport? = nil
     ) async throws -> Outcome {
         do {
+            // Before the first byte: a media-only stream can carry a blob in its first chunk, and
+            // the core lets one through only against the ids named here or by a message ahead of
+            // it in the stream.
+            receiver.expectMedia(mediaIds: try await sink.heldMediaIds())
             return try await receiveLoop(from: source, into: receiver, sink: sink, pin: pin, resolve: resolve, reply: reply, progress: progress)
         } catch {
             await sink.abandonMedia()
@@ -339,12 +343,22 @@ extension HistoryQRPin {
 /// 2026-10-12 a context's queue did this serialising, and the caller had to supply one).
 actor HistoryImportSink {
     private let importer: HistorySnapshotImporter
+    private let ownAccountId: String
     private let media = HistoryMediaSink()
     private var mediaSummary = HistoryImportSummary()
     private var manifestPhase: UInt32 = 0
 
     init(expectedUserId: String) {
         self.importer = HistorySnapshotImporter(expectedUserId: expectedUserId)
+        self.ownAccountId = expectedUserId
+    }
+
+    /// The media ids the messages already on this device name.
+    func heldMediaIds() throws -> [String] {
+        let identity = HistorySnapshotIdentity(
+            userId: ownAccountId, sourceDeviceId: "", snapshotId: Data(), createdAt: .distantPast, appVersion: ""
+        )
+        return try HistorySnapshotEncoder(identity: identity).referencedMediaIds()
     }
 
     func consume(_ events: [HistoryEvent]) throws {
@@ -366,6 +380,13 @@ actor HistoryImportSink {
                 try media.append(data)
             case .mediaEnd:
                 mediaSummary.add(try media.end())
+            case .mediaRefused(let reason):
+                // A whole blob the core would not let through; no bytes of it arrive.
+                Log.info("history_media_refused reason=\(reason)", category: "HistorySync")
+                switch reason {
+                case .badId: mediaSummary.add(.skipped(.mediaRefusedBadId))
+                case .notReferenced: mediaSummary.add(.skipped(.mediaRefusedUnreferenced))
+                }
             case .end:
                 break
             }
@@ -397,10 +418,11 @@ final class HistoryMediaSink {
     /// Seals what arrives: the file is written sealed at rest (`AtRestFiles`), never in the clear.
     private var sealer: SealedFile.Writer?
 
-    /// A blob begins. One already on disk is kept, and this copy's bytes are dropped.
+    /// A blob begins. One already on disk is kept, and this copy's bytes are dropped. The id is a
+    /// server media id a message names: the core let nothing else through (`history::media_gate`,
+    /// which replaced this file's own `/` check on 2026-11-14).
     func start(mediaId: String) throws -> HistoryApplyResult {
         abandon()
-        guard !mediaId.isEmpty, !mediaId.contains("/") else { return .ignored }
         let url = MediaManager.onDiskURL(for: mediaId)
         if FileManager.default.fileExists(atPath: url.path) {
             return .skipped(.mediaAlreadyPresent)

@@ -174,6 +174,15 @@ final class HistorySnapshotEncoder {
 
     // MARK: - Message lift
 
+    /// Every media id this device's messages refer to — the lift the encoder plans media from.
+    /// A media-only transfer is let through against these (`HistoryReceiver.expectMedia`); until
+    /// the import runs in the core (decisions/history-transfer-whole-in-the-core.md §3).
+    func referencedMediaIds() throws -> [String] {
+        let chats = try LocalRepositories.chats.chats()
+        let lifted = try liftMessages(peers: Dictionary(chats.map { ($0.id, $0.peerId) }) { a, _ in a })
+        return Array(Set(lifted.flatMap { $0.media.map(\.id) }))
+    }
+
     private struct Lifted {
         let id: String
         let proto: Data

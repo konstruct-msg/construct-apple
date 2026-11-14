@@ -66,6 +66,24 @@ class HistoryCoreStreamTests: XCTestCase {
         }
     }
 
+    /// A message from this account to the first of `contacts(_:)`, whose body is one photo,
+    /// `mediaId`: what names a blob, so the receiver's core lets it through.
+    private nonisolated func message(naming mediaId: String) -> HistoryOutbound {
+        var media = Shared_Proto_Messaging_V1_MediaMessage()
+        media.mediaID = mediaId
+        media.mimeType = "image/jpeg"
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.media = media
+        var msg = Construct_Client_History_V1_HistoryMessage()
+        msg.id = UUID().uuidString.lowercased()
+        msg.fromUserID = userRaw
+        msg.toUserID = Data(repeating: 1, count: 16)
+        msg.timestampUnixMs = 1_700_000_000_000
+        msg.isSentByMe = true
+        msg.body = .messageContent(content)
+        return .record(.transcript(type: HistoryRecordType.message, proto: try! msg.serializedData()))
+    }
+
     /// A receiving device's store, empty, with the repositories the importer writes through
     /// pointed at it until the test ends.
     func freshStore() {
@@ -90,7 +108,8 @@ class HistoryCoreStreamTests: XCTestCase {
 
     /// A media file on this device's disk, as the encoder would find it.
     private func mediaFile(bytes: Int) throws -> (id: String, data: Data) {
-        let id = "history-test-\(UUID().uuidString.lowercased())"
+        // A server media id: the core lets no other name through (`history::media_gate`).
+        let id = UUID().uuidString.lowercased()
         let data = Data((0..<bytes).map { UInt8(($0 * 31 + 7) % 256) })
         try FileManager.default.createDirectory(
             at: MediaManager.onDiskURL(for: id).deletingLastPathComponent(),
@@ -108,10 +127,14 @@ class HistoryCoreStreamTests: XCTestCase {
     }
 
     /// Write a phase-3 file from `old` for `new` carrying `contactCount` contacts and one media file.
-    private func writeFile(from old: Device, to new: Device, contactCount: Int, media: (id: String, data: Data)) async throws -> URL {
+    /// `named`: a message of the file names the blob — without it the receiver drops it.
+    private func writeFile(
+        from old: Device, to new: Device, contactCount: Int, media: (id: String, data: Data), named: Bool = true
+    ) async throws -> URL {
         let sender = try old.core.historyOfferFile(userId: userRaw, peer: new.keys)
         let items: [HistoryOutbound] = [.record(manifest(snapshotId: sender.snapshotId(), phase: 3))]
             + contacts(contactCount)
+            + (named ? [message(naming: media.id)] : [])
             + [.media(id: media.id, mime: "image/jpeg")]
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("hist-\(UUID().uuidString).cthf")
         FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -154,11 +177,70 @@ class HistoryCoreStreamTests: XCTestCase {
         guard case .imported(let summary, let phase) = outcome else { return XCTFail("\(outcome)") }
         XCTAssertEqual(phase, 3)
         XCTAssertEqual(try peopleCount(), 3)
-        XCTAssertEqual(summary.applied, 4, "three contacts and one media file")
+        XCTAssertEqual(summary.applied, 5, "three contacts, the message that names the file, the file")
         // Written sealed at rest, never in the clear (`AtRestFiles`); read back whole.
         XCTAssertTrue(SealedFile.isSealed(fileAt: MediaManager.onDiskURL(for: media.id)))
         XCTAssertEqual(MediaManager.loadOnDisk(mediaId: media.id), media.data)
         XCTAssertEqual(try partFiles(), [])
+    }
+
+    /// A blob no message of the transfer names is not written: the core drops it whole and says
+    /// so once (`mediaRefused`), and the rest of the file imports.
+    func testABlobNoMessageNamesIsNotWritten() async throws {
+        let old = try device()
+        let new = try device()
+        let media = try mediaFile(bytes: 20_000)
+        let url = try await writeFile(from: old, to: new, contactCount: 2, media: media, named: false)
+        try FileManager.default.removeItem(at: MediaManager.onDiskURL(for: media.id))
+
+        freshStore()
+        guard case .imported(let summary, _) = try await importFile(url, into: new, from: old) else {
+            return XCTFail("expected an import")
+        }
+        XCTAssertEqual(summary.skipped[.mediaRefusedUnreferenced], 1)
+        XCTAssertEqual(try peopleCount(), 2, "the records around it still import")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: MediaManager.onDiskURL(for: media.id).path))
+        XCTAssertEqual(try partFiles(), [])
+    }
+
+    /// Phase 2 carries media alone: its blob is let through because the message phase 1 brought
+    /// names it — the receiver passes the ids its store holds before the first byte.
+    func testAMediaOnlyPhaseTakesTheBlobsTheHeldMessagesName() async throws {
+        let old = try device()
+        let new = try device()
+        freshStore()
+        let media = try mediaFile(bytes: 30_000)
+        let sending = HistoryTransferCoordinator()
+        let receiving = HistoryTransferCoordinator()
+
+        let phase1 = HistoryMemoryDuplex()
+        let sent1 = Task {
+            try await offer(
+                from: old, to: new,
+                items: { [self] snapshot in [.record(manifest(snapshotId: snapshot, phase: 1)), message(naming: media.id)] },
+                over: phase1.left, coordinator: sending, media: false
+            )
+        }
+        defer { sent1.cancel() }
+        _ = try await receive(into: new, from: old, over: phase1.right, coordinator: receiving)
+        try await sent1.value
+
+        let phase2 = HistoryMemoryDuplex()
+        let sent2 = Task {
+            try await offer(
+                from: old, to: new,
+                items: { [self] snapshot in [.record(manifest(snapshotId: snapshot, phase: 2)), .media(id: media.id, mime: "image/jpeg")] },
+                over: phase2.left, coordinator: sending, media: true
+            )
+        }
+        defer { sent2.cancel() }
+        let second = try await receive(into: new, from: old, over: phase2.right, coordinator: receiving)
+        try await sent2.value
+        guard case .imported(let summary, 2) = second else { return XCTFail("\(second)") }
+        // Both devices share this process's media directory, so the file is there already: the
+        // sink keeps it. That it got to the sink at all is the point — a refused blob never does.
+        XCTAssertEqual(summary.skipped[.mediaAlreadyPresent], 1, "the core let the blob through")
+        XCTAssertNil(summary.skipped[.mediaRefusedUnreferenced])
     }
 
     /// A media file the new device already has is kept, and the incoming copy is dropped.
