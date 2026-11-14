@@ -256,16 +256,12 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
     /// and start pumping our socketpair end ↔ the NWConnection.
     private func startSession(localFD: Int32, ready: Prepared) {
         // socketpair: Rust gets one end (decrypted relay duplex), we pump the other.
-        var fds: [Int32] = [-1, -1]
-        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0 else {
+        guard Self.refusesSigpipe(localFD), let (swiftFD, rustFD) = Self.makeSessionPair() else {
             ready.conn.cancel()
             close(localFD)
             Log.info("VEIL native-TLS: socketpair failed errno \(errno)", category: "VEIL")
             return
         }
-        let rustFD = fds[1]
-        let swiftFD = fds[0]
-        _ = fcntl(swiftFD, F_SETFL, fcntl(swiftFD, F_GETFL, 0) | O_NONBLOCK)
 
         // Rust adopts localFD and rustFD unconditionally (it closes both), so we
         // must not touch them after the call. We keep swiftFD for the pump.
@@ -306,6 +302,31 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
         } else {
             session.teardown()   // raced stop() — clean up immediately
         }
+    }
+
+    /// The socketpair of one session: our end (non-blocking, pumped by DispatchIO) and Rust's.
+    ///
+    /// Both refuse SIGPIPE. A write to a socket whose peer has closed raises SIGPIPE, and its
+    /// default action ends the app: our pump writes the relay's bytes after Rust's ferry has
+    /// ended, and the ferry writes after a VEIL stop closed our end. Until 2026-11-14 neither
+    /// end, nor the accepted gRPC socket, was guarded, and a front demoted with sends in
+    /// flight killed the app (todo 313; construct-veil tests/ferry_sigpipe.rs reproduces it).
+    static func makeSessionPair() -> (swiftFD: Int32, rustFD: Int32)? {
+        var fds: [Int32] = [-1, -1]
+        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0 else { return nil }
+        guard refusesSigpipe(fds[0]), refusesSigpipe(fds[1]) else {
+            close(fds[0])
+            close(fds[1])
+            return nil
+        }
+        _ = fcntl(fds[0], F_SETFL, fcntl(fds[0], F_GETFL, 0) | O_NONBLOCK)
+        return (fds[0], fds[1])
+    }
+
+    /// Writes on `fd` fail with EPIPE instead of raising SIGPIPE (Darwin's SO_NOSIGPIPE).
+    static func refusesSigpipe(_ fd: Int32) -> Bool {
+        var on: Int32 = 1
+        return setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size)) == 0
     }
 
     private func removeSession(_ session: Session) {
