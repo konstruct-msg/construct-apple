@@ -20,6 +20,10 @@ enum HistorySkipReason: Equatable {
     case bodyUnknown
     case hintDroppedBadId
     case mediaAlreadyPresent
+    /// The core refused the blob: its id is not a server media id (`HistoryMediaRefusal.badId`).
+    case mediaRefusedBadId
+    /// The core refused the blob: no message of the transcript names it (`.notReferenced`).
+    case mediaRefusedUnreferenced
     case reactionTargetMissing
 }
 

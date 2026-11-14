@@ -1233,6 +1233,12 @@ public protocol HistoryReceiverProtocol: AnyObject, Sendable {
      */
     func endOfInput() throws 
     
+    /**
+     * The media ids this device's own messages refer to. A media-only (phase 2) transfer carries
+     * no messages; without these every blob in it is refused.
+     */
+    func expectMedia(mediaIds: [String]) 
+    
     func feed(data: Data) throws  -> HistoryStep
     
     func need()  -> UInt32
@@ -1309,6 +1315,18 @@ open func accept(known: HistoryKnownKeys, pin: HistoryPin)throws  -> Data?  {
 open func endOfInput()throws   {try rustCallWithError(FfiConverterTypeHistoryError_lift) {
     uniffi_construct_core_fn_method_historyreceiver_end_of_input(
             self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * The media ids this device's own messages refer to. A media-only (phase 2) transfer carries
+     * no messages; without these every blob in it is refused.
+     */
+open func expectMedia(mediaIds: [String])  {try! rustCall() {
+    uniffi_construct_core_fn_method_historyreceiver_expect_media(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(mediaIds),$0
     )
 }
 }
@@ -9929,6 +9947,137 @@ public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) 
 }
 
 
+public struct ShareDraft: Equatable, Hashable {
+    public var id: String
+    public var text: String
+    public var items: [ShareDraftItem]
+    public var contactId: String?
+    public var stage: ShareDraftStage
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, text: String, items: [ShareDraftItem], contactId: String?, stage: ShareDraftStage) {
+        self.id = id
+        self.text = text
+        self.items = items
+        self.contactId = contactId
+        self.stage = stage
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ShareDraft: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeShareDraft: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ShareDraft {
+        return
+            try ShareDraft(
+                id: FfiConverterString.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                items: FfiConverterSequenceTypeShareDraftItem.read(from: &buf), 
+                contactId: FfiConverterOptionString.read(from: &buf), 
+                stage: FfiConverterTypeShareDraftStage.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ShareDraft, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterSequenceTypeShareDraftItem.write(value.items, into: &buf)
+        FfiConverterOptionString.write(value.contactId, into: &buf)
+        FfiConverterTypeShareDraftStage.write(value.stage, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraft_lift(_ buf: RustBuffer) throws -> ShareDraft {
+    return try FfiConverterTypeShareDraft.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraft_lower(_ value: ShareDraft) -> RustBuffer {
+    return FfiConverterTypeShareDraft.lower(value)
+}
+
+
+/**
+ * Keys describe locally sealed source files, never an external provider URI.
+ */
+public struct ShareDraftItem: Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var mime: String
+    public var key: Data
+    public var size: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, mime: String, key: Data, size: UInt64) {
+        self.id = id
+        self.name = name
+        self.mime = mime
+        self.key = key
+        self.size = size
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ShareDraftItem: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeShareDraftItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ShareDraftItem {
+        return
+            try ShareDraftItem(
+                id: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                key: FfiConverterData.read(from: &buf), 
+                size: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ShareDraftItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterData.write(value.key, into: &buf)
+        FfiConverterUInt64.write(value.size, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraftItem_lift(_ buf: RustBuffer) throws -> ShareDraftItem {
+    return try FfiConverterTypeShareDraftItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraftItem_lower(_ value: ShareDraftItem) -> RustBuffer {
+    return FfiConverterTypeShareDraftItem.lower(value)
+}
+
+
 /**
  * The entry holding the cursor back, for the log line that names a stall.
  */
@@ -11782,6 +11931,11 @@ public enum HistoryEvent: Equatable, Hashable {
     case mediaBytes(data: Data
     )
     case mediaEnd
+    /**
+     * A whole blob this device may not write: no `MediaStart`, no bytes. The transfer goes on.
+     */
+    case mediaRefused(reason: HistoryMediaRefusal
+    )
     case end
 
 
@@ -11816,7 +11970,10 @@ public struct FfiConverterTypeHistoryEvent: FfiConverterRustBuffer {
         
         case 5: return .mediaEnd
         
-        case 6: return .end
+        case 6: return .mediaRefused(reason: try FfiConverterTypeHistoryMediaRefusal.read(from: &buf)
+        )
+        
+        case 7: return .end
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -11853,8 +12010,13 @@ public struct FfiConverterTypeHistoryEvent: FfiConverterRustBuffer {
             writeInt(&buf, Int32(5))
         
         
-        case .end:
+        case let .mediaRefused(reason):
             writeInt(&buf, Int32(6))
+            FfiConverterTypeHistoryMediaRefusal.write(reason, into: &buf)
+            
+        
+        case .end:
+            writeInt(&buf, Int32(7))
         
         }
     }
@@ -11873,6 +12035,80 @@ public func FfiConverterTypeHistoryEvent_lift(_ buf: RustBuffer) throws -> Histo
 #endif
 public func FfiConverterTypeHistoryEvent_lower(_ value: HistoryEvent) -> RustBuffer {
     return FfiConverterTypeHistoryEvent.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why a media blob was dropped (`construct-docs/decisions/history-transfer-whole-in-the-core.md`).
+ */
+
+public enum HistoryMediaRefusal: Equatable, Hashable {
+    
+    /**
+     * Its id is not a server media id (a dashed UUID): it would become a file name.
+     */
+    case badId
+    /**
+     * No message of the transcript — this transfer's, or one `expect_media` named — refers to it.
+     */
+    case notReferenced
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryMediaRefusal: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMediaRefusal: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryMediaRefusal
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMediaRefusal {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .badId
+        
+        case 2: return .notReferenced
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryMediaRefusal, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .badId:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .notReferenced:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRefusal_lift(_ buf: RustBuffer) throws -> HistoryMediaRefusal {
+    return try FfiConverterTypeHistoryMediaRefusal.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRefusal_lower(_ value: HistoryMediaRefusal) -> RustBuffer {
+    return FfiConverterTypeHistoryMediaRefusal.lower(value)
 }
 
 
@@ -13975,6 +14211,85 @@ public func FfiConverterTypeSendFailureKind_lower(_ value: SendFailureKind) -> R
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ShareDraftStage: Equatable, Hashable {
+    
+    case importing
+    case ready
+    case submitted
+    case finished
+
+
+
+}
+
+#if compiler(>=6)
+extension ShareDraftStage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeShareDraftStage: FfiConverterRustBuffer {
+    typealias SwiftType = ShareDraftStage
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ShareDraftStage {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .importing
+        
+        case 2: return .ready
+        
+        case 3: return .submitted
+        
+        case 4: return .finished
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ShareDraftStage, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .importing:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .ready:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .submitted:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .finished:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraftStage_lift(_ buf: RustBuffer) throws -> ShareDraftStage {
+    return try FfiConverterTypeShareDraftStage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeShareDraftStage_lower(_ value: ShareDraftStage) -> RustBuffer {
+    return FfiConverterTypeShareDraftStage.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * What to do with a bundle refused as stale. See orchestration::stale_spk_plan.
  */
@@ -15980,6 +16295,31 @@ fileprivate struct FfiConverterSequenceTypeReadIncoming: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeShareDraftItem: FfiConverterRustBuffer {
+    typealias SwiftType = [ShareDraftItem]
+
+    public static func write(_ value: [ShareDraftItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeShareDraftItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ShareDraftItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ShareDraftItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeShareDraftItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
     typealias SwiftType = [CfeAction]
 
@@ -16983,6 +17323,23 @@ public func sealedVerifySenderCert(userId: String, domain: String, identityKey: 
     )
 })
 }
+public func shareDraftDecode(kept: Data)throws  -> ShareDraft  {
+    return try  FfiConverterTypeShareDraft_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_share_draft_decode(
+        FfiConverterData.lower(kept),$0
+    )
+})
+}
+/**
+ * An incoming OS share kept locally. No message is sent or ratchet advanced by this codec.
+ */
+public func shareDraftEncode(draft: ShareDraft)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_share_draft_encode(
+        FfiConverterTypeShareDraft_lower(draft),$0
+    )
+})
+}
 /**
  * The name a person is shown by: the one we gave them (`alias`), then the one they shared
  * unless it is their generated name, then their username, then the generated name. Each
@@ -17417,6 +17774,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 64198) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_share_draft_decode() != 28972) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_share_draft_encode() != 2960) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_shown_name() != 22785) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -17544,6 +17907,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_historyreceiver_end_of_input() != 37985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historyreceiver_expect_media() != 19586) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_historyreceiver_feed() != 49701) {

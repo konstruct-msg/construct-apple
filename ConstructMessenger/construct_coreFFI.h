@@ -482,6 +482,11 @@ RustBuffer uniffi_construct_core_fn_method_historyreceiver_accept(uint64_t ptr, 
 void uniffi_construct_core_fn_method_historyreceiver_end_of_input(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_HISTORYRECEIVER_EXPECT_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_HISTORYRECEIVER_EXPECT_MEDIA
+void uniffi_construct_core_fn_method_historyreceiver_expect_media(uint64_t ptr, RustBuffer media_ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_HISTORYRECEIVER_FEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_HISTORYRECEIVER_FEED
 RustBuffer uniffi_construct_core_fn_method_historyreceiver_feed(uint64_t ptr, RustBuffer data, RustCallStatus *_Nonnull out_status
@@ -2224,6 +2229,16 @@ RustBuffer uniffi_construct_core_fn_func_sealed_seal_sender_cert(RustBuffer cert
 int8_t uniffi_construct_core_fn_func_sealed_verify_sender_cert(RustBuffer user_id, RustBuffer domain, RustBuffer identity_key, RustBuffer device_id, int64_t issued_at, int64_t expires_at, RustBuffer signature, RustBuffer server_verifying_key, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHARE_DRAFT_DECODE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHARE_DRAFT_DECODE
+RustBuffer uniffi_construct_core_fn_func_share_draft_decode(RustBuffer kept, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHARE_DRAFT_ENCODE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHARE_DRAFT_ENCODE
+RustBuffer uniffi_construct_core_fn_func_share_draft_encode(RustBuffer draft, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHOWN_NAME
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SHOWN_NAME
 RustBuffer uniffi_construct_core_fn_func_shown_name(RustBuffer alias, RustBuffer display_name, RustBuffer username, RustBuffer user_id, RustCallStatus *_Nonnull out_status
@@ -3095,6 +3110,18 @@ uint16_t uniffi_construct_core_checksum_func_sealed_verify_sender_cert(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHARE_DRAFT_DECODE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHARE_DRAFT_DECODE
+uint16_t uniffi_construct_core_checksum_func_share_draft_decode(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHARE_DRAFT_ENCODE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHARE_DRAFT_ENCODE
+uint16_t uniffi_construct_core_checksum_func_share_draft_encode(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHOWN_NAME
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SHOWN_NAME
 uint16_t uniffi_construct_core_checksum_func_shown_name(void
@@ -3350,6 +3377,12 @@ uint16_t uniffi_construct_core_checksum_method_historyreceiver_accept(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_HISTORYRECEIVER_END_OF_INPUT
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_HISTORYRECEIVER_END_OF_INPUT
 uint16_t uniffi_construct_core_checksum_method_historyreceiver_end_of_input(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_HISTORYRECEIVER_EXPECT_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_HISTORYRECEIVER_EXPECT_MEDIA
+uint16_t uniffi_construct_core_checksum_method_historyreceiver_expect_media(void
     
 );
 #endif
