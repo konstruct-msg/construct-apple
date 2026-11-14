@@ -181,8 +181,9 @@ actor VeilCertFetcher {
         return URLSession(configuration: config)
     }
 
-    /// When the last HTTPS fetch was accepted — kept across launches, or every launch of the
-    /// phone app would be a fetch — and when an urgent one last went out in this process.
+    /// When the last fetch was accepted (HTTPS, or `ServerTrustService` under `on`) — kept across
+    /// launches, or every launch of the phone app would be a fetch — and when an urgent one last
+    /// went out in this process.
     private static let lastAcceptedKey = "construct.manifest_last_accepted"
     private var lastAccepted: Date? {
         let t = UserDefaults.standard.double(forKey: Self.lastAcceptedKey)
@@ -230,23 +231,27 @@ actor VeilCertFetcher {
     /// while it is recent (`ManifestFetchPolicy`).
     @discardableResult
     func fetchAndCacheRelayConfig(urgent: Bool = false) async -> [RelayInfo]? {
-        let sources = Self.manifestSources(mode: VeilProxyStore.loadMode())
-        guard !sources.isEmpty else {
-            return await ServerTrustClient.refresh() ?? Self.cachedRelayInfosSync()
-        }
         let now = Date()
-        guard ManifestFetchPolicy.shouldFetch(
+        let source = ManifestFetchPolicy.source(
             urgent: urgent,
             now: now,
             lastAccepted: lastAccepted,
             lastUrgent: lastUrgent,
-            hasCache: UserDefaults.standard.data(forKey: Self.cachedBundleSigningKeyKey) != nil
-        ) else {
+            hasCache: UserDefaults.standard.data(forKey: Self.cachedBundleSigningKeyKey) != nil,
+            httpsSources: Self.manifestSources(mode: VeilProxyStore.loadMode())
+        )
+        if urgent, source != .cache { lastUrgent = now }
+        switch source {
+        case .cache:
             return Self.cachedRelayInfosSync()
-        }
-        if urgent { lastUrgent = now }
-        if let relays = await fetchVerifiedRelayConfig(from: sources) {
+        case .serverTrust:
+            guard let relays = await ServerTrustClient.refresh() else { return Self.cachedRelayInfosSync() }
+            noteAccepted()
             return relays
+        case .https(let sources):
+            if let relays = await fetchVerifiedRelayConfig(from: sources) {
+                return relays
+            }
         }
         Log.debug("Manifest fetch failed — using cache", category: "VEIL")
         return Self.cachedRelayInfosSync()
@@ -540,6 +545,29 @@ enum ManifestFetchPolicy {
     /// An urgent one (an expired relay certificate, a sealed message that did not verify) still
     /// waits this long after the last urgent fetch, so a burst of them is one request.
     static let urgentInterval: TimeInterval = 10 * 60
+
+    /// Where a refresh comes from. The cache rule is the same for every mode: under `on` there is
+    /// no HTTPS source and the manifest is asked of `ServerTrustService` through the tunnel, and
+    /// until 2026-11-14 that ask skipped the cache — one RPC on every return to the app, and the
+    /// stream waited for it (todo 315).
+    enum Source: Equatable {
+        case cache
+        case serverTrust
+        case https([URL])
+    }
+
+    static func source(
+        urgent: Bool,
+        now: Date,
+        lastAccepted: Date?,
+        lastUrgent: Date?,
+        hasCache: Bool,
+        httpsSources: [URL]
+    ) -> Source {
+        guard shouldFetch(urgent: urgent, now: now, lastAccepted: lastAccepted,
+                          lastUrgent: lastUrgent, hasCache: hasCache) else { return .cache }
+        return httpsSources.isEmpty ? .serverTrust : .https(httpsSources)
+    }
 
     static func shouldFetch(
         urgent: Bool,
