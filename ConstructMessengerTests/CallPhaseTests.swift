@@ -37,8 +37,8 @@ final class CallPhaseTests: XCTestCase {
 
     func testANormalEndCarriesHowLongTheCallWasConnected() {
         XCTAssertEqual(CallPhase.of(.ended(session, .hangup(.normal)), quality: .good, connectedSeconds: 845),
-                       .over(.ended(seconds: 845)))
-        XCTAssertEqual(CallPhase.outcome(of: .hangup(.normal), connectedSeconds: nil), .ended(seconds: nil))
+                       .over(.ended(connectedSeconds: 845)))
+        XCTAssertEqual(CallPhase.outcome(of: .hangup(.normal), connectedSeconds: nil), .ended(connectedSeconds: nil))
     }
 
     func testLocalReasonsAreFailures() {
@@ -53,7 +53,7 @@ final class CallPhaseTests: XCTestCase {
     }
 
     func testOnlyANormalEndClosesItself() {
-        XCTAssertFalse(CallOutcome.ended(seconds: 10).wantsAttention)
+        XCTAssertFalse(CallOutcome.ended(connectedSeconds: 10).wantsAttention)
         for o in [CallOutcome.declined, .busy, .noAnswer, .failed] {
             XCTAssertTrue(o.wantsAttention, "\(o)")
         }

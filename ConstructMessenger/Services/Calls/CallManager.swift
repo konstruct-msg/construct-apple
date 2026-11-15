@@ -463,12 +463,10 @@ final class CallManager: CallUIManaging {
             return
         }
 
-        let reason: Shared_Proto_Signaling_V1_HangupReason
-        if case .incoming = active.session.direction, case .incoming = state {
-            reason = .declined
-        } else {
-            reason = .normal
-        }
+        let stillRinging: Bool
+        if case .incoming = state { stillRinging = true } else { stillRinging = false }
+        let reason = CallRuleWire.proto(callLocalHangupReason(
+            direction: CallRuleWire.direction(active.session.direction), stillRinging: stillRinging))
 
         let wasRegisteredWithCallKit = active.callKitRegistered
         Log.info(
@@ -527,20 +525,12 @@ final class CallManager: CallUIManaging {
         }
         PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
 
-        // Determine call status for history
-        let historyStatus: CallRecord.Status
-        switch reason {
-        case .hangup(let r):
-            switch r {
-            case .declined: historyStatus = session.direction == .incoming ? .declined : .missed
-            case .busy:     historyStatus = .missed
-            default:        historyStatus = answeredAt != nil ? .completed : .missed
-            }
-        case .error, .local:
-            historyStatus = answeredAt != nil ? .completed : .failed
-        }
-
-        let duration: Int32 = answeredAt.map { Int32(Date().timeIntervalSince($0)) } ?? 0
+        // The history row, by the core's rule (todo 295): none for a call taken on another of our
+        // devices — that device records it; this one shows neither a missed call nor a second row.
+        let historyStatus = callHistoryStatus(direction: CallRuleWire.direction(session.direction),
+                                              cause: CallRuleWire.cause(reason), answered: answeredAt != nil)
+        let duration = callDurationSeconds(answeredAtMs: answeredAt.map { Int64($0.timeIntervalSince1970 * 1000) },
+                                           endedAtMs: Int64(Date().timeIntervalSince1970 * 1000))
 
         active.close()
         self.active = nil
@@ -561,14 +551,12 @@ final class CallManager: CallUIManaging {
             if case .ended = self.state { self.state = .idle }
         }
 
-        // Taken on another of our devices: that device records the call; this one neither shows
-        // a missed call nor a second entry for it.
-        if reason != .hangup(.acceptedElsewhere) {
+        if let historyStatus {
             CallHistoryService.shared.record(
                 session: session,
-                status: historyStatus,
+                status: CallRuleWire.record(historyStatus),
                 startedAt: startedAt,
-                durationSeconds: duration
+                durationSeconds: Int32(clamping: duration)
             )
         }
 

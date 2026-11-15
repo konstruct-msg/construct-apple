@@ -3,7 +3,9 @@
 //  Construct Messenger
 //
 //  Which of the other person's devices each call signal goes to and comes from
-//  (`decisions/a-call-rings-every-device.md`). Pure, so the rules are tested without a call:
+//  (`decisions/a-call-rings-every-device.md`). The rule is the core's (`construct-rules`
+//  `calls`, construct-core 0.73.0, todo 295), shared with Android and construct-client; this file
+//  only carries this app's values to it:
 //
 //  - the offer goes to every device of theirs the core plans a send to and we hold a session with;
 //  - until someone answers, everything we send goes to all of them;
@@ -23,58 +25,69 @@ enum CallDeviceRouting {
     /// offer went to. `pinned`: the single device the peer's pinned key names, for a call that
     /// knows neither (a busy refusal to a call we never took).
     static func targets(chosen: String?, offered: [String], pinned: String?) -> [String] {
-        if let chosen { return [chosen] }
-        if !offered.isEmpty { return offered }
-        return pinned.map { [$0] } ?? []
+        callSignalTargets(chosen: chosen, offered: offered, pinned: pinned)
     }
 
     /// The devices an offer goes to: those the core planned a send to that we hold a session
-    /// with, in the plan's order. A device without a session would get nothing it can open; the
-    /// pinned device is the fallback when none has one (the caller then waits for its session).
+    /// with, in the plan's order; the pinned device when none has one.
     static func offerDevices(planned: [String], hasSession: (String) -> Bool, pinned: String?) -> [String] {
-        var seen = Set<String>()
-        let usable = planned.filter { hasSession($0) && seen.insert($0).inserted }
-        if !usable.isEmpty { return usable }
-        return pinned.map { [$0] } ?? []
+        callOfferDevices(planned: planned, withSession: planned.filter(hasSession), pinned: pinned)
     }
 
-    /// Whether a signal from `device` belongs to this call. Before a device is chosen, any of
-    /// the peer's devices may speak (an answer, a decline); after, only the chosen one.
+    /// Whether a signal from `device` belongs to this call: any of the peer's devices before one
+    /// is chosen, only the chosen one after.
     static func admits(_ device: String, chosen: String?) -> Bool {
-        chosen == nil || chosen == device
+        callAdmits(device: device, chosen: chosen)
     }
 
-    enum AnswerDisposition: Equatable {
-        /// Take this answer: `device` becomes the call's device, and `release` are told the call
-        /// was taken elsewhere.
-        case accept(device: String, release: [String])
-        /// Someone else answered first: tell this device the call was taken elsewhere.
-        case releaseLate(String)
+    static func onAnswer(from device: String, chosen: String?, offered: [String]) -> CallAnswerDisposition {
+        callOnAnswer(device: device, chosen: chosen, offered: offered)
     }
 
-    static func onAnswer(from device: String, chosen: String?, offered: [String]) -> AnswerDisposition {
-        if let chosen, chosen != device { return .releaseLate(device) }
-        return .accept(device: device, release: offered.filter { $0 != device })
-    }
-
-    enum HangupDisposition: Equatable {
-        /// End the call, and tell `release` (the other offered devices) it was taken elsewhere.
-        case end(release: [String])
-        /// Only this device is out (it is busy); the call keeps ringing on `remaining`.
-        case dropDevice(remaining: [String])
-        /// Not from this call's device: ignore.
-        case ignore
-    }
-
-    /// A hangup from one of the peer's devices. Declining anywhere ends the call for every device;
-    /// busy on one only takes that one out until all are busy.
+    /// A hangup from one of the peer's devices: declining anywhere ends the call for every
+    /// device; busy on one only takes that one out until all are busy; taken on another of our
+    /// devices ends this one's ringing and nothing else.
     static func onHangup(from device: String, reason: Shared_Proto_Signaling_V1_HangupReason,
-                         chosen: String?, offered: [String]) -> HangupDisposition {
-        guard admits(device, chosen: chosen) else { return .ignore }
-        let others = offered.filter { $0 != device }
-        if chosen == nil, reason == .busy, !others.isEmpty {
-            return .dropDevice(remaining: others)
+                         chosen: String?, offered: [String]) -> CallHangupDisposition {
+        callOnHangup(device: device, reason: CallRuleWire.reason(reason), chosen: chosen, offered: offered)
+    }
+}
+
+/// This app's call values in the core rule's types. The wire enums map by their numbers, so an
+/// unknown value reads as the rule's `unspecified`, never as a guess.
+enum CallRuleWire {
+    static func reason(_ r: Shared_Proto_Signaling_V1_HangupReason) -> CallHangupReason {
+        callHangupReasonFromWire(value: Int32(truncatingIfNeeded: r.rawValue))
+    }
+
+    static func proto(_ r: CallHangupReason) -> Shared_Proto_Signaling_V1_HangupReason {
+        Shared_Proto_Signaling_V1_HangupReason(rawValue: Int(callHangupReasonWire(reason: r))) ?? .unspecified
+    }
+
+    static func cause(_ reason: CallEndReason) -> CallEndCause {
+        switch reason {
+        case .hangup(let r): return .hangup(reason: Self.reason(r))
+        case .error(let code): return .serverError(error: callSignalErrorFromWire(value: Int32(truncatingIfNeeded: code.rawValue)))
+        // Every local reason is a setup or path failure (`endActiveCall(reason: .local(…))`); a
+        // person ending the call is a hangup.
+        case .local: return .local
         }
-        return .end(release: chosen == nil ? others : [])
+    }
+
+    static func direction(_ d: CallSession.Direction) -> CallDirection {
+        switch d {
+        case .incoming: return .incoming
+        case .outgoing: return .outgoing
+        }
+    }
+
+    /// The history row's status as this app stores it (`CallRecord.Status`, the same codes 0–3).
+    static func record(_ s: CallHistoryStatus) -> CallRecord.Status {
+        switch s {
+        case .completed: return .completed
+        case .missed: return .missed
+        case .declined: return .declined
+        case .failed: return .failed
+        }
     }
 }

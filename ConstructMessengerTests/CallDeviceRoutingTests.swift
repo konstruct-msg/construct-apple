@@ -8,6 +8,9 @@
 //  The 2026-10-21 defect this answers: a Mac called, the phone answered to the caller account's
 //  pinned device (another phone), and the Mac never heard the answer.
 //
+//  The rule is the core's since todo 295; these tests run it through this app's bridge, so a
+//  wrong wire number or a dropped case in `CallRuleWire` turns them red.
+//
 
 import XCTest
 @testable import Construct_Messenger
@@ -46,7 +49,7 @@ final class CallDeviceRoutingTests: XCTestCase {
     }
 
     func testALateAnswerIsReleasedAndDoesNotTakeTheCall() {
-        XCTAssertEqual(CallDeviceRouting.onAnswer(from: phone, chosen: ipad, offered: [phone, ipad]), .releaseLate(phone))
+        XCTAssertEqual(CallDeviceRouting.onAnswer(from: phone, chosen: ipad, offered: [phone, ipad]), .releaseLate(device: phone))
     }
 
     func testARepeatedAnswerFromTheChosenDeviceIsTakenAgainWithNothingReleased() {
@@ -75,5 +78,66 @@ final class CallDeviceRoutingTests: XCTestCase {
         XCTAssertEqual(CallDeviceRouting.onHangup(from: phone, reason: .normal, chosen: ipad, offered: [phone, ipad]), .ignore)
         XCTAssertEqual(CallDeviceRouting.onHangup(from: ipad, reason: .normal, chosen: ipad, offered: [phone, ipad]),
                        .end(release: []), "after the answer the others were already released")
+    }
+
+    /// Mutation: check `acceptedElsewhere` before `admits` again, or map it to another reason —
+    /// the ringing would not stop, or a device we do not hear could stop it.
+    func testTakenOnAnotherOfOurDevicesStopsTheRingingAndNothingElse() {
+        XCTAssertEqual(CallDeviceRouting.onHangup(from: mac, reason: .acceptedElsewhere, chosen: mac, offered: []),
+                       .endTakenElsewhere)
+        XCTAssertEqual(CallDeviceRouting.onHangup(from: phone, reason: .acceptedElsewhere, chosen: mac, offered: []),
+                       .ignore, "only the call's own device speaks for it")
+    }
+}
+
+/// The bridge between this app's call values and the core rule's types.
+final class CallRuleWireTests: XCTestCase {
+    /// Mutation: any wrong number in the mapping — each proto reason must come back as itself.
+    func testEveryHangupReasonCrossesTheBridgeAndBack() {
+        let all: [Shared_Proto_Signaling_V1_HangupReason] =
+            [.unspecified, .normal, .busy, .declined, .timeout, .connectionFailed, .acceptedElsewhere]
+        for r in all {
+            XCTAssertEqual(CallRuleWire.proto(CallRuleWire.reason(r)), r, "\(r)")
+        }
+        XCTAssertEqual(CallRuleWire.reason(.acceptedElsewhere), .acceptedElsewhere)
+        XCTAssertEqual(CallRuleWire.reason(.busy), .busy)
+    }
+
+    func testAReasonFromANewerPeerReadsAsUnspecified() {
+        XCTAssertEqual(CallRuleWire.reason(.UNRECOGNIZED(99)), .unspecified)
+    }
+
+    /// Mutations: a server error read as a hangup, a local failure as a hangup, an error code
+    /// mapped by name to the wrong number.
+    func testHowACallEndedReachesTheRuleAsItHappened() {
+        XCTAssertEqual(CallRuleWire.cause(.hangup(.declined)), .hangup(reason: .declined))
+        XCTAssertEqual(CallRuleWire.cause(.error(.calleeBusy)), .serverError(error: .calleeBusy))
+        XCTAssertEqual(CallRuleWire.cause(.error(.callExpired)), .serverError(error: .callExpired))
+        XCTAssertEqual(CallRuleWire.cause(.local("ICE connection failed")), .local)
+    }
+
+    /// The history row as `endActiveCall` writes it. Mutations: swap the direction, swap two
+    /// status codes, write a row for a call taken elsewhere.
+    func testTheHistoryRowFollowsTheRule() {
+        func row(_ d: CallSession.Direction, _ r: CallEndReason, answered: Bool) -> CallRecord.Status? {
+            callHistoryStatus(direction: CallRuleWire.direction(d), cause: CallRuleWire.cause(r), answered: answered)
+                .map(CallRuleWire.record)
+        }
+        XCTAssertEqual(row(.incoming, .hangup(.declined), answered: false), .declined)
+        XCTAssertEqual(row(.outgoing, .hangup(.declined), answered: false), .missed)
+        XCTAssertEqual(row(.incoming, .hangup(.normal), answered: true), .completed)
+        XCTAssertEqual(row(.outgoing, .local("setup"), answered: false), .failed)
+        XCTAssertNil(row(.incoming, .hangup(.acceptedElsewhere), answered: false))
+    }
+
+    /// The reason `end()` sends: declining while an incoming call still rings, a normal end
+    /// otherwise. Mutation: pass the direction the wrong way round.
+    func testOurOwnHangupSaysDeclinedOnlyForAnIncomingCallStillRinging() {
+        func sent(_ d: CallSession.Direction, ringing: Bool) -> Shared_Proto_Signaling_V1_HangupReason {
+            CallRuleWire.proto(callLocalHangupReason(direction: CallRuleWire.direction(d), stillRinging: ringing))
+        }
+        XCTAssertEqual(sent(.incoming, ringing: true), .declined)
+        XCTAssertEqual(sent(.outgoing, ringing: true), .normal)
+        XCTAssertEqual(sent(.incoming, ringing: false), .normal)
     }
 }

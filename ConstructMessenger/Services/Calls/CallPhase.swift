@@ -9,22 +9,15 @@
 
 import Foundation
 
-enum CallOutcome: Equatable, Sendable {
-    /// Ended normally; `seconds` is how long the two were connected, nil if they never were.
-    case ended(seconds: Int?)
-    case declined
-    case busy
-    /// The other side never answered.
-    case noAnswer
-    /// The call did not connect: setup, ICE or signalling failed.
-    case failed
+/// How a call ended, for the screen: the core's `CallEndOutcome` (construct-core 0.73.0, todo 295),
+/// so iOS, Android and construct-client read an ended call the same way. `ended(connectedSeconds:)`
+/// carries how long the two were connected, nil if they never were.
+typealias CallOutcome = CallEndOutcome
 
+extension CallEndOutcome {
     /// An outcome the person may want to act on (call back, look at the network). A normal end
     /// needs no answer, so its window closes by itself.
-    var wantsAttention: Bool {
-        if case .ended = self { return false }
-        return true
-    }
+    var wantsAttention: Bool { callOutcomeWantsAttention(outcome: self) }
 }
 
 enum CallPhase: Equatable, Sendable {
@@ -61,25 +54,7 @@ enum CallPhase: Equatable, Sendable {
     }
 
     static func outcome(of reason: CallEndReason, connectedSeconds: Int?) -> CallOutcome {
-        switch reason {
-        case .hangup(let r):
-            switch r {
-            case .declined: return .declined
-            case .busy: return .busy
-            case .timeout: return .noAnswer
-            case .connectionFailed: return .failed
-            default: return .ended(seconds: connectedSeconds)
-            }
-        case .error(let code):
-            switch code {
-            case .calleeBusy: return .busy
-            case .callExpired: return .noAnswer
-            default: return .failed
-            }
-        // Every local reason is a setup or path failure (`endActiveCall(reason: .local(…))`); a
-        // person ending the call is a hangup. No local reason names the missing relay — the
-        // "TURN" check in `InCallView` matches nothing — so it reads as a failure too.
-        case .local: return .failed
-        }
+        callEndOutcome(cause: CallRuleWire.cause(reason),
+                       connectedSeconds: connectedSeconds.map { UInt32(clamping: $0) })
     }
 }

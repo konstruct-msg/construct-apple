@@ -10435,6 +10435,783 @@ public func FfiConverterTypeAckCheckResult_lower(_ value: AckCheckResult) -> Rus
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum CallAnswerDisposition: Equatable, Hashable {
+    
+    /**
+     * `device` becomes the call's device; `release` are told it was taken elsewhere.
+     */
+    case accept(device: String, release: [String]
+    )
+    /**
+     * Another device answered first: tell this one it was taken elsewhere.
+     */
+    case releaseLate(device: String
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension CallAnswerDisposition: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallAnswerDisposition: FfiConverterRustBuffer {
+    typealias SwiftType = CallAnswerDisposition
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallAnswerDisposition {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .accept(device: try FfiConverterString.read(from: &buf), release: try FfiConverterSequenceString.read(from: &buf)
+        )
+        
+        case 2: return .releaseLate(device: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallAnswerDisposition, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .accept(device,release):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(device, into: &buf)
+            FfiConverterSequenceString.write(release, into: &buf)
+            
+        
+        case let .releaseLate(device):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(device, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallAnswerDisposition_lift(_ buf: RustBuffer) throws -> CallAnswerDisposition {
+    return try FfiConverterTypeCallAnswerDisposition.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallAnswerDisposition_lower(_ value: CallAnswerDisposition) -> RustBuffer {
+    return FfiConverterTypeCallAnswerDisposition.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Which side of the call we are.
+ */
+
+public enum CallDirection: Equatable, Hashable {
+    
+    case incoming
+    case outgoing
+
+
+
+}
+
+#if compiler(>=6)
+extension CallDirection: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallDirection: FfiConverterRustBuffer {
+    typealias SwiftType = CallDirection
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallDirection {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .incoming
+        
+        case 2: return .outgoing
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallDirection, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .incoming:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .outgoing:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallDirection_lift(_ buf: RustBuffer) throws -> CallDirection {
+    return try FfiConverterTypeCallDirection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallDirection_lower(_ value: CallDirection) -> RustBuffer {
+    return FfiConverterTypeCallDirection.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Why a call ended.
+ */
+
+public enum CallEndCause: Equatable, Hashable {
+    
+    /**
+     * Ours, or one the peer's device sent.
+     */
+    case hangup(reason: CallHangupReason
+    )
+    /**
+     * The signaling server's error.
+     */
+    case serverError(error: CallSignalError
+    )
+    /**
+     * Our own setup or path failed; a person ending the call is a hangup.
+     */
+    case local
+
+
+
+}
+
+#if compiler(>=6)
+extension CallEndCause: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallEndCause: FfiConverterRustBuffer {
+    typealias SwiftType = CallEndCause
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallEndCause {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .hangup(reason: try FfiConverterTypeCallHangupReason.read(from: &buf)
+        )
+        
+        case 2: return .serverError(error: try FfiConverterTypeCallSignalError.read(from: &buf)
+        )
+        
+        case 3: return .local
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallEndCause, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .hangup(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeCallHangupReason.write(reason, into: &buf)
+            
+        
+        case let .serverError(error):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeCallSignalError.write(error, into: &buf)
+            
+        
+        case .local:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallEndCause_lift(_ buf: RustBuffer) throws -> CallEndCause {
+    return try FfiConverterTypeCallEndCause.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallEndCause_lower(_ value: CallEndCause) -> RustBuffer {
+    return FfiConverterTypeCallEndCause.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How an ended call reads on its screen.
+ */
+
+public enum CallEndOutcome: Equatable, Hashable {
+    
+    /**
+     * `connected_seconds`: how long the two were connected, none if never.
+     */
+    case ended(connectedSeconds: UInt32?
+    )
+    case declined
+    case busy
+    case noAnswer
+    case failed
+
+
+
+}
+
+#if compiler(>=6)
+extension CallEndOutcome: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallEndOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = CallEndOutcome
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallEndOutcome {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .ended(connectedSeconds: try FfiConverterOptionUInt32.read(from: &buf)
+        )
+        
+        case 2: return .declined
+        
+        case 3: return .busy
+        
+        case 4: return .noAnswer
+        
+        case 5: return .failed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallEndOutcome, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .ended(connectedSeconds):
+            writeInt(&buf, Int32(1))
+            FfiConverterOptionUInt32.write(connectedSeconds, into: &buf)
+            
+        
+        case .declined:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .busy:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .noAnswer:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallEndOutcome_lift(_ buf: RustBuffer) throws -> CallEndOutcome {
+    return try FfiConverterTypeCallEndOutcome.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallEndOutcome_lower(_ value: CallEndOutcome) -> RustBuffer {
+    return FfiConverterTypeCallEndOutcome.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CallGlare: Equatable, Hashable {
+    
+    case keepOurs
+    case yield
+
+
+
+}
+
+#if compiler(>=6)
+extension CallGlare: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallGlare: FfiConverterRustBuffer {
+    typealias SwiftType = CallGlare
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallGlare {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .keepOurs
+        
+        case 2: return .yield
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallGlare, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .keepOurs:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .yield:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallGlare_lift(_ buf: RustBuffer) throws -> CallGlare {
+    return try FfiConverterTypeCallGlare.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallGlare_lower(_ value: CallGlare) -> RustBuffer {
+    return FfiConverterTypeCallGlare.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CallHangupDisposition: Equatable, Hashable {
+    
+    /**
+     * End the call; tell `release` it was taken elsewhere.
+     */
+    case end(release: [String]
+    )
+    /**
+     * Another of our devices took it: stop ringing, tell nobody, write no history.
+     */
+    case endTakenElsewhere
+    /**
+     * Only this device is busy; the call keeps ringing on `remaining`.
+     */
+    case dropDevice(remaining: [String]
+    )
+    /**
+     * Not from this call's device.
+     */
+    case ignore
+
+
+
+}
+
+#if compiler(>=6)
+extension CallHangupDisposition: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHangupDisposition: FfiConverterRustBuffer {
+    typealias SwiftType = CallHangupDisposition
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHangupDisposition {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .end(release: try FfiConverterSequenceString.read(from: &buf)
+        )
+        
+        case 2: return .endTakenElsewhere
+        
+        case 3: return .dropDevice(remaining: try FfiConverterSequenceString.read(from: &buf)
+        )
+        
+        case 4: return .ignore
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallHangupDisposition, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .end(release):
+            writeInt(&buf, Int32(1))
+            FfiConverterSequenceString.write(release, into: &buf)
+            
+        
+        case .endTakenElsewhere:
+            writeInt(&buf, Int32(2))
+        
+        
+        case let .dropDevice(remaining):
+            writeInt(&buf, Int32(3))
+            FfiConverterSequenceString.write(remaining, into: &buf)
+            
+        
+        case .ignore:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupDisposition_lift(_ buf: RustBuffer) throws -> CallHangupDisposition {
+    return try FfiConverterTypeCallHangupDisposition.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupDisposition_lower(_ value: CallHangupDisposition) -> RustBuffer {
+    return FfiConverterTypeCallHangupDisposition.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * `HangupReason` of signaling/webrtc.proto.
+ */
+
+public enum CallHangupReason: Equatable, Hashable {
+    
+    case unspecified
+    case normal
+    case busy
+    case declined
+    case timeout
+    case connectionFailed
+    /**
+     * Another device of the callee took the call.
+     */
+    case acceptedElsewhere
+
+
+
+}
+
+#if compiler(>=6)
+extension CallHangupReason: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHangupReason: FfiConverterRustBuffer {
+    typealias SwiftType = CallHangupReason
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHangupReason {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unspecified
+        
+        case 2: return .normal
+        
+        case 3: return .busy
+        
+        case 4: return .declined
+        
+        case 5: return .timeout
+        
+        case 6: return .connectionFailed
+        
+        case 7: return .acceptedElsewhere
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallHangupReason, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unspecified:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .normal:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .busy:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .declined:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .timeout:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .connectionFailed:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .acceptedElsewhere:
+            writeInt(&buf, Int32(7))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupReason_lift(_ buf: RustBuffer) throws -> CallHangupReason {
+    return try FfiConverterTypeCallHangupReason.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupReason_lower(_ value: CallHangupReason) -> RustBuffer {
+    return FfiConverterTypeCallHangupReason.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A call history row's status; codes 0–3 in this order (history_snapshot.proto).
+ */
+
+public enum CallHistoryStatus: Equatable, Hashable {
+    
+    case completed
+    case missed
+    case declined
+    case failed
+
+
+
+}
+
+#if compiler(>=6)
+extension CallHistoryStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHistoryStatus: FfiConverterRustBuffer {
+    typealias SwiftType = CallHistoryStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHistoryStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .completed
+        
+        case 2: return .missed
+        
+        case 3: return .declined
+        
+        case 4: return .failed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallHistoryStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .completed:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .missed:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .declined:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHistoryStatus_lift(_ buf: RustBuffer) throws -> CallHistoryStatus {
+    return try FfiConverterTypeCallHistoryStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHistoryStatus_lower(_ value: CallHistoryStatus) -> RustBuffer {
+    return FfiConverterTypeCallHistoryStatus.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * `SignalErrorCode` of services/signaling_service.proto.
+ */
+
+public enum CallSignalError: Equatable, Hashable {
+    
+    case unspecified
+    case calleeOffline
+    case calleeBusy
+    case rateLimited
+    case unauthorized
+    case callExpired
+
+
+
+}
+
+#if compiler(>=6)
+extension CallSignalError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallSignalError: FfiConverterRustBuffer {
+    typealias SwiftType = CallSignalError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallSignalError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unspecified
+        
+        case 2: return .calleeOffline
+        
+        case 3: return .calleeBusy
+        
+        case 4: return .rateLimited
+        
+        case 5: return .unauthorized
+        
+        case 6: return .callExpired
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallSignalError, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unspecified:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .calleeOffline:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .calleeBusy:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .rateLimited:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .unauthorized:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .callExpired:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallSignalError_lift(_ buf: RustBuffer) throws -> CallSignalError {
+    return try FfiConverterTypeCallSignalError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallSignalError_lower(_ value: CallSignalError) -> RustBuffer {
+    return FfiConverterTypeCallSignalError.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum CertificateVerdict: Equatable, Hashable {
     
     case vouched
@@ -15500,6 +16277,30 @@ fileprivate struct FfiConverterOptionTypeStreamCursorSkip: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCallHistoryStatus: FfiConverterRustBuffer {
+    typealias SwiftType = CallHistoryStatus?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCallHistoryStatus.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCallHistoryStatus.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeKtVerdict: FfiConverterRustBuffer {
     typealias SwiftType = KtVerdict?
 
@@ -16399,6 +17200,156 @@ public func afterSendFailure(failure: SendFailureKind) -> MessageAfterSendFailur
     return try!  FfiConverterTypeMessageAfterSendFailure_lift(try! rustCall() {
     uniffi_construct_core_fn_func_after_send_failure(
         FfiConverterTypeSendFailureKind_lower(failure),$0
+    )
+})
+}
+/**
+ * Whether a signal from `device` belongs to the call: any device before one is chosen.
+ */
+public func callAdmits(device: String, chosen: String?) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_admits(
+        FfiConverterString.lower(device),
+        FfiConverterOptionString.lower(chosen),$0
+    )
+})
+}
+/**
+ * Whole seconds from the answer to the end; 0 if nobody answered.
+ */
+public func callDurationSeconds(answeredAtMs: Int64?, endedAtMs: Int64) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_duration_seconds(
+        FfiConverterOptionInt64.lower(answeredAtMs),
+        FfiConverterInt64.lower(endedAtMs),$0
+    )
+})
+}
+/**
+ * How an ended call reads on its screen.
+ */
+public func callEndOutcome(cause: CallEndCause, connectedSeconds: UInt32?) -> CallEndOutcome  {
+    return try!  FfiConverterTypeCallEndOutcome_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_end_outcome(
+        FfiConverterTypeCallEndCause_lower(cause),
+        FfiConverterOptionUInt32.lower(connectedSeconds),$0
+    )
+})
+}
+/**
+ * Both dialled each other: the greater account id by its bytes keeps its call.
+ */
+public func callGlare(myUserId: String, peerUserId: String) -> CallGlare  {
+    return try!  FfiConverterTypeCallGlare_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_glare(
+        FfiConverterString.lower(myUserId),
+        FfiConverterString.lower(peerUserId),$0
+    )
+})
+}
+/**
+ * Calls (construct-rules `calls`; decisions/a-call-rings-every-device.md). The values of
+ * `HangupReason` (webrtc.proto) and `SignalErrorCode` (signaling_service.proto) by number; an
+ * unknown one reads as `Unspecified`.
+ */
+public func callHangupReasonFromWire(value: Int32) -> CallHangupReason  {
+    return try!  FfiConverterTypeCallHangupReason_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_hangup_reason_from_wire(
+        FfiConverterInt32.lower(value),$0
+    )
+})
+}
+public func callHangupReasonWire(reason: CallHangupReason) -> Int32  {
+    return try!  FfiConverterInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_hangup_reason_wire(
+        FfiConverterTypeCallHangupReason_lower(reason),$0
+    )
+})
+}
+/**
+ * The history row's status; none for a call taken on another of our devices.
+ */
+public func callHistoryStatus(direction: CallDirection, cause: CallEndCause, answered: Bool) -> CallHistoryStatus?  {
+    return try!  FfiConverterOptionTypeCallHistoryStatus.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_history_status(
+        FfiConverterTypeCallDirection_lower(direction),
+        FfiConverterTypeCallEndCause_lower(cause),
+        FfiConverterBool.lower(answered),$0
+    )
+})
+}
+/**
+ * Our own hangup's reason: declined for an incoming call still ringing, normal otherwise.
+ */
+public func callLocalHangupReason(direction: CallDirection, stillRinging: Bool) -> CallHangupReason  {
+    return try!  FfiConverterTypeCallHangupReason_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_local_hangup_reason(
+        FfiConverterTypeCallDirection_lower(direction),
+        FfiConverterBool.lower(stillRinging),$0
+    )
+})
+}
+/**
+ * The devices an offer rings: planned ones with a session, in plan order, each once; else the
+ * pinned one.
+ */
+public func callOfferDevices(planned: [String], withSession: [String], pinned: String?) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_offer_devices(
+        FfiConverterSequenceString.lower(planned),
+        FfiConverterSequenceString.lower(withSession),
+        FfiConverterOptionString.lower(pinned),$0
+    )
+})
+}
+/**
+ * An answer to our outgoing call: the first wins and releases the rest; a later one is released.
+ */
+public func callOnAnswer(device: String, chosen: String?, offered: [String]) -> CallAnswerDisposition  {
+    return try!  FfiConverterTypeCallAnswerDisposition_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_on_answer(
+        FfiConverterString.lower(device),
+        FfiConverterOptionString.lower(chosen),
+        FfiConverterSequenceString.lower(offered),$0
+    )
+})
+}
+/**
+ * A hangup or busy from one of the peer's devices.
+ */
+public func callOnHangup(device: String, reason: CallHangupReason, chosen: String?, offered: [String]) -> CallHangupDisposition  {
+    return try!  FfiConverterTypeCallHangupDisposition_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_on_hangup(
+        FfiConverterString.lower(device),
+        FfiConverterTypeCallHangupReason_lower(reason),
+        FfiConverterOptionString.lower(chosen),
+        FfiConverterSequenceString.lower(offered),$0
+    )
+})
+}
+public func callOutcomeWantsAttention(outcome: CallEndOutcome) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_outcome_wants_attention(
+        FfiConverterTypeCallEndOutcome_lower(outcome),$0
+    )
+})
+}
+public func callSignalErrorFromWire(value: Int32) -> CallSignalError  {
+    return try!  FfiConverterTypeCallSignalError_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_signal_error_from_wire(
+        FfiConverterInt32.lower(value),$0
+    )
+})
+}
+/**
+ * Who a call signal is sealed for: the chosen device, else the offered ones, else the pinned.
+ */
+public func callSignalTargets(chosen: String?, offered: [String], pinned: String?) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_signal_targets(
+        FfiConverterOptionString.lower(chosen),
+        FfiConverterSequenceString.lower(offered),
+        FfiConverterOptionString.lower(pinned),$0
     )
 })
 }
@@ -17505,6 +18456,48 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_construct_core_checksum_func_after_send_failure() != 17777) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_admits() != 33031) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_duration_seconds() != 6083) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_end_outcome() != 59643) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_glare() != 17513) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_hangup_reason_from_wire() != 57402) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_hangup_reason_wire() != 2312) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_history_status() != 36393) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_local_hangup_reason() != 37151) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_offer_devices() != 39220) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_on_answer() != 53719) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_on_hangup() != 58669) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_outcome_wants_attention() != 65524) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_signal_error_from_wire() != 50313) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_signal_targets() != 44640) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_compute_pow() != 30246) {
