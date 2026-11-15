@@ -27,7 +27,7 @@ private func callStatus(_ phase: CallPhase, seconds: Int?) -> String {
     case .reconnecting: return NSLocalizedString("call_reconnecting_title", comment: "")
     case .over(let outcome):
         switch outcome {
-        case .ended(let s?): return String(format: NSLocalizedString("call_ended_after", comment: ""), formatCallDuration(s))
+        case .ended(let s?): return String(format: NSLocalizedString("call_ended_after", comment: ""), formatCallDuration(Int(s)))
         case .ended(nil): return NSLocalizedString("call_ended", comment: "")
         case .declined: return NSLocalizedString("call_declined", comment: "")
         case .busy: return NSLocalizedString("call_busy", comment: "")

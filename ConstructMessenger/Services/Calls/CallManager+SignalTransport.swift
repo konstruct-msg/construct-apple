@@ -290,13 +290,11 @@ extension CallManager {
     /// the call for the device that took it.
     private func endFromPeer(reason: Shared_Proto_Signaling_V1_HangupReason, device: String, callId: String, peerUserId: String) {
         guard let call = active, call.session.id == callId else { return }
-        if reason == .acceptedElsewhere {
-            endActiveCall(reason: .hangup(.acceptedElsewhere), reportToCallKit: true)
-            return
-        }
         switch CallDeviceRouting.onHangup(from: device, reason: reason, chosen: call.peerDevice, offered: call.offeredDevices) {
         case .ignore:
             return
+        case .endTakenElsewhere:
+            endActiveCall(reason: .hangup(.acceptedElsewhere), reportToCallKit: true)
         case .dropDevice(let remaining):
             call.offeredDevices = remaining
             Log.info("Device \(device.prefix(8))… is busy — \(remaining.count) still ringing (call_id=\(callId.prefix(8))…)", category: "Calls")

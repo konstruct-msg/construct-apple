@@ -348,14 +348,13 @@ extension CallManager {
             break  // falls through to the glare check and the new-call path below
         }
         // Glare: we have an OUTGOING call to the same peer and now receive THEIR offer
-        // (both sides dialed simultaneously, each with its own callId). Deterministic
-        // tie-break mirrors session init (higher userId stays INITIATOR): the higher
-        // userId keeps its outgoing call and ignores the incoming offer; the lower userId
-        // yields and answers. Without this both sides tear down their outgoing call and
+        // (both sides dialed simultaneously, each with its own callId). The core's rule
+        // (`call_glare`, todo 295) decides: the higher account id keeps its outgoing call and
+        // ignores the incoming offer; the lower one yields and answers. Without this both sides tear down their outgoing call and
         // the call never establishes.
         if let active, case .outgoing = active.session.direction, active.session.peerUserId == callerUserId {
             let myUserId = AuthSessionManager.shared.currentUserId ?? ""
-            if myUserId > callerUserId {
+            if callGlare(myUserId: myUserId, peerUserId: callerUserId) == .keepOurs {
                 Log.info("Glare: keeping our outgoing call to \(callerUserId.prefix(8))… (tie-break win) — ignoring their offer", category: "Calls")
                 return
             }
