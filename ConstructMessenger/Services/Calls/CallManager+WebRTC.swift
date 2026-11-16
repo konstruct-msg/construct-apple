@@ -155,7 +155,7 @@ extension CallManager {
     }
 
     /// Hold an offer for a call the user has not answered. The SDP goes where `answer()` looks for
-    /// it, so consent is what starts negotiation — see `remoteOfferDisposition`.
+    /// it, so consent is what starts negotiation (`call_on_offer`: `HoldUntilAnswered`).
     ///
     /// `offer.sdp` is plaintext by the time it is here, and there is one way for it to arrive:
     /// `handleCallSignalProto`, after the whole `WebRTCSignal` came out of the Double Ratchet.

@@ -87,7 +87,7 @@ final class CallManager: CallUIManaging {
     ///
     /// A call's signals outlive it: the offer travels the ordinary E2EE message stream and can be
     /// delivered long after both sides gave up. On 2026-08-05 an offer landed 8 s after its call
-    /// had been ended and `handleIncomingCallOffer`, finding no active call, took the "no existing
+    /// had been ended and the offer handler, finding no active call, took the "no existing
     /// call" branch and rang CallKit again for a call nobody was making — a ghost incoming call
     /// with the same uuid the log had just reported ended.
     private var endedCallIds: [String: Date] = [:]
@@ -183,7 +183,7 @@ final class CallManager: CallUIManaging {
         /// channels — the VoIP push (fast, call id only) and the E2EE offer (slow, carries the
         /// SDP) — and CallKit is driven by the first. On 2026-08-05 the push rang at 10:02:56, the
         /// user answered at 10:02:58, and the offer arrived at **10:03:26**, thirty seconds later.
-        /// `handleIncomingCallOffer` stored it against a consumer that had already returned, so
+        /// the offer handler stored it against a consumer that had already returned, so
         /// nothing ever built the answer: the callee sat in `.connecting` and the caller in
         /// `dialing` until both gave up by hand.
         ///
@@ -597,13 +597,17 @@ final class CallManager: CallUIManaging {
 
     func sendHangup(
         reason: Shared_Proto_Signaling_V1_HangupReason,
-        origin: CallHangupOrigin
+        origin: CallHangupSide
     ) {
         guard let active else { return }
-        let channels = callHangupChannels(origin: origin)
+        // The core's rule (`call_hangup_route`, todo 295): ours goes to the peer and the server;
+        // one the peer sent goes to the server only, so its occupancy clears (AC92380B) without
+        // encrypting into a session that may be gone (D858E6FE); "accepted elsewhere" never goes
+        // to the stream, where the server would end the call for the device that took it.
+        let route = CallRuleWire.hangupRoute(side: origin, reason: reason)
         var e2eeSent = false
         var streamSent = false
-        if channels.contains(.e2ee) {
+        if route.e2ee {
             var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
             sig.callID = active.session.id
             sig.senderDeviceID = Self.currentDeviceId()
@@ -622,7 +626,7 @@ final class CallManager: CallUIManaging {
                 )
             }
         }
-        if channels.contains(.signalingStream), let stream = active.stream {
+        if route.stream, let stream = active.stream {
             stream.send(Self.makeRoutedSignal(
                 callId: active.session.id,
                 deviceId: Self.currentDeviceId(),

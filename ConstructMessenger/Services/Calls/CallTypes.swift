@@ -24,55 +24,6 @@ enum CallEndReason: Equatable {
     case local(String)
 }
 
-/// What to do with an incoming SDP offer.
-///
-/// The pure part of `CallManager.handleIncomingCallOffer`, split out so it can be tested: three
-/// separate defects lived in this one decision on 2026-08-05, and none of them was reachable from
-/// a test while it was a chain of `if let active` inside a `@MainActor` singleton wired to CallKit.
-enum CallOfferDisposition: Equatable {
-    /// The call is already over. Drop the offer — do not ring CallKit for it.
-    case ignoreCallEnded
-    /// The user already answered and `answer()` has run with nothing to apply. Attach the SDP and
-    /// *finish the answer*.
-    case resumeAnswer
-    /// The call is ringing and unanswered. Attach the SDP for `answer()` to consume.
-    case storeForAnswer
-    /// Another call is in progress and this offer is not glare with it. Refuse it as busy — tell
-    /// the caller and remember the id as ended — and leave the call in progress alone.
-    case declineBusy
-    /// Nothing matches this call id — a genuinely new incoming call.
-    case reportNewCall
-}
-
-/// Decide what an arriving offer means.
-///
-/// "There is an incoming call" and "here is its SDP" travel on separate channels — the VoIP push
-/// (fast, call id only) and the E2EE message stream (slow, carries the SDP) — and CallKit is driven
-/// by the first. Every ordering of those two is reachable, and on 2026-08-05 the unhandled ones
-/// cost a call each way: the offer arrived 30 s after the user answered and nothing consumed it,
-/// then arrived again 8 s after the call ended and rang CallKit for a call nobody was making.
-///
-/// Glare (an *outgoing* call to the same peer) is deliberately not modelled here — it is resolved
-/// by a userId tie-break in `handleIncomingCallOffer` and is a different question from this one.
-///
-/// `isBusyWithAnotherCall` is the guard this path did not have until 2026-10-01. The push path
-/// refused a second caller; an offer for that same second call, arriving a moment later, found no
-/// match and took `.reportNewCall`, whose `begin()` starts with `active?.close()` — the call in
-/// progress was hung up by someone else dialling in. Android raised it from its own code: there the
-/// offer decides "busy", the second caller gets hangup BUSY and the call in progress is untouched.
-func callOfferDisposition(
-    hasRecentlyEnded: Bool,
-    matchesActiveIncomingCall: Bool,
-    awaitingOfferAfterAnswer: Bool,
-    isBusyWithAnotherCall: Bool
-) -> CallOfferDisposition {
-    if hasRecentlyEnded { return .ignoreCallEnded }
-    guard matchesActiveIncomingCall else {
-        return isBusyWithAnotherCall ? .declineBusy : .reportNewCall
-    }
-    return awaitingOfferAfterAnswer ? .resumeAnswer : .storeForAnswer
-}
-
 /// What an arriving VoIP push means for the call state we already hold.
 enum IncomingPushDisposition: Equatable {
     /// Another call is up. Refuse this one: tell CallKit it ended, tell the caller we are busy, and
@@ -134,49 +85,6 @@ func callStateIsBusy(_ state: CallState) -> Bool {
     case .incoming, .dialing, .ringing, .connecting, .active: return true
     case .idle, .ended: return false
     }
-}
-
-/// What an SDP offer means for a call we are already tracking.
-enum RemoteOfferDisposition: Equatable {
-    /// The call is under way — this is the peer renegotiating (ICE restart, re-offer). Apply it;
-    /// asking for consent again would drop a live call.
-    case renegotiate
-    /// An incoming call nobody has answered. Hold the SDP. Consent is what starts negotiation.
-    case holdUntilAnswered
-}
-
-/// Whether an offer for a known call may be negotiated immediately, or must wait for the user.
-///
-/// `callOfferDisposition` above answers this correctly — and was reachable only when no `ActiveCall`
-/// existed yet. When one did, `handleCallSignalProto` went to `handleRemoteOffer` instead: a third
-/// implementation of "apply the offer and answer" that negotiates, marks `answeredAt`, and sets the
-/// call `.active`, with no consent and without telling CallKit. Which of the two ran came down to a
-/// race — whether the VoIP push (call id, fast) beat the E2EE offer (SDP, slow). The push usually
-/// wins, so the usual path was the unguarded one. Build 583, 2026-08-06:
-///
-///     13:52:06  Incoming VoIP push — CallKit notified
-///     13:52:06  WebRTC session created (role=callee)  ← negotiating already
-///     13:52:06  Answer (proto) sent via E2EE          ← and answered, unasked
-///     13:52:09  peerConnectionState → connected
-///     13:52:13  CallKit answer                        ← the user accepts, seven seconds later
-///     13:52:13  "Answered before the offer arrived — waiting up to 45s for SDP"
-///     13:52:22  Call end                              ← never worked
-///
-/// Two consequences. The visible one: CallKit still offers accept/decline while the app's own UI
-/// shows a running timer, because `state = .active` came from media, not from the user. The one that
-/// killed the call: `handleRemoteOffer` consumes the offer without touching
-/// `pendingRemoteOfferSdp`, so the real answer found it empty and armed a 45-second wait for an SDP
-/// that had been applied and answered seven seconds earlier.
-///
-/// The same shape as the rest of this class of defect: two carriers for "the offer has been
-/// applied", disagreeing in silence. `applyOfferAndAnswer` was written to be the single authority
-/// and says so in its own comment — this is the implementation that was left behind it.
-///
-/// A renegotiation is *not* a consent question: the call is already up, and holding an ICE-restart
-/// offer would strand a call the user is in the middle of.
-func remoteOfferDisposition(isIncomingCall: Bool, hasAnswered: Bool) -> RemoteOfferDisposition {
-    guard isIncomingCall, !hasAnswered else { return .renegotiate }
-    return .holdUntilAnswered
 }
 
 /// Whether a stored offer SDP is something that can actually be negotiated.
@@ -260,41 +168,6 @@ func shouldIgnoreSilentPush(foregroundLiveStream: Bool, callNeedsOffer: Bool) ->
     foregroundLiveStream && !callNeedsOffer
 }
 
-/// What a signaling-stream receive loop ending means for the call.
-///
-/// The stream is not the call. Offer, answer, and hangup ride the message path; the stream is
-/// presence, a fast path for ICE — and the only path for the server's own hangup. That last part
-/// is why closing it cannot simply be ignored: the signaling reaper
-/// (`signaling-service/src/registry.rs`, `HangupReason::Timeout`) ends an unanswered call by
-/// sending over the stream, and a call whose stream is gone never hears it. The call may outlive
-/// its stream only while something else bounds it:
-///
-/// - media up — ICE failure or a hangup ends it (the ~30s drop was ending it here);
-/// - answered and waiting for the offer — the 45s offer wait ends it. 2026-09-24, 3C86C064: the
-///   callee answered, the VEIL listener refused the stream, and this end cancelled that wait one
-///   second in, so each side looked like the other had cancelled.
-///
-/// Before media with neither, nothing ends the call: a caller whose stream died would ring until
-/// the user gave up, while the server had already hung up the other side.
-enum SignalingStreamClosedDisposition: Equatable {
-    /// Open the stream again; the call is unaffected.
-    case reconnect
-    /// No more reconnects, but something other than the stream bounds the call.
-    case keepOnMessagePath
-    /// The stream was the last thing that could end this call.
-    case endCall
-}
-
-func signalingStreamClosedDisposition(
-    mediaConnected: Bool,
-    awaitingOfferAfterAnswer: Bool,
-    canReconnect: Bool
-) -> SignalingStreamClosedDisposition {
-    if canReconnect { return .reconnect }
-    if mediaConnected || awaitingOfferAfterAnswer { return .keepOnMessagePath }
-    return .endCall
-}
-
 /// Whether an incoming call should pull missed messages to recover an SDP that has not arrived.
 enum IncomingCallFetchDisposition: Equatable {
     /// The offer is already in hand. A fetch would only replay it.
@@ -335,40 +208,6 @@ func callSignalEncryptDisposition(code: String, message: String) -> CallSignalEn
     // not a missing session and retrying it would loop the same payload.
     if message.localizedCaseInsensitiveContains("No session") { return .retryAfterSession }
     return .drop
-}
-
-/// Who decided the call is over.
-enum CallHangupOrigin: Equatable {
-    /// We hung up (in-app button, CallKit, local failure).
-    case local
-    /// The peer told us, over E2EE. The signaling server has not heard.
-    case remote
-}
-
-enum CallHangupChannel: Equatable {
-    /// Double Ratchet `WebRTCSignal.hangup` — the peer.
-    case e2ee
-    /// Signaling stream presence hangup — the server occupancy table.
-    case signalingStream
-}
-
-/// Which hangup channels must be written for this origin.
-///
-/// Build 631, 2026-08-22, AC92380B:
-///
-///     11:38:14  callee Hangup sent (E2EE+stream)
-///     11:38:14  caller handleCallSignalProto hangup → endActiveCall, no stream hangup
-///     11:38:18  callee InitiateCall → failedPrecondition: "Callee is busy"
-///
-/// The E2EE hangup ended the media path. Occupancy lives on signaling-service, which only
-/// sees the stream. A received hangup that skips the stream leaves the receiver "in a call"
-/// until TTL, so the peer cannot call back. The peer already knows — do not encrypt another
-/// E2EE hangup (that is what failed with `No session with contact` on D858E6FE).
-func callHangupChannels(origin: CallHangupOrigin) -> [CallHangupChannel] {
-    switch origin {
-    case .local: return [.e2ee, .signalingStream]
-    case .remote: return [.signalingStream]
-    }
 }
 
 enum CallState: Equatable {

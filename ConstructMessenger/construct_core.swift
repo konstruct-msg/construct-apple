@@ -6069,6 +6069,125 @@ public func FfiConverterTypeBinaryKeyBundle_lower(_ value: BinaryKeyBundle) -> R
 }
 
 
+public struct CallHangupRoute: Equatable, Hashable {
+    public var e2ee: Bool
+    public var stream: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(e2ee: Bool, stream: Bool) {
+        self.e2ee = e2ee
+        self.stream = stream
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension CallHangupRoute: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHangupRoute: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHangupRoute {
+        return
+            try CallHangupRoute(
+                e2ee: FfiConverterBool.read(from: &buf), 
+                stream: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CallHangupRoute, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.e2ee, into: &buf)
+        FfiConverterBool.write(value.stream, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupRoute_lift(_ buf: RustBuffer) throws -> CallHangupRoute {
+    return try FfiConverterTypeCallHangupRoute.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupRoute_lower(_ value: CallHangupRoute) -> RustBuffer {
+    return FfiConverterTypeCallHangupRoute.lower(value)
+}
+
+
+/**
+ * The call this device holds when an offer arrives.
+ */
+public struct CallHeldCall: Equatable, Hashable {
+    public var sameCall: Bool
+    public var direction: CallDirection
+    public var withOfferer: Bool
+    public var answered: Bool
+    public var awaitingOfferAfterAnswer: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(sameCall: Bool, direction: CallDirection, withOfferer: Bool, answered: Bool, awaitingOfferAfterAnswer: Bool) {
+        self.sameCall = sameCall
+        self.direction = direction
+        self.withOfferer = withOfferer
+        self.answered = answered
+        self.awaitingOfferAfterAnswer = awaitingOfferAfterAnswer
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension CallHeldCall: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHeldCall: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHeldCall {
+        return
+            try CallHeldCall(
+                sameCall: FfiConverterBool.read(from: &buf), 
+                direction: FfiConverterTypeCallDirection.read(from: &buf), 
+                withOfferer: FfiConverterBool.read(from: &buf), 
+                answered: FfiConverterBool.read(from: &buf), 
+                awaitingOfferAfterAnswer: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CallHeldCall, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.sameCall, into: &buf)
+        FfiConverterTypeCallDirection.write(value.direction, into: &buf)
+        FfiConverterBool.write(value.withOfferer, into: &buf)
+        FfiConverterBool.write(value.answered, into: &buf)
+        FfiConverterBool.write(value.awaitingOfferAfterAnswer, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHeldCall_lift(_ buf: RustBuffer) throws -> CallHeldCall {
+    return try FfiConverterTypeCallHeldCall.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHeldCall_lower(_ value: CallHeldCall) -> RustBuffer {
+    return FfiConverterTypeCallHeldCall.lower(value)
+}
+
+
 public struct DecryptedMessageResult: Equatable, Hashable {
     public var plaintext: Data
     public var storageKey: Data
@@ -11033,6 +11152,71 @@ public func FfiConverterTypeCallHangupReason_lower(_ value: CallHangupReason) ->
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CallHangupSide: Equatable, Hashable {
+    
+    case local
+    case remote
+
+
+
+}
+
+#if compiler(>=6)
+extension CallHangupSide: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallHangupSide: FfiConverterRustBuffer {
+    typealias SwiftType = CallHangupSide
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallHangupSide {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .local
+        
+        case 2: return .remote
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallHangupSide, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .local:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .remote:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupSide_lift(_ buf: RustBuffer) throws -> CallHangupSide {
+    return try FfiConverterTypeCallHangupSide.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallHangupSide_lower(_ value: CallHangupSide) -> RustBuffer {
+    return FfiConverterTypeCallHangupSide.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * A call history row's status; codes 0–3 in this order (history_snapshot.proto).
  */
@@ -11110,6 +11294,113 @@ public func FfiConverterTypeCallHistoryStatus_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeCallHistoryStatus_lower(_ value: CallHistoryStatus) -> RustBuffer {
     return FfiConverterTypeCallHistoryStatus.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CallOfferAction: Equatable, Hashable {
+    
+    case ignoreEnded
+    case resumeAnswer
+    case holdUntilAnswered
+    case renegotiate
+    case ring
+    case keepOurs
+    case replaceOutgoing
+    case busy
+
+
+
+}
+
+#if compiler(>=6)
+extension CallOfferAction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallOfferAction: FfiConverterRustBuffer {
+    typealias SwiftType = CallOfferAction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallOfferAction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .ignoreEnded
+        
+        case 2: return .resumeAnswer
+        
+        case 3: return .holdUntilAnswered
+        
+        case 4: return .renegotiate
+        
+        case 5: return .ring
+        
+        case 6: return .keepOurs
+        
+        case 7: return .replaceOutgoing
+        
+        case 8: return .busy
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallOfferAction, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .ignoreEnded:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .resumeAnswer:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .holdUntilAnswered:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .renegotiate:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .ring:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .keepOurs:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .replaceOutgoing:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .busy:
+            writeInt(&buf, Int32(8))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallOfferAction_lift(_ buf: RustBuffer) throws -> CallOfferAction {
+    return try FfiConverterTypeCallOfferAction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallOfferAction_lower(_ value: CallOfferAction) -> RustBuffer {
+    return FfiConverterTypeCallOfferAction.lower(value)
 }
 
 
@@ -11206,6 +11497,78 @@ public func FfiConverterTypeCallSignalError_lift(_ buf: RustBuffer) throws -> Ca
 #endif
 public func FfiConverterTypeCallSignalError_lower(_ value: CallSignalError) -> RustBuffer {
     return FfiConverterTypeCallSignalError.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CallStreamClosedAction: Equatable, Hashable {
+    
+    case reconnect
+    case keepOnMessagePath
+    case endCall
+
+
+
+}
+
+#if compiler(>=6)
+extension CallStreamClosedAction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallStreamClosedAction: FfiConverterRustBuffer {
+    typealias SwiftType = CallStreamClosedAction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallStreamClosedAction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .reconnect
+        
+        case 2: return .keepOnMessagePath
+        
+        case 3: return .endCall
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CallStreamClosedAction, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .reconnect:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .keepOnMessagePath:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .endCall:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallStreamClosedAction_lift(_ buf: RustBuffer) throws -> CallStreamClosedAction {
+    return try FfiConverterTypeCallStreamClosedAction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallStreamClosedAction_lower(_ value: CallStreamClosedAction) -> RustBuffer {
+    return FfiConverterTypeCallStreamClosedAction.lower(value)
 }
 
 
@@ -15821,6 +16184,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCallHeldCall: FfiConverterRustBuffer {
+    typealias SwiftType = CallHeldCall?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCallHeldCall.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCallHeldCall.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer {
     typealias SwiftType = EnvelopeOpened?
 
@@ -17267,6 +17654,17 @@ public func callHangupReasonWire(reason: CallHangupReason) -> Int32  {
 })
 }
 /**
+ * Which channels a hangup is written to (end to end, the signalling stream).
+ */
+public func callHangupRoute(side: CallHangupSide, reason: CallHangupReason) -> CallHangupRoute  {
+    return try!  FfiConverterTypeCallHangupRoute_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_hangup_route(
+        FfiConverterTypeCallHangupSide_lower(side),
+        FfiConverterTypeCallHangupReason_lower(reason),$0
+    )
+})
+}
+/**
  * The history row's status; none for a call taken on another of our devices.
  */
 public func callHistoryStatus(direction: CallDirection, cause: CallEndCause, answered: Bool) -> CallHistoryStatus?  {
@@ -17324,6 +17722,32 @@ public func callOnHangup(device: String, reason: CallHangupReason, chosen: Strin
         FfiConverterTypeCallHangupReason_lower(reason),
         FfiConverterOptionString.lower(chosen),
         FfiConverterSequenceString.lower(offered),$0
+    )
+})
+}
+/**
+ * What an arriving offer means: ring, wait for consent, resume an answer, renegotiate, glare
+ * or busy (construct-rules `calls::on_offer`; `held` none for no call or one that is over).
+ */
+public func callOnOffer(recentlyEnded: Bool, held: CallHeldCall?, myUserId: String, offererUserId: String) -> CallOfferAction  {
+    return try!  FfiConverterTypeCallOfferAction_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_on_offer(
+        FfiConverterBool.lower(recentlyEnded),
+        FfiConverterOptionTypeCallHeldCall.lower(held),
+        FfiConverterString.lower(myUserId),
+        FfiConverterString.lower(offererUserId),$0
+    )
+})
+}
+/**
+ * What the signalling stream closing means for the call.
+ */
+public func callOnStreamClosed(canReconnect: Bool, mediaConnected: Bool, awaitingOfferAfterAnswer: Bool) -> CallStreamClosedAction  {
+    return try!  FfiConverterTypeCallStreamClosedAction_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_on_stream_closed(
+        FfiConverterBool.lower(canReconnect),
+        FfiConverterBool.lower(mediaConnected),
+        FfiConverterBool.lower(awaitingOfferAfterAnswer),$0
     )
 })
 }
@@ -18476,6 +18900,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_call_hangup_reason_wire() != 2312) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_call_hangup_route() != 12811) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_call_history_status() != 36393) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -18489,6 +18916,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_call_on_hangup() != 58669) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_on_offer() != 34755) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_call_on_stream_closed() != 43170) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_call_outcome_wants_attention() != 65524) {

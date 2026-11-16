@@ -4,7 +4,7 @@
 //
 //  Which of the other person's devices each call signal goes to and comes from
 //  (`decisions/a-call-rings-every-device.md`). The rule is the core's (`construct-rules`
-//  `calls`, construct-core 0.73.0, todo 295), shared with Android and construct-client; this file
+//  `calls`, construct-core 0.74.0, todo 295), shared with Android and construct-client; this file
 //  only carries this app's values to it:
 //
 //  - the offer goes to every device of theirs the core plans a send to and we hold a session with;
@@ -79,6 +79,30 @@ enum CallRuleWire {
         case .incoming: return .incoming
         case .outgoing: return .outgoing
         }
+    }
+
+    /// The call this device holds when an offer for `callId` from `offerer` arrives, as the
+    /// core's offer rule reads it (`callOnOffer`). `session`: the call this app tracks, if any.
+    /// A different call that no longer occupies the phone (`isBusy` false: idle, ended) holds
+    /// nothing — a stale call must not refuse a real one. The offer's own call is held in any
+    /// state; an ended one is caught first by `recently_ended`.
+    static func held(
+        callId: String, offerer: String, session: CallSession?, isBusy: Bool,
+        answered: Bool, awaitingOfferAfterAnswer: Bool
+    ) -> CallHeldCall? {
+        guard let session, session.id == callId || isBusy else { return nil }
+        return CallHeldCall(
+            sameCall: session.id == callId,
+            direction: direction(session.direction),
+            withOfferer: session.peerUserId == offerer,
+            answered: answered,
+            awaitingOfferAfterAnswer: awaitingOfferAfterAnswer
+        )
+    }
+
+    /// Which channels a hangup with this wire reason is written to (`call_hangup_route`).
+    static func hangupRoute(side: CallHangupSide, reason r: Shared_Proto_Signaling_V1_HangupReason) -> CallHangupRoute {
+        callHangupRoute(side: side, reason: reason(r))
     }
 
     /// The history row's status as this app stores it (`CallRecord.Status`, the same codes 0–3).

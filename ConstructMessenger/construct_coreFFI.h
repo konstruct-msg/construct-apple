@@ -1801,6 +1801,11 @@ RustBuffer uniffi_construct_core_fn_func_call_hangup_reason_from_wire(int32_t va
 int32_t uniffi_construct_core_fn_func_call_hangup_reason_wire(RustBuffer reason, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_HANGUP_ROUTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_HANGUP_ROUTE
+RustBuffer uniffi_construct_core_fn_func_call_hangup_route(RustBuffer side, RustBuffer reason, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_HISTORY_STATUS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_HISTORY_STATUS
 RustBuffer uniffi_construct_core_fn_func_call_history_status(RustBuffer direction, RustBuffer cause, int8_t answered, RustCallStatus *_Nonnull out_status
@@ -1824,6 +1829,16 @@ RustBuffer uniffi_construct_core_fn_func_call_on_answer(RustBuffer device, RustB
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_HANGUP
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_HANGUP
 RustBuffer uniffi_construct_core_fn_func_call_on_hangup(RustBuffer device, RustBuffer reason, RustBuffer chosen, RustBuffer offered, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_OFFER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_OFFER
+RustBuffer uniffi_construct_core_fn_func_call_on_offer(int8_t recently_ended, RustBuffer held, RustBuffer my_user_id, RustBuffer offerer_user_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_STREAM_CLOSED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_ON_STREAM_CLOSED
+RustBuffer uniffi_construct_core_fn_func_call_on_stream_closed(int8_t can_reconnect, int8_t media_connected, int8_t awaiting_offer_after_answer, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_OUTCOME_WANTS_ATTENTION
@@ -2682,6 +2697,12 @@ uint16_t uniffi_construct_core_checksum_func_call_hangup_reason_wire(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_HANGUP_ROUTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_HANGUP_ROUTE
+uint16_t uniffi_construct_core_checksum_func_call_hangup_route(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_HISTORY_STATUS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_HISTORY_STATUS
 uint16_t uniffi_construct_core_checksum_func_call_history_status(void
@@ -2709,6 +2730,18 @@ uint16_t uniffi_construct_core_checksum_func_call_on_answer(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_HANGUP
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_HANGUP
 uint16_t uniffi_construct_core_checksum_func_call_on_hangup(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_OFFER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_OFFER
+uint16_t uniffi_construct_core_checksum_func_call_on_offer(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_STREAM_CLOSED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_ON_STREAM_CLOSED
+uint16_t uniffi_construct_core_checksum_func_call_on_stream_closed(void
     
 );
 #endif
