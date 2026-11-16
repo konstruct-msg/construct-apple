@@ -111,10 +111,13 @@ extension CallManager {
                 let canReconnect = active.mediaConnected
                     ? active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects
                     : active.streamRetryCount < ActiveCall.maxStreamRetries
-                switch signalingStreamClosedDisposition(
+                // The core's rule (`call_on_stream_closed`, todo 295): the stream is the only
+                // path for the server's own hangup, so a call outlives it only while media or an
+                // answer waiting for its offer bounds it (3C86C064).
+                switch callOnStreamClosed(
+                    canReconnect: canReconnect,
                     mediaConnected: active.mediaConnected,
-                    awaitingOfferAfterAnswer: active.awaitingOfferAfterAnswer,
-                    canReconnect: canReconnect
+                    awaitingOfferAfterAnswer: active.awaitingOfferAfterAnswer
                 ) {
                 case .reconnect:
                     active.stream = nil

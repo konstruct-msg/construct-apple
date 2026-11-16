@@ -110,7 +110,7 @@ extension CallManager {
 
         // The setup below has several awaits. A simultaneous incoming offer from the
         // same peer (glare) replaces `active` with the incoming call via
-        // handleIncomingCallOffer's tie-break-lose branch. Re-check `self.active === call`
+        // the offer's `.replaceOutgoing` (glare, tie-break lost). Re-check `self.active === call`
         // after each await so we never apply TURN/stream/offer of this outgoing call to
         // the call that replaced it; bail out silently if it changed.
         do {

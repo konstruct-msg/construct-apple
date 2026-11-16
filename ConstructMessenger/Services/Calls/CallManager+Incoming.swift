@@ -269,113 +269,94 @@ extension CallManager {
         }
     }
 
-    /// Handle an incoming call offer (SDP received via E2EE message before user answers).
+    /// An SDP offer, out of the Double Ratchet. What it means is the core's rule
+    /// (`call_on_offer`, todo 295), shared with Android and construct-client; this app reads its
+    /// own state into it and does what the rule says. The orders it covers each cost a call before
+    /// they were handled: an offer after the answer (2026-08-05), one after the end (2026-08-05),
+    /// one for a ringing call negotiated before consent (build 583), a second caller's offer that
+    /// replaced the call in progress (2026-10-01).
     ///
-    /// `sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
-    /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding.
-    ///
-    /// `callerDevice`: the caller's device the core opened this offer under. Whatever call this
-    /// offer ends up starting or completing talks to that device and no other
-    /// (`decisions/a-call-rings-every-device.md`).
-    func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool,
-                                 callerDevice: String? = nil) {
-        defer {
-            if let callerDevice, let active, active.session.id == callId, active.peerDevice == nil {
-                active.peerDevice = callerDevice
-            }
-        }
-        // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
-        // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
-        guard offerSdpIsUsable(sdp) else {
-            Log.error(
-                "Incoming offer from \(callerUserId.prefix(8))… carries no SDP — not ringing for a call that cannot connect (callId=\(callId.prefix(8))…)",
-                category: "Calls"
-            )
-            return
-        }
+    /// `offer.sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
+    /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding. `callerDevice`: the
+    /// caller's device the core opened this offer under; the call this offer starts or completes
+    /// talks to that device and no other.
+    func handleOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, callId: String, from callerUserId: String,
+                     callerDevice: String) {
+        let sdp = offer.sdp
         Log.info(
             "Incoming offer SDP from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))… sdp=\(sdp.utf8.count)b",
             category: "Calls"
         )
-        let matchingIncoming: ActiveCall? = {
-            guard let active, active.session.id == callId,
-                  case .incoming = active.session.direction else { return nil }
-            return active
-        }()
-
-        let isBusyWithAnotherCall = active.map { $0.session.id != callId } == true
-            && callStateIsBusy(state)
-            && !isOutgoingCall(to: callerUserId)
-
-        switch callOfferDisposition(
-            hasRecentlyEnded: hasRecentlyEnded(callId: callId),
-            matchesActiveIncomingCall: matchingIncoming != nil,
-            awaitingOfferAfterAnswer: matchingIncoming?.awaitingOfferAfterAnswer ?? false,
-            isBusyWithAnotherCall: isBusyWithAnotherCall
-        ) {
-        case .declineBusy:
-            Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
-            declineAsBusy(callId: callId, callerUserId: callerUserId, callerDevice: callerDevice)
-            return
-
-        case .ignoreCallEnded:
+        let held = CallRuleWire.held(
+            callId: callId, offerer: callerUserId, session: active?.session, isBusy: callStateIsBusy(state),
+            answered: active?.answeredAt != nil,
+            awaitingOfferAfterAnswer: active?.awaitingOfferAfterAnswer ?? false
+        )
+        let action = callOnOffer(
+            recentlyEnded: hasRecentlyEnded(callId: callId), held: held,
+            myUserId: AuthSessionManager.shared.currentUserId ?? "", offererUserId: callerUserId
+        )
+        switch action {
+        case .ignoreEnded:
             Log.info("Ignoring offer for already-ended call \(callId.prefix(8))… — not re-reporting to CallKit", category: "Calls")
             PerformanceMetrics.shared.record(.callSignalAfterEnd, label: "offer")
-            return
 
-        case .storeForAnswer:
-            matchingIncoming?.pendingRemoteOfferSdp = sdp
-            Log.info("Stored pending SDP for existing call callId=\(callId.prefix(8))…", category: "Calls")
-            return
+        case .busy:
+            Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
+            declineAsBusy(callId: callId, callerUserId: callerUserId, callerDevice: callerDevice)
 
-        case .resumeAnswer:
-            guard let call = matchingIncoming else { return }
-            call.pendingRemoteOfferSdp = sdp
-            Log.info("Offer arrived after the user answered — resuming the answer (call_id=\(callId.prefix(8))…)", category: "Calls")
-            PerformanceMetrics.shared.record(.answerBeforeOffer, label: "resumed")
-            Task { [weak self] in
+        case .keepOurs:
+            Log.info("Glare: keeping our outgoing call to \(callerUserId.prefix(8))… (tie-break win) — ignoring their offer", category: "Calls")
+
+        case .holdUntilAnswered, .resumeAnswer:
+            // `holdRemoteOffer` finishes an answer that is waiting for this offer.
+            guard let active, active.session.id == callId else { return }
+            if active.peerDevice == nil { active.peerDevice = callerDevice }
+            ringAsOffered(offer, for: active)
+            takeUpVideoCall(offer, for: active)
+            holdRemoteOffer(offer, for: active)
+
+        case .renegotiate:
+            guard let active, active.session.id == callId else { return }
+            if active.peerDevice == nil { active.peerDevice = callerDevice }
+            Task { @MainActor [weak self] in
                 guard let self else { return }
-                do {
-                    try await self.applyOfferAndAnswer(sdp: sdp, for: call)
-                } catch {
-                    Log.error("Failed to answer with the late offer: \(error)", category: "Calls")
-                    self.endActiveCall(reason: .local("Accept failed"))
-                }
+                await self.handleRemoteOffer(offer, for: active.session)
             }
-            return
 
-        case .reportNewCall:
-            break  // falls through to the glare check and the new-call path below
-        }
-        // Glare: we have an OUTGOING call to the same peer and now receive THEIR offer
-        // (both sides dialed simultaneously, each with its own callId). The core's rule
-        // (`call_glare`, todo 295) decides: the higher account id keeps its outgoing call and
-        // ignores the incoming offer; the lower one yields and answers. Without this both sides tear down their outgoing call and
-        // the call never establishes.
-        if let active, case .outgoing = active.session.direction, active.session.peerUserId == callerUserId {
-            let myUserId = AuthSessionManager.shared.currentUserId ?? ""
-            if callGlare(myUserId: myUserId, peerUserId: callerUserId) == .keepOurs {
-                Log.info("Glare: keeping our outgoing call to \(callerUserId.prefix(8))… (tie-break win) — ignoring their offer", category: "Calls")
+        case .replaceOutgoing, .ring:
+            // Refused here rather than rung: an unusable offer rings CallKit for a call that cannot
+            // be negotiated, and the caller learns nothing until a human hangs up.
+            guard offerSdpIsUsable(sdp) else {
+                Log.error(
+                    "Incoming offer from \(callerUserId.prefix(8))… carries no SDP — not ringing for a call that cannot connect (callId=\(callId.prefix(8))…)",
+                    category: "Calls"
+                )
                 return
             }
-            Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
-            // End our outgoing call in CallKit before begin() replaces it. begin() →
-            // active.close() only tears down WebRTC/stream, NOT the CallKit call. With
-            // maximumCallGroups=1 the stale outgoing UUID would otherwise stay "active",
-            // blocking the next CXStartCallAction with maximumCallGroupsReached and
-            // leaving a phantom call on the lock screen.
-            #if os(iOS)
-            if active.callKitRegistered {
-                CallKitProvider.shared.reportCallEnded(uuid: active.session.uuid)
+            if action == .replaceOutgoing, let active {
+                // Glare, and theirs wins: our outgoing call gives way. End it in CallKit before
+                // begin() replaces it — begin() → close() tears down WebRTC and the stream, not the
+                // CallKit call, and with maximumCallGroups=1 the stale outgoing UUID would block the
+                // next CXStartCallAction and leave a phantom call on the lock screen.
+                Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
+                #if os(iOS)
+                if active.callKitRegistered {
+                    CallKitProvider.shared.reportCallEnded(uuid: active.session.uuid)
+                }
+                #endif
             }
-            #endif
-            // fall through: begin() below closes our outgoing call and creates the incoming one.
+            ringNewCall(offer, callId: callId, callerUserId: callerUserId, callerDevice: callerDevice)
         }
-        // No existing call — create from message-based offer. Caller name is resolved
-        // from local CoreData (profile-shared name → username → generated fallback);
-        // never surface the raw UUID.
-        let name = callerName
-            ?? Self.resolveContactDisplayName(userId: callerUserId)
+    }
+
+    /// A call this device first hears of from its offer. The name is resolved from local Core Data
+    /// (profile-shared name → username → generated fallback); the raw UUID is never shown.
+    private func ringNewCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, callId: String, callerUserId: String,
+                             callerDevice: String) {
+        let hasVideo = CallVideoSignal.answersWithCamera(
+            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+        let name = Self.resolveContactDisplayName(userId: callerUserId)
             ?? NSLocalizedString("call_incoming_audio", comment: "")
         // Report to CallKit FIRST so the session uses CallKit's UUID from the start —
         // avoids creating a provisional ActiveCall and immediately closing/recreating it.
@@ -391,10 +372,12 @@ extension CallManager {
         let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
         begin(session: session, initialState: .incoming(session))
         video.ringsAsVideo = hasVideo
-        active?.pendingRemoteOfferSdp = sdp
+        active?.pendingRemoteOfferSdp = offer.sdp
+        active?.peerDevice = callerDevice
         #if os(iOS)
         active?.callKitRegistered = true
         #endif
         Log.info("Incoming call via E2EE offer from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))…", category: "Calls")
+        if let active { takeUpVideoCall(offer, for: active) }
     }
 }

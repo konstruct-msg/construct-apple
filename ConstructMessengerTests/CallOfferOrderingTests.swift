@@ -28,41 +28,52 @@ import XCTest
 
 final class CallOfferOrderingTests: XCTestCase {
 
+    // What an offer means is the core's rule (`call_on_offer`, construct-rules `calls`, todo 295),
+    // tested there over every state. What these tests hold is this app's half: the state it reads
+    // into the rule (`CallRuleWire.held`) and the orders that each cost a call here.
+
+    private func incoming(_ id: String = "c1", from peer: String = "peer") -> CallSession {
+        CallSession(id: id, uuid: UUID(), peerUserId: peer, peerName: "P", direction: .incoming)
+    }
+
+    private func outgoing(_ id: String = "c0", to peer: String = "peer") -> CallSession {
+        CallSession(id: id, uuid: UUID(), peerUserId: peer, peerName: "P", direction: .outgoing)
+    }
+
+    /// An offer for `callId` from `offerer`, with `session` the call this app tracks.
+    private func action(
+        callId: String = "c1", from offerer: String = "peer", me: String = "me",
+        ended: Bool = false, session: CallSession?, busy: Bool = true,
+        answered: Bool = false, awaiting: Bool = false
+    ) -> CallOfferAction {
+        callOnOffer(
+            recentlyEnded: ended,
+            held: CallRuleWire.held(callId: callId, offerer: offerer, session: session, isBusy: busy,
+                                    answered: answered, awaitingOfferAfterAnswer: awaiting),
+            myUserId: me, offererUserId: offerer
+        )
+    }
+
     // MARK: - The regression: an offer that arrives after the answer must finish the answer
 
     /// The defect. The user tapped Answer while the SDP was still in flight; the offer that finally
-    /// lands must complete the answer, not be filed away.
+    /// lands must complete the answer, not be filed away. This app leaves `answeredAt` unset while
+    /// it waits, so the wait is read from `awaitingOfferAfterAnswer`.
     ///
-    /// Mutation: return `.storeForAnswer` when `awaitingOfferAfterAnswer`.
+    /// Mutation: `CallRuleWire.held` passes `awaitingOfferAfterAnswer: false`.
     func testOfferArrivingAfterTheAnswerResumesIt() {
         XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: true,
-                isBusyWithAnotherCall: false
-            ),
+            action(session: incoming(), awaiting: true),
             .resumeAnswer,
-            "storing it is storing it for a consumer that has already returned — the caller then "
+            "holding it is holding it for a consumer that has already returned — the caller then "
             + "waits in `dialing` for an answer nobody is building"
         )
     }
 
     /// The ordinary ordering, which always worked: offer first, tap second. `answer()` finds the
-    /// SDP waiting and consumes it, so the arriving offer only needs to be stored.
-    ///
-    /// Mutation: return `.resumeAnswer` unconditionally — this is what stops the fix from firing
-    /// a second, concurrent answer on the normal path.
-    func testOfferArrivingBeforeTheAnswerIsJustStored() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: false
-            ),
-            .storeForAnswer
-        )
+    /// SDP waiting and consumes it, so the arriving offer only needs to be held.
+    func testOfferArrivingBeforeTheAnswerIsJustHeld() {
+        XCTAssertEqual(action(session: incoming()), .holdUntilAnswered)
     }
 
     // MARK: - A dead call must stay dead
@@ -70,92 +81,108 @@ final class CallOfferOrderingTests: XCTestCase {
     /// The phantom. A call's signals outlive it — the offer rides the ordinary message stream and
     /// can be delivered long after both sides gave up. Ringing CallKit for it shows the user an
     /// incoming call from someone who is not calling them.
-    ///
-    /// Mutation: drop the `hasRecentlyEnded` guard.
     func testOfferForAnEndedCallIsIgnored() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: true,
-                matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: false
-            ),
-            .ignoreCallEnded
-        )
+        XCTAssertEqual(action(ended: true, session: nil), .ignoreEnded)
     }
 
-    /// "Ended" outranks everything. A redelivered offer for a call that ended while still active
-    /// must not resume an answer either — the state it would resume no longer exists.
+    /// "Ended" outranks everything, a call still held under that id included.
     func testEndedOutranksAnActiveMatch() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: true,
-                matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: true,
-                isBusyWithAnotherCall: false
-            ),
-            .ignoreCallEnded,
-            "the end is the most recent fact about this call id"
-        )
+        XCTAssertEqual(action(ended: true, session: incoming(), awaiting: true), .ignoreEnded)
     }
 
     // MARK: - A genuinely new call must still ring
 
-    /// The guard must not swallow real calls: no active call, never ended, so this is the first
-    /// anyone has heard of it. This is also the path a call takes when the offer beats the push,
-    /// or when there is no push at all.
-    ///
-    /// Mutation: return `.ignoreCallEnded` unconditionally — the one that would make the fix
-    /// silently stop all incoming calls.
+    /// No call at all, never ended: the first anyone has heard of it. This is also the path a
+    /// call takes when the offer beats the push, or when there is no push at all.
     func testUnknownCallIdRings() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: false
-            ),
-            .reportNewCall
-        )
+        XCTAssertEqual(action(session: nil), .ring)
     }
 
-    /// `awaitingOfferAfterAnswer` is meaningless without a matching call and must not leak into
-    /// this decision — a stale flag cannot turn a new call into a resume.
-    func testAwaitingFlagWithoutAMatchStillRings() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: true,
-                isBusyWithAnotherCall: false
-            ),
-            .reportNewCall
-        )
+    /// A different call that no longer occupies the phone (idle, ended) holds nothing: a stale
+    /// call must neither refuse a real one nor lend it its flags.
+    ///
+    /// Mutation: `CallRuleWire.held` ignores `isBusy`.
+    func testAStaleOtherCallDoesNotStandInTheWay() {
+        XCTAssertEqual(action(session: incoming("c0"), busy: false, awaiting: true), .ring)
     }
 
-    // MARK: - All orderings are accounted for
+    /// The offer's own call is held whatever its state: its offer is that call's SDP.
+    ///
+    /// Mutation: `CallRuleWire.held` holds nothing when `isBusy` is false.
+    func testTheOffersOwnCallIsHeldInAnyState() {
+        XCTAssertEqual(action(session: incoming(), busy: false), .holdUntilAnswered)
+    }
 
-    /// Every combination maps to exactly one disposition, and each disposition is reachable. The
-    /// two that were missing are the two that cost a call.
-    func testEveryOrderingHasADisposition() {
-        var seen: Set<CallOfferDisposition> = []
+    // MARK: - An offer for a call already on screen (build 583, 2026-08-06)
+
+    //  An offer for a known call used to go to `handleRemoteOffer` — a third implementation of
+    //  "apply the offer and answer" that negotiates, stamps `answeredAt` and sets the call
+    //  `.active` with no consent, and without touching `pendingRemoteOfferSdp`. Which one ran was
+    //  a race between the VoIP push (call id, fast) and the E2EE offer (SDP, slow), and the push
+    //  usually wins:
+    //
+    //      13:52:06  Incoming VoIP push — CallKit notified
+    //      13:52:06  Answer (proto) sent via E2EE          ← answered, unasked
+    //      13:52:13  CallKit answer                        ← the user, seven seconds later
+    //      13:52:13  "Answered before the offer arrived — waiting up to 45s for SDP"
+    //      13:52:22  Call end                              ← never worked
+
+    /// Once answered, an offer is the peer renegotiating — an ICE restart. Holding it would strand
+    /// a call the user is in the middle of.
+    ///
+    /// Mutation: `CallRuleWire.held` passes `answered: false`.
+    func testAnsweredIncomingCallRenegotiates() {
+        XCTAssertEqual(action(session: incoming(), answered: true), .renegotiate)
+    }
+
+    /// An offer on our own outgoing call is never a consent question — we placed the call.
+    ///
+    /// Mutation: `CallRuleWire.direction` maps outgoing to incoming.
+    func testOutgoingCallAlwaysRenegotiates() {
+        XCTAssertEqual(action(callId: "c0", session: outgoing()), .renegotiate)
+        XCTAssertEqual(action(callId: "c0", session: outgoing(), answered: true), .renegotiate)
+    }
+
+    // MARK: - Glare: both dialled each other
+
+    /// The higher account id keeps its outgoing call and ignores the offer; the lower one gives
+    /// way. Without one answer both sides tear down their call and none is established.
+    ///
+    /// Mutation: `CallRuleWire.held` passes `withOfferer: false`.
+    func testGlareKeepsOneCallOfTheTwo() {
+        XCTAssertEqual(action(from: "a", me: "b", session: outgoing(to: "a")), .keepOurs)
+        XCTAssertEqual(action(from: "b", me: "a", session: outgoing(to: "b")), .replaceOutgoing)
+    }
+
+    /// Our outgoing call is to someone else: their offer is a second caller, not glare.
+    ///
+    /// Mutation: `CallRuleWire.held` passes `withOfferer: true`.
+    func testAnOfferFromSomeoneElseWhileWeDialIsBusy() {
+        XCTAssertEqual(action(from: "a", me: "b", session: outgoing(to: "c")), .busy)
+    }
+
+    /// Every action is reachable from this app's state. An unreachable one is a branch of
+    /// `handleOffer` that cannot be exercised on a device either.
+    func testEveryActionIsReachableFromThisAppsState() {
+        var seen: Set<CallOfferAction> = []
+        let sessions: [CallSession?] = [nil, incoming(), incoming("c0"), outgoing(to: "a"), outgoing(to: "b"),
+                                        outgoing("c1", to: "a")]
         for ended in [true, false] {
-            for match in [true, false] {
-                for awaiting in [true, false] {
-                    seen.insert(callOfferDisposition(
-                        hasRecentlyEnded: ended,
-                        matchesActiveIncomingCall: match,
-                        awaitingOfferAfterAnswer: awaiting,
-                        isBusyWithAnotherCall: false
-                    ))
+            for session in sessions {
+                for busy in [true, false] {
+                    for answered in [true, false] {
+                        for awaiting in [true, false] {
+                            seen.insert(action(from: "a", me: "b", ended: ended, session: session, busy: busy,
+                                               answered: answered, awaiting: awaiting))
+                            seen.insert(action(from: "b", me: "a", ended: ended, session: session, busy: busy,
+                                               answered: answered, awaiting: awaiting))
+                        }
+                    }
                 }
             }
         }
-        XCTAssertEqual(
-            seen,
-            [.ignoreCallEnded, .resumeAnswer, .storeForAnswer, .reportNewCall],
-            "an unreachable disposition is a branch that cannot be exercised on a device either"
-        )
+        XCTAssertEqual(seen, [.ignoreEnded, .resumeAnswer, .holdUntilAnswered, .renegotiate, .ring,
+                              .keepOurs, .replaceOutgoing, .busy])
     }
 
     // MARK: - Not covered here, on purpose
@@ -166,61 +193,6 @@ final class CallOfferOrderingTests: XCTestCase {
     // coverage (decisions/ios-semantic-divergence-signals, amendment 2026-08-04). On device they
     // read as `answer_before_offer` labelled `wait` → `resumed`, or `wait` → `timeout`; a `wait`
     // with neither successor is the defect returning.
-
-    // MARK: - An offer for a call already on screen (build 583, 2026-08-06)
-
-    //  `callOfferDisposition` above was only reachable when no ActiveCall existed. When one did,
-    //  `handleCallSignalProto` went to `handleRemoteOffer` — a third implementation of "apply the
-    //  offer and answer" that negotiates, stamps `answeredAt` and sets the call `.active` with no
-    //  consent, and without touching `pendingRemoteOfferSdp`. Which one ran was a race between the
-    //  VoIP push (call id, fast) and the E2EE offer (SDP, slow), and the push usually wins:
-    //
-    //      13:52:06  Incoming VoIP push — CallKit notified
-    //      13:52:06  Answer (proto) sent via E2EE          ← answered, unasked
-    //      13:52:13  CallKit answer                        ← the user, seven seconds later
-    //      13:52:13  "Answered before the offer arrived — waiting up to 45s for SDP"
-    //      13:52:22  Call end                              ← never worked
-
-    /// The regression, and the reason the call died: an unanswered incoming call must not
-    /// negotiate. Consent starts the handshake.
-    func testUnansweredIncomingCallHoldsTheOffer() {
-        XCTAssertEqual(
-            remoteOfferDisposition(isIncomingCall: true, hasAnswered: false),
-            .holdUntilAnswered,
-            "negotiating here answers the call on the user's behalf and consumes the SDP the real answer needs"
-        )
-    }
-
-    /// Once answered, an offer is the peer renegotiating — an ICE restart. Holding it would strand
-    /// a call the user is in the middle of, which is the failure mode in the other direction.
-    func testAnsweredIncomingCallRenegotiates() {
-        XCTAssertEqual(
-            remoteOfferDisposition(isIncomingCall: true, hasAnswered: true),
-            .renegotiate
-        )
-    }
-
-    /// An offer on our own outgoing call is never a consent question — we placed the call.
-    func testOutgoingCallAlwaysRenegotiates() {
-        XCTAssertEqual(
-            remoteOfferDisposition(isIncomingCall: false, hasAnswered: false),
-            .renegotiate
-        )
-        XCTAssertEqual(
-            remoteOfferDisposition(isIncomingCall: false, hasAnswered: true),
-            .renegotiate
-        )
-    }
-
-    /// Consent is the only thing that distinguishes the two, and it is read from `answeredAt` —
-    /// the same field the duration and the completed/missed verdict come from. Pinned so a future
-    /// change that re-stamps it on renegotiation shows up here as well as in the call history.
-    func testOnlyConsentSeparatesTheTwoDispositions() {
-        XCTAssertNotEqual(
-            remoteOfferDisposition(isIncomingCall: true, hasAnswered: false),
-            remoteOfferDisposition(isIncomingCall: true, hasAnswered: true)
-        )
-    }
 
     // MARK: - An offer with no SDP (build 613, 2026-08-17)
 
@@ -405,51 +377,30 @@ final class CallOfferOrderingTests: XCTestCase {
     //
     //  Android pointed at it from its own code: there the offer decides "busy", the second caller
     //  gets hangup BUSY and the call in progress is untouched. Here only the push asked; the offer
-    //  for the same second call found no match, took `.reportNewCall`, and `begin()` began with
+    //  for the same second call found no match, rang as a new call, and `begin()` began with
     //  `active?.close()` — the call in progress was hung up by someone else dialling in.
 
     /// The defect. An offer for a different call while one is up is refused, not begun.
-    ///
-    /// Mutation: ignore `isBusyWithAnotherCall` — restores the hang-up of the call in progress.
     func testAnOfferForASecondCallIsDeclinedAsBusy() {
         XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: true
-            ),
-            .declineBusy,
-            "`.reportNewCall` runs begin(), which closes the call in progress"
+            action(session: incoming("c0")),
+            .busy,
+            "ringing it runs begin(), which closes the call in progress"
         )
     }
 
     /// The push declined this call first and remembered it as ended; its offer, arriving later,
     /// must be dropped quietly rather than refused a second time.
     func testAnEndedSecondCallIsIgnoredNotDeclinedAgain() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: true,
-                matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: true
-            ),
-            .ignoreCallEnded
-        )
+        XCTAssertEqual(action(ended: true, session: incoming("c0")), .ignoreEnded)
     }
 
     /// Being busy is about *another* call. The offer for the call we are ringing with is that call's
-    /// own SDP, and must still be stored.
+    /// own SDP, and must still be held.
+    ///
+    /// Mutation: `CallRuleWire.held` passes `sameCall: false`.
     func testBusyDoesNotRefuseTheOfferOfOurOwnCall() {
-        XCTAssertEqual(
-            callOfferDisposition(
-                hasRecentlyEnded: false,
-                matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: false,
-                isBusyWithAnotherCall: true
-            ),
-            .storeForAnswer
-        )
+        XCTAssertEqual(action(session: incoming()), .holdUntilAnswered)
     }
 
     /// A call ringing unanswered occupies the phone. Until 2026-10-01 `.incoming` was not busy, and

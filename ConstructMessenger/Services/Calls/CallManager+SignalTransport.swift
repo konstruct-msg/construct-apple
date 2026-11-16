@@ -347,35 +347,7 @@ extension CallManager {
 
         switch signal.signal {
         case .offer(let offer):
-            if let active, active.session.id == signal.callID {
-                if active.peerDevice == nil { active.peerDevice = device }
-                switch remoteOfferDisposition(
-                    isIncomingCall: { if case .incoming = active.session.direction { return true } else { return false } }(),
-                    hasAnswered: active.answeredAt != nil
-                ) {
-                case .holdUntilAnswered:
-                    ringAsOffered(offer, for: active)
-                    takeUpVideoCall(offer, for: active)
-                    holdRemoteOffer(offer, for: active)
-                case .renegotiate:
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        await self.handleRemoteOffer(offer, for: active.session)
-                    }
-                }
-            } else {
-                // Note: `offer.callerUserID` is a UUID, not a display name. Resolve via
-                // local CoreData like the PushKit path does.
-                handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
-                                        callerName: nil,
-                                        sdp: offer.sdp,
-                                        hasVideo: CallVideoSignal.answersWithCamera(
-                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled),
-                                        callerDevice: device)
-                if let active, active.session.id == signal.callID {
-                    takeUpVideoCall(offer, for: active)
-                }
-            }
+            handleOffer(offer, callId: signal.callID, from: senderUserId, callerDevice: device)
         case .answer(let answer):
             guard let call = active, call.session.id == signal.callID else { return }
             switch CallDeviceRouting.onAnswer(from: device, chosen: call.peerDevice, offered: call.offeredDevices) {

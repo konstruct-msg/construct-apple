@@ -3,8 +3,9 @@
 //  ConstructMessengerTests
 //
 //  Three holes from the 2026-08-22 two-device logs (build 631). Each decision is
-//  extracted so a mutation in CallTypes reddens a named test; CallManager wiring
-//  is not stood up here (see CallOfferOrderingTests "Not covered here").
+//  extracted so a mutation reddens a named test. The stream and hangup rules are the core's
+//  (`call_on_stream_closed`, `call_hangup_route`, todo 295), pinned here as this app calls them.
+//  CallManager wiring is not stood up here (see CallOfferOrderingTests "Not covered here").
 //
 
 import XCTest
@@ -40,11 +41,10 @@ final class CallSetupHolesTests: XCTestCase {
 
     /// A closed stream is reopened first, whatever the call is doing.
     ///
-    /// Mutation: drop the `canReconnect` line — this reddens.
     func testAClosedSignalingStreamIsReopenedWhileRetriesRemain() {
         for media in [false, true] {
             XCTAssertEqual(
-                signalingStreamClosedDisposition(mediaConnected: media, awaitingOfferAfterAnswer: false, canReconnect: true),
+                callOnStreamClosed(canReconnect: true, mediaConnected: media, awaitingOfferAfterAnswer: false),
                 .reconnect
             )
         }
@@ -53,20 +53,18 @@ final class CallSetupHolesTests: XCTestCase {
     /// 3C86C064, 2026-09-24. The callee answered, the VEIL listener refused the stream, and the
     /// receive loop ended the call while the 45s offer wait had just started.
     ///
-    /// Mutation: drop `awaitingOfferAfterAnswer` from the keep condition — this reddens.
     func testAnAnsweredCallWaitingForItsOfferOutlivesTheStream() {
         XCTAssertEqual(
-            signalingStreamClosedDisposition(mediaConnected: false, awaitingOfferAfterAnswer: true, canReconnect: false),
+            callOnStreamClosed(canReconnect: false, mediaConnected: false, awaitingOfferAfterAnswer: true),
             .keepOnMessagePath
         )
     }
 
     /// The older hole stays closed: a stream drop after media is up is still not a hangup.
     ///
-    /// Mutation: drop `mediaConnected` from the keep condition — this reddens.
     func testALiveCallOutlivesTheStream() {
         XCTAssertEqual(
-            signalingStreamClosedDisposition(mediaConnected: true, awaitingOfferAfterAnswer: false, canReconnect: false),
+            callOnStreamClosed(canReconnect: false, mediaConnected: true, awaitingOfferAfterAnswer: false),
             .keepOnMessagePath
         )
     }
@@ -75,10 +73,9 @@ final class CallSetupHolesTests: XCTestCase {
     /// no offer wait, nothing would end the call — the caller rings on after the server has hung
     /// up the callee.
     ///
-    /// Mutation: `return .keepOnMessagePath` in place of `.endCall` — this reddens.
     func testAnUnboundedCallEndsWithItsLastStream() {
         XCTAssertEqual(
-            signalingStreamClosedDisposition(mediaConnected: false, awaitingOfferAfterAnswer: false, canReconnect: false),
+            callOnStreamClosed(canReconnect: false, mediaConnected: false, awaitingOfferAfterAnswer: false),
             .endCall
         )
     }
@@ -161,25 +158,25 @@ final class CallSetupHolesTests: XCTestCase {
     /// A hangup we receive over E2EE has not reached signaling-service. Write the stream
     /// so occupancy clears. Do not encrypt another E2EE hangup — the peer already sent it,
     /// and the session may be gone (D858E6FE).
-    ///
-    /// Mutation: `return [.e2ee, .signalingStream]` for remote — encrypt-fail on a dead session.
     func testAReceivedHangupNotifiesTheServerNotThePeer() {
-        XCTAssertEqual(callHangupChannels(origin: .remote), [.signalingStream])
+        XCTAssertEqual(CallRuleWire.hangupRoute(side: .remote, reason: .normal), CallHangupRoute(e2ee: false, stream: true))
     }
 
     /// A hangup we originate still goes both ways: the peer needs E2EE (media path),
     /// the server needs the stream (occupancy).
-    ///
-    /// Mutation: `return [.signalingStream]` for local — peer stays in call until they hang up too.
     func testALocalHangupGoesToThePeerAndTheServer() {
-        XCTAssertEqual(callHangupChannels(origin: .local), [.e2ee, .signalingStream])
+        XCTAssertEqual(CallRuleWire.hangupRoute(side: .local, reason: .normal), CallHangupRoute(e2ee: true, stream: true))
     }
 
-    /// The two origins must not collapse. Occupancy and "tell the peer" are different questions.
-    func testLocalAndRemoteHangupChannelsDiffer() {
-        XCTAssertNotEqual(
-            callHangupChannels(origin: .local),
-            callHangupChannels(origin: .remote)
-        )
+    /// "Accepted elsewhere" never reaches the stream: the server ends the whole call on any hangup
+    /// it sees, so there it would end the call for the device that took it. Ours (releasing a
+    /// device) goes end to end only; one we received goes nowhere.
+    ///
+    /// Mutation: `CallRuleWire.hangupRoute` passes a fixed `.normal` to the rule.
+    func testTakenElsewhereNeverReachesTheStream() {
+        XCTAssertEqual(CallRuleWire.hangupRoute(side: .local, reason: .acceptedElsewhere),
+                       CallHangupRoute(e2ee: true, stream: false))
+        XCTAssertEqual(CallRuleWire.hangupRoute(side: .remote, reason: .acceptedElsewhere),
+                       CallHangupRoute(e2ee: false, stream: false))
     }
 }
