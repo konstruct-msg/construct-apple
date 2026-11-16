@@ -82,9 +82,11 @@ final class CallTurnFetchTests: XCTestCase {
                 calls += 1
                 throw VeilTunnelNotUp()
             },
+            // A second wait would be told "no route", so waiting each time ends the fetch rather
+            // than spinning.
             waitForRoute: {
                 waits += 1
-                return true
+                return waits == 1
             }
         )
         XCTAssertNil(turn)
