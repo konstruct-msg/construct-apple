@@ -56,10 +56,10 @@ extension CallManager {
     /// The devices a signal of call `callId` goes to: the call's own device once it has one, the
     /// devices its offer went to before that, the pinned device for a call we do not hold.
     func callSignalTargets(callId: String, peerUserId: String) -> [String] {
-        let call = active.flatMap { $0.session.id == callId ? $0 : nil }
+        let call = machineCall.flatMap { $0.callId == callId ? $0 : nil }
         return CallDeviceRouting.targets(
-            chosen: call?.peerDevice,
-            offered: call?.offeredDevices ?? [],
+            chosen: call?.chosen,
+            offered: call?.offered ?? [],
             pinned: SessionAddressing.pinnedDevice(ofPeer: peerUserId)
         )
     }
@@ -290,21 +290,22 @@ extension CallManager {
     /// the call for the device that took it.
     private func endFromPeer(reason: Shared_Proto_Signaling_V1_HangupReason, device: String, callId: String, peerUserId: String) {
         guard let call = active, call.session.id == callId else { return }
-        switch CallDeviceRouting.onHangup(from: device, reason: reason, chosen: call.peerDevice, offered: call.offeredDevices) {
+        let step = withMachine {
+            $0.hangupFrom(callId: callId, device: device, reason: CallRuleWire.reason(reason), nowMs: Self.nowMs())
+        }
+        switch step {
         case .ignore:
             return
-        case .endTakenElsewhere:
-            endActiveCall(reason: .hangup(.acceptedElsewhere), reportToCallKit: true)
         case .dropDevice(let remaining):
-            call.offeredDevices = remaining
             Log.info("Device \(device.prefix(8))… is busy — \(remaining.count) still ringing (call_id=\(callId.prefix(8))…)", category: "Calls")
-        case .end(let release):
+        case .end(let release, let reason, let route, let ended):
             releaseDevices(release, callId: callId, peerUserId: peerUserId)
-            // Occupancy lives on signaling-service. The peer already knows (they sent
-            // this); tell the server so a callback in the next few seconds is not
-            // "Callee is busy" (AC92380B).
-            sendHangup(reason: reason, origin: .remote)
-            endActiveCall(reason: .hangup(reason), reportToCallKit: true)
+            // Occupancy lives on signaling-service. The peer already knows (they sent this); the
+            // route tells the server so a callback in the next few seconds is not "Callee is busy"
+            // (AC92380B) — and, for "taken elsewhere", tells nobody.
+            let proto = CallRuleWire.proto(reason)
+            sendHangup(reason: proto, route: route, targets: [])
+            endActiveCall(reason: .hangup(proto), ended: ended, reportToCallKit: true)
         }
     }
 
@@ -336,7 +337,7 @@ extension CallManager {
 
         // Once the call has its device, its siblings do not move it.
         if let active, active.session.id == signal.callID,
-           !CallDeviceRouting.admits(device, chosen: active.peerDevice) {
+           !CallDeviceRouting.admits(device, chosen: machineCall?.chosen) {
             if case .answer? = signal.signal {
                 // A second device answered after the first: release it, below.
             } else {
@@ -349,15 +350,14 @@ extension CallManager {
         case .offer(let offer):
             handleOffer(offer, callId: signal.callID, from: senderUserId, callerDevice: device)
         case .answer(let answer):
-            guard let call = active, call.session.id == signal.callID else { return }
-            switch CallDeviceRouting.onAnswer(from: device, chosen: call.peerDevice, offered: call.offeredDevices) {
+            guard active?.session.id == signal.callID else { return }
+            guard let disposition = withMachine({ $0.answerFrom(callId: signal.callID, device: device) }) else { return }
+            switch disposition {
             case .releaseLate(let late):
                 Log.info("Late answer from \(late.prefix(8))… — another device took the call", category: "Calls")
                 releaseDevices([late], callId: signal.callID, peerUserId: senderUserId)
                 return
-            case .accept(let chosen, let release):
-                call.peerDevice = chosen
-                call.offeredDevices = []
+            case .accept(_, let release):
                 releaseDevices(release, callId: signal.callID, peerUserId: senderUserId)
             }
             let sdp = answer.sdp
@@ -375,8 +375,7 @@ extension CallManager {
                         Log.info("Call changed during E2EE answer — discarding stale state update", category: "Calls")
                         return
                     }
-                    self.state = .active(active.session)
-                    active.answeredAt = Date()
+                    self.withMachine { $0.answered(nowMs: Self.nowMs()) }
                     // Finalize the setup metric and promote CallKit out of "connecting"
                     // (otherwise the caller's lock-screen call UI stays stuck connecting).
                     // This is the only answer path now — the signaling-stream twin it used to
@@ -430,8 +429,8 @@ extension CallManager {
         case .busy:
             endFromPeer(reason: .busy, device: device, callId: signal.callID, peerUserId: senderUserId)
         case .ringing:
-            guard let active, active.session.id == signal.callID else { return }
-            if case .dialing = state { state = .ringing(active.session) }
+            guard active?.session.id == signal.callID else { return }
+            withMachine { $0.ringing() }
         case .mediaUpdate(let update):
             guard active?.session.id == signal.callID,
                   let on = CallVideoSignal.remoteCameraOn(after: update) else { return }

@@ -4,7 +4,8 @@
 //
 //  Three holes from the 2026-08-22 two-device logs (build 631). Each decision is
 //  extracted so a mutation reddens a named test. The stream and hangup rules are the core's
-//  (`call_on_stream_closed`, `call_hangup_route`, todo 295), pinned here as this app calls them.
+//  (the call machine's `streamClosed`, `call_hangup_route`, todo 295), pinned here as this app
+//  calls them.
 //  CallManager wiring is not stood up here (see CallOfferOrderingTests "Not covered here").
 //
 
@@ -39,45 +40,34 @@ final class CallSetupHolesTests: XCTestCase {
         XCTAssertTrue(shouldIgnoreSilentPush(foregroundLiveStream: true, callNeedsOffer: false))
     }
 
-    /// A closed stream is reopened first, whatever the call is doing.
+    /// The stream closing is the call machine's (`streamClosed`): reopened within its budget, then
+    /// kept only while media or an offer wait bounds the call.
     ///
-    func testAClosedSignalingStreamIsReopenedWhileRetriesRemain() {
-        for media in [false, true] {
-            XCTAssertEqual(
-                callOnStreamClosed(canReconnect: true, mediaConnected: media, awaitingOfferAfterAnswer: false),
-                .reconnect
-            )
-        }
-    }
-
-    /// 3C86C064, 2026-09-24. The callee answered, the VEIL listener refused the stream, and the
+    /// 3C86C064, 2026-09-24: the callee answered, the VEIL listener refused the stream, and the
     /// receive loop ended the call while the 45s offer wait had just started.
-    ///
     func testAnAnsweredCallWaitingForItsOfferOutlivesTheStream() {
-        XCTAssertEqual(
-            callOnStreamClosed(canReconnect: false, mediaConnected: false, awaitingOfferAfterAnswer: true),
-            .keepOnMessagePath
-        )
+        let machine = CallMachine()
+        machine.push(callId: "c1", peerUserId: "peer", nowMs: 0)
+        machine.accept(nowMs: 0)
+        for _ in 0..<callTimings().maxStreamRetries {
+            XCTAssertEqual(machine.streamClosed(nowMs: 0), .reconnect)
+        }
+        XCTAssertEqual(machine.streamClosed(nowMs: 0), .keepOnMessagePath)
     }
 
-    /// The older hole stays closed: a stream drop after media is up is still not a hangup.
-    ///
-    func testALiveCallOutlivesTheStream() {
-        XCTAssertEqual(
-            callOnStreamClosed(canReconnect: false, mediaConnected: true, awaitingOfferAfterAnswer: false),
-            .keepOnMessagePath
-        )
-    }
-
-    /// The server's unanswered-call hangup rides the stream. With the stream gone, no media and
-    /// no offer wait, nothing would end the call — the caller rings on after the server has hung
-    /// up the callee.
-    ///
+    /// The server's unanswered-call hangup rides the stream. With the stream gone, no media and no
+    /// offer wait, nothing would end the call — the caller rings on after the server has hung up
+    /// the callee.
     func testAnUnboundedCallEndsWithItsLastStream() {
-        XCTAssertEqual(
-            callOnStreamClosed(canReconnect: false, mediaConnected: false, awaitingOfferAfterAnswer: false),
-            .endCall
-        )
+        let machine = CallMachine()
+        machine.dial(callId: "c1", peerUserId: "peer", nowMs: 0)
+        for _ in 0..<callTimings().maxStreamRetries {
+            XCTAssertEqual(machine.streamClosed(nowMs: 0), .reconnect)
+        }
+        guard case .end(let ended) = machine.streamClosed(nowMs: 0) else {
+            return XCTFail("nothing else bounds the call")
+        }
+        XCTAssertEqual(ended.cause, .local)
     }
 
     /// A down stream never skips, with or without a call — that is the original wake path.

@@ -83,42 +83,20 @@ final class CallManager: CallUIManaging {
     /// Avoids repeated bundle fetches for multiple signals (offer, ICE candidates, etc.).
     var identityKeyCache: [String: Data] = [:]
 
-    /// Call ids that have already ended, with the instant they did.
-    ///
-    /// A call's signals outlive it: the offer travels the ordinary E2EE message stream and can be
-    /// delivered long after both sides gave up. On 2026-08-05 an offer landed 8 s after its call
-    /// had been ended and the offer handler, finding no active call, took the "no existing
-    /// call" branch and rang CallKit again for a call nobody was making — a ghost incoming call
-    /// with the same uuid the log had just reported ended.
-    private var endedCallIds: [String: Date] = [:]
-    /// How long an ended call id is remembered. Only needs to outlive in-flight signals for the
-    /// call that just ended, not to be a durable record.
-    private static let endedCallMemory: TimeInterval = 120
+    /// The call's state: the core's call machine (`CallManager+Machine.swift`). Changed only
+    /// through `withMachine`.
+    let machine = CallMachine()
+    /// The machine's call as of its last change, for views and logs.
+    var machineCall: CallSnapshot?
+    /// The one timer, at `machine.nextDeadline()`.
+    var deadlineTask: Task<Void, Never>?
 
-    private func rememberEnded(callId: String) {
-        let now = Date()
-        endedCallIds[callId] = now
-        endedCallIds = endedCallIds.filter { now.timeIntervalSince($0.value) < Self.endedCallMemory }
-    }
-
-    func hasRecentlyEnded(callId: String) -> Bool {
-        guard let endedAt = endedCallIds[callId] else { return false }
-        return Date().timeIntervalSince(endedAt) < Self.endedCallMemory
-    }
-
-    /// Our outgoing call to `userId` is the one in progress — a call from them now is glare, which
-    /// the offer's tie-break resolves, not a second caller to refuse.
-    func isOutgoingCall(to userId: String) -> Bool {
-        guard let active, case .outgoing = active.session.direction else { return false }
-        return active.session.peerUserId == userId
-    }
-
-    /// Refuse a second call while one is in progress: hangup BUSY to its caller over E2EE, and the
-    /// id remembered as ended, so the push and the offer — whichever comes second — find it ended
-    /// instead of ringing. The call in progress is not touched. Not over the signaling stream: that
-    /// stream belongs to the call in progress; the caller's client tells the server when it ends.
+    /// Refuse a second call while one is in progress: hangup BUSY to its caller over E2EE. The
+    /// machine has remembered the id as ended, so the push and the offer — whichever comes second —
+    /// find it ended instead of ringing. The call in progress is not touched. Not over the
+    /// signaling stream: that stream belongs to the call in progress; the caller's client tells
+    /// the server when it ends.
     func declineAsBusy(callId: String, callerUserId: String, callerDevice: String? = nil) {
-        rememberEnded(callId: callId)
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
         sig.callID = callId
         sig.senderDeviceID = Self.currentDeviceId()
@@ -156,14 +134,6 @@ final class CallManager: CallUIManaging {
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
         var acceptTask: Task<Void, Never>?
-        let startedAt: Date = Date()
-        var answeredAt: Date? = nil
-        /// The peer's device this call talks to: the one that sent the offer (incoming), or the
-        /// one whose answer came first (outgoing). Known from the session the core opened its
-        /// signal under, never from `sender_device_id`. Nil until then.
-        var peerDevice: String?
-        /// The peer's devices our offer went to (outgoing, before an answer).
-        var offeredDevices: [String] = []
         /// SDP offer received via MessagingService before the user answered.
         ///
         /// Read it through `usableRemoteOfferSdp`, never directly: the raw field answers "is there
@@ -176,55 +146,23 @@ final class CallManager: CallUIManaging {
         var usableRemoteOfferSdp: String? {
             offerSdpIsUsable(pendingRemoteOfferSdp) ? pendingRemoteOfferSdp : nil
         }
-        /// The user answered before the SDP offer arrived, and `answer()` has already run to
-        /// completion with nothing to apply.
-        ///
-        /// The two facts "there is an incoming call" and "here is its SDP" travel on separate
-        /// channels — the VoIP push (fast, call id only) and the E2EE offer (slow, carries the
-        /// SDP) — and CallKit is driven by the first. On 2026-08-05 the push rang at 10:02:56, the
-        /// user answered at 10:02:58, and the offer arrived at **10:03:26**, thirty seconds later.
-        /// the offer handler stored it against a consumer that had already returned, so
-        /// nothing ever built the answer: the callee sat in `.connecting` and the caller in
-        /// `dialing` until both gave up by hand.
-        ///
-        /// This flag is what lets the late offer finish the job the answer started.
-        var awaitingOfferAfterAnswer: Bool = false
-        /// Bounds that wait. Without it the callee waits forever on an offer that may never come.
-        var offerWaitTimeout: Task<Void, Never>?
-        /// Ends an incoming call nobody answers. See `startUnansweredTimeout`.
-        var unansweredTimeout: Task<Void, Never>?
         /// ICE candidates received via E2EE before the remote offer was applied.
         /// Applied automatically when pendingRemoteOfferSdp is consumed in answer().
         var pendingIceCandidates: [WebRTCIceCandidate] = []
         /// Whether CallKit successfully registered this call (requestStartCall succeeded).
         /// Only true calls should have reportCallEnded called on them.
         var callKitRegistered: Bool = false
-        /// Number of signaling stream reconnect attempts (timeout-triggered). Capped at maxStreamRetries.
-        var streamRetryCount: Int = 0
-        static let maxStreamRetries = 3
+        /// Times the server did not accept a newly opened stream in time (`openStreamIfNeeded`).
+        /// This platform's own budget: a stream refused this way does not end the call — it goes
+        /// on over E2EE — unlike one that closed (`CallMachine.streamClosed`). Capped at the
+        /// core's `maxStreamRetries`.
+        var acceptTimeouts: UInt32 = 0
         /// ICE candidates waiting to be flushed as a batch to stay under 10/sec signal rate limit.
         /// Our candidates waiting for the debounce, in the clear: each is encrypted per target
         /// device at the flush, because which devices those are can change before it runs.
         var pendingOutgoingIce: [WebRTCIceCandidate] = []
         /// Task that fires after a short debounce to flush pendingOutgoingIce.
         var iceFlushTask: Task<Void, Never>? = nil
-        /// True once WebRTC media (ICE/DTLS) has connected at least once. After this, a
-        /// signaling-stream close must NOT tear down the call — media is P2P/TURN and
-        /// independent of the signaling stream. The call ends only on iceConnectionState
-        /// = failed (onConnectionFailed) or explicit hangup.
-        var mediaConnected: Bool = false
-        /// Signaling-stream reconnect attempts made *after* media was already connected.
-        /// Capped to avoid a tight reconnect loop if the server keeps closing the stream.
-        var postMediaStreamReconnects: Int = 0
-        static let maxPostMediaReconnects = 5
-        /// Debounced restart task fired after `.disconnected` if the call does not
-        /// self-heal. Cancelled as soon as ICE returns to `.connected/.completed`.
-        var iceRestartTask: Task<Void, Never>?
-        /// True while we have already generated and sent an ICE-restart offer and are
-        /// waiting for the connection to recover or for the peer's answer.
-        var isIceRestartInFlight: Bool = false
-        /// Count caller-driven ICE restart attempts for this call.
-        var iceRestartAttempts: Int = 0
 
         init(session: CallSession) {
             self.session = session
@@ -236,12 +174,7 @@ final class CallManager: CallUIManaging {
             receiveTask?.cancel()
             acceptTask?.cancel()
             iceFlushTask?.cancel()
-            iceRestartTask?.cancel()
-            offerWaitTimeout?.cancel()
-            unansweredTimeout?.cancel()
             iceFlushTask = nil
-            iceRestartTask = nil
-            offerWaitTimeout = nil
             studio?.stop()
             studio = nil
             webrtc?.close()
@@ -335,7 +268,7 @@ final class CallManager: CallUIManaging {
 
     /// When the current call was answered — the one value the call screen and the call history
     /// both count the call's time from.
-    var answeredAt: Date? { active?.answeredAt }
+    var answeredAt: Date? { machineCall?.answeredAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } }
 
     /// Mute or unmute the local microphone.
     func setMuted(_ muted: Bool) {
@@ -438,7 +371,7 @@ final class CallManager: CallUIManaging {
         let announce = video.apply(change, canSend: webrtc?.canSendVideo)
         webrtc?.setCameraOn(video.canSend && video.localCameraOn, facing: video.facing)
         // Before media connects nothing is sent: `onConnected` says it then.
-        guard let announce, let active, active.mediaConnected else { return }
+        guard let announce, active != nil, machineCall?.mediaConnected == true else { return }
         sendMediaUpdate(cameraOn: announce)
     }
 
@@ -463,25 +396,24 @@ final class CallManager: CallUIManaging {
             return
         }
 
-        let stillRinging: Bool
-        if case .incoming = state { stillRinging = true } else { stillRinging = false }
-        let reason = CallRuleWire.proto(callLocalHangupReason(
-            direction: CallRuleWire.direction(active.session.direction), stillRinging: stillRinging))
-
         let wasRegisteredWithCallKit = active.callKitRegistered
-        Log.info(
-            "Call end requested source=\(source.rawValue) reason=\(reason) \(describeEndContext(active: active))",
-            category: "Calls"
-        )
+        let context = describeEndContext(active: active)
+        // Best-effort: open the signaling stream so the hangup also takes the fast relay path.
+        // The hangup MUST be sent even if the stream can't open — it also goes E2EE — and
+        // skipping it leaves the peer ringing until the server-side TTL.
+        try? openStreamIfNeeded()
+        // The machine says the reason (declined while ringing, normal after), the devices and the
+        // paths, and ends the call.
+        if let hangup = withMachine({ $0.hangUp(nowMs: Self.nowMs()) }) {
+            Log.info("Call end requested source=\(source.rawValue) reason=\(hangup.reason) \(context)", category: "Calls")
+            sendHangup(hangup)
+            endActiveCall(reason: .hangup(CallRuleWire.proto(hangup.reason)), ended: hangup.ended, reportToCallKit: false)
+        } else {
+            Log.error("Call end requested source=\(source.rawValue) for a call the machine does not hold \(context)", category: "Calls")
+            endActiveCall(reason: .local("Ended without a call"), reportToCallKit: false)
+        }
 
         Task {
-            // Best-effort: open the signaling stream so the hangup also takes the fast
-            // relay path. The hangup MUST be sent even if the stream can't open — it is
-            // also sent via E2EE (sendHangup uses both), and skipping it leaves the peer
-            // ringing until the server-side TTL.
-            try? openStreamIfNeeded()
-            sendHangup(reason: reason, origin: .local)
-            endActiveCall(reason: .hangup(reason), reportToCallKit: false)
             #if os(iOS)
             // When the user ends the call from within the app, CallKit still thinks the
             // call is active. Requesting CXEndCallAction via the call controller causes
@@ -506,36 +438,28 @@ final class CallManager: CallUIManaging {
         active = ActiveCall(session: session)
         video = CallVideoState()
         state = initialState
-        if case .incoming = initialState, let active { startUnansweredTimeout(for: active) }
         PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
     }
 
 
-    func endActiveCall(reason: CallEndReason, reportToCallKit: Bool = true) {
+    /// Tear the call down here. `ended`: the machine's end of it, when the caller already ended it
+    /// there (`hangUp`, `hangupFrom`, a deadline); otherwise the machine ends it now for `reason`
+    /// (`CallRuleWire.end`). The history row and its length are the machine's.
+    func endActiveCall(reason: CallEndReason, ended: CallEnded? = nil, reportToCallKit: Bool = true) {
         guard let active else { return }
         let session = active.session
-        let startedAt = active.startedAt
-        let answeredAt = active.answeredAt
         let wasRegisteredWithCallKit = active.callKitRegistered
         let metricsLabel = String(session.id.prefix(8))
+        let ended = ended ?? withMachine { CallRuleWire.end(reason, in: $0, nowMs: Self.nowMs()) }
 
-        // If we never reached "active", clean up pending metric starts.
-        if answeredAt == nil {
-            PerformanceMetrics.shared.cancelStart(.callSetupStart, label: metricsLabel)
-        }
+        // A setup that never finished leaves its start pending (an answered call already ended
+        // it; cancelling a finished one does nothing).
+        PerformanceMetrics.shared.cancelStart(.callSetupStart, label: metricsLabel)
         PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
-
-        // The history row, by the core's rule (todo 295): none for a call taken on another of our
-        // devices — that device records it; this one shows neither a missed call nor a second row.
-        let historyStatus = callHistoryStatus(direction: CallRuleWire.direction(session.direction),
-                                              cause: CallRuleWire.cause(reason), answered: answeredAt != nil)
-        let duration = callDurationSeconds(answeredAtMs: answeredAt.map { Int64($0.timeIntervalSince1970 * 1000) },
-                                           endedAtMs: Int64(Date().timeIntervalSince1970 * 1000))
 
         active.close()
         self.active = nil
         video = CallVideoState()
-        rememberEnded(callId: session.id)
         clearIdentityKeyCache()
         // Return the signal-send chain to idle. sendHangup() above already chained this
         // call's hangup, whose Task keeps running after this nil (it still delivers); we
@@ -551,13 +475,17 @@ final class CallManager: CallUIManaging {
             if case .ended = self.state { self.state = .idle }
         }
 
-        if let historyStatus {
+        // The history row, by the core's rule: none for a call taken on another of our devices —
+        // that device records it; this one shows neither a missed call nor a second row.
+        if let ended, let historyStatus = ended.history {
             CallHistoryService.shared.record(
                 session: session,
                 status: CallRuleWire.record(historyStatus),
-                startedAt: startedAt,
-                durationSeconds: Int32(clamping: duration)
+                startedAt: Date(timeIntervalSince1970: Double(ended.startedAtMs) / 1000),
+                durationSeconds: Int32(clamping: ended.durationSeconds)
             )
+        } else if ended == nil {
+            Log.error("Call \(session.id.prefix(8))… ended here but not in the call machine — no history row", category: "Calls")
         }
 
         #if os(iOS)
@@ -595,16 +523,19 @@ final class CallManager: CallUIManaging {
     }
 
 
-    func sendHangup(
-        reason: Shared_Proto_Signaling_V1_HangupReason,
-        origin: CallHangupSide
-    ) {
+    /// Our hangup, as the machine decided it: its reason, its devices and its paths.
+    func sendHangup(_ hangup: CallLocalHangup) {
+        sendHangup(reason: CallRuleWire.proto(hangup.reason), route: hangup.route, targets: hangup.targets)
+    }
+
+    /// A hangup on `route`: end to end to `targets` (none: the call's targets, else the pinned
+    /// device), and on the signaling stream. The machine's `call_hangup_route` decides the route:
+    /// ours goes both ways; one the peer sent only to the stream, so the server's occupancy
+    /// clears (AC92380B) without encrypting into a session that may be gone (D858E6FE); "accepted
+    /// elsewhere" never to the stream, where the server would end the call for the device that
+    /// took it.
+    func sendHangup(reason: Shared_Proto_Signaling_V1_HangupReason, route: CallHangupRoute, targets: [String]) {
         guard let active else { return }
-        // The core's rule (`call_hangup_route`, todo 295): ours goes to the peer and the server;
-        // one the peer sent goes to the server only, so its occupancy clears (AC92380B) without
-        // encrypting into a session that may be gone (D858E6FE); "accepted elsewhere" never goes
-        // to the stream, where the server would end the call for the device that took it.
-        let route = CallRuleWire.hangupRoute(side: origin, reason: reason)
         var e2eeSent = false
         var streamSent = false
         if route.e2ee {
@@ -613,7 +544,7 @@ final class CallManager: CallUIManaging {
             sig.senderDeviceID = Self.currentDeviceId()
             sig.timestamp = Self.nowMs()
             sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: reason))
-            switch sendCallSignalProto(sig, to: active.session.peerUserId) {
+            switch sendCallSignalProto(sig, to: active.session.peerUserId, devices: CallRuleWire.devices(targets)) {
             case .encrypted:
                 e2eeSent = true
             case .sessionMissing, .failed:
@@ -621,7 +552,7 @@ final class CallManager: CallUIManaging {
                 // logged CALL_SIGNAL_ENCRYPT_FAILED on D858E6FE and then claimed
                 // "Hangup sent (E2EE+stream)" anyway.
                 Log.info(
-                    "E2EE hangup not sent (\(origin)) — no session or encrypt failed (call_id=\(active.session.id.prefix(8))…)",
+                    "E2EE hangup not sent — no session or encrypt failed (call_id=\(active.session.id.prefix(8))…)",
                     category: "Calls"
                 )
             }
@@ -635,7 +566,7 @@ final class CallManager: CallUIManaging {
             streamSent = true
         }
         Log.info(
-            "Hangup sent (e2ee=\(e2eeSent) stream=\(streamSent) origin=\(origin)) to \(active.session.peerUserId.prefix(8))… reason=\(reason)",
+            "Hangup sent (e2ee=\(e2eeSent) stream=\(streamSent)) to \(active.session.peerUserId.prefix(8))… reason=\(reason)",
             category: "Calls"
         )
     }
@@ -664,16 +595,17 @@ final class CallManager: CallUIManaging {
     }
 
     private func describeEndContext(active: ActiveCall) -> String {
-        let setupMs = Int(Date().timeIntervalSince(active.startedAt) * 1000)
-        let answerMs = active.answeredAt.map { Int(Date().timeIntervalSince($0) * 1000) }
+        let now = Self.nowMs()
+        let setupMs = machineCall.map { Int(now - $0.startedAtMs) } ?? -1
+        let answerMs = machineCall?.answeredAtMs.map { Int(now - $0) }
         return [
             "call_id=\(active.session.id.prefix(8))…",
             "dir=\(active.session.direction.debugName)",
             "state=\(state.debugName)",
-            "mediaConnected=\(active.mediaConnected)",
+            "mediaConnected=\(machineCall?.mediaConnected ?? false)",
             "streamOpen=\(active.stream != nil)",
             "callKitRegistered=\(active.callKitRegistered)",
-            "answered=\(active.answeredAt != nil)",
+            "answered=\(machineCall?.answeredAtMs != nil)",
             "setupAgeMs=\(setupMs)",
             "answerAgeMs=\(answerMs.map(String.init) ?? "nil")",
             Self.currentAppContext()

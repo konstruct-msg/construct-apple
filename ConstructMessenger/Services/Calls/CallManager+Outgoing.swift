@@ -71,27 +71,27 @@ extension CallManager {
             return
         }
 
-        // Busy / glare guard. Without this, `begin()` → `active?.close()` would tear down
-        // an existing call to start the new outgoing one, and the subsequent
+        // Busy / glare guard, by the machine (`dial`). Without it, `begin()` → `active?.close()`
+        // would tear down an existing call to start the new outgoing one, and the subsequent
         // CXStartCallAction fails with maximumCallGroupsReached (Code 7) — orphaning the
-        // original call in CallKit ("Answer for unknown call"). Mirrors the guard in
-        // `handleIncomingPush`, which `startOutgoingCall` was missing.
-        if let active {
-            // Glare: the same peer is already calling us → answer their call instead of
-            // starting a competing outgoing one.
-            if case .incoming = active.session.direction, active.session.peerUserId == userId {
-                Log.info("Glare: outgoing request to \(userId.prefix(8))… while incoming from same peer — answering instead", category: "Calls")
-                answer(callUUID: active.session.uuid)
-                return
-            }
-            Log.info("Busy — ignoring outgoing call to \(userId.prefix(8))… (a call is already active)", category: "Calls")
-            lastError = NSLocalizedString("call_error_busy", comment: "")
-            return
-        }
-
+        // original call in CallKit ("Answer for unknown call").
         // Use UUID string for call_id so it round-trips through CallKit cleanly.
         let uuid = UUID()
         let callId = uuid.uuidString
+        switch withMachine({ $0.dial(callId: callId, peerUserId: userId, nowMs: Self.nowMs()) }) {
+        case .answerInstead:
+            // Glare: the same peer is already calling us → answer their call instead of
+            // starting a competing outgoing one.
+            Log.info("Glare: outgoing request to \(userId.prefix(8))… while incoming from same peer — answering instead", category: "Calls")
+            if let active { answer(callUUID: active.session.uuid) }
+            return
+        case .busy:
+            Log.info("Busy — ignoring outgoing call to \(userId.prefix(8))… (a call is already active)", category: "Calls")
+            lastError = NSLocalizedString("call_error_busy", comment: "")
+            return
+        case .start:
+            break
+        }
 
         let session = CallSession(
             id: callId,
@@ -167,7 +167,8 @@ extension CallManager {
             // signaling stream so they are not left ringing / we are not left "busy".
             guard self.active === call else { return }
             try? openStreamIfNeeded()
-            sendHangup(reason: .normal, origin: .local)
+            sendHangup(reason: .normal, route: CallRuleWire.hangupRoute(side: .local, reason: .normal),
+                       targets: machineCall?.targets ?? [])
             endActiveCall(reason: .local("Call setup failed"))
         }
     }

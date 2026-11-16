@@ -4,7 +4,7 @@
 //
 //  Which of the other person's devices each call signal goes to and comes from
 //  (`decisions/a-call-rings-every-device.md`). The rule is the core's (`construct-rules`
-//  `calls`, construct-core 0.74.0, todo 295), shared with Android and construct-client; this file
+//  `calls`, construct-core 0.75.0, todo 295), shared with Android and construct-client; this file
 //  only carries this app's values to it:
 //
 //  - the offer goes to every device of theirs the core plans a send to and we hold a session with;
@@ -39,18 +39,6 @@ enum CallDeviceRouting {
     static func admits(_ device: String, chosen: String?) -> Bool {
         callAdmits(device: device, chosen: chosen)
     }
-
-    static func onAnswer(from device: String, chosen: String?, offered: [String]) -> CallAnswerDisposition {
-        callOnAnswer(device: device, chosen: chosen, offered: offered)
-    }
-
-    /// A hangup from one of the peer's devices: declining anywhere ends the call for every
-    /// device; busy on one only takes that one out until all are busy; taken on another of our
-    /// devices ends this one's ringing and nothing else.
-    static func onHangup(from device: String, reason: Shared_Proto_Signaling_V1_HangupReason,
-                         chosen: String?, offered: [String]) -> CallHangupDisposition {
-        callOnHangup(device: device, reason: CallRuleWire.reason(reason), chosen: chosen, offered: offered)
-    }
 }
 
 /// This app's call values in the core rule's types. The wire enums map by their numbers, so an
@@ -74,30 +62,34 @@ enum CallRuleWire {
         }
     }
 
-    static func direction(_ d: CallSession.Direction) -> CallDirection {
-        switch d {
-        case .incoming: return .incoming
-        case .outgoing: return .outgoing
+    /// What the call screen shows for the machine's phase of `session`.
+    static func state(_ phase: CallMachinePhase, session: CallSession) -> CallState {
+        switch phase {
+        case .incoming: return .incoming(session)
+        case .dialing: return .dialing(session)
+        case .ringing: return .ringing(session)
+        case .connecting: return .connecting(session)
+        case .active: return .active(session)
         }
     }
 
-    /// The call this device holds when an offer for `callId` from `offerer` arrives, as the
-    /// core's offer rule reads it (`callOnOffer`). `session`: the call this app tracks, if any.
-    /// A different call that no longer occupies the phone (`isBusy` false: idle, ended) holds
-    /// nothing — a stale call must not refuse a real one. The offer's own call is held in any
-    /// state; an ended one is caught first by `recently_ended`.
-    static func held(
-        callId: String, offerer: String, session: CallSession?, isBusy: Bool,
-        answered: Bool, awaitingOfferAfterAnswer: Bool
-    ) -> CallHeldCall? {
-        guard let session, session.id == callId || isBusy else { return nil }
-        return CallHeldCall(
-            sameCall: session.id == callId,
-            direction: direction(session.direction),
-            withOfferer: session.peerUserId == offerer,
-            answered: answered,
-            awaitingOfferAfterAnswer: awaitingOfferAfterAnswer
-        )
+    /// End the machine's call for `reason`: a server's hangup or busy (over the stream, so
+    /// nothing goes back), a server's error, or a failure of our own. A hangup we send or one the
+    /// peer sent end to end ends through `hangUp` / `hangupFrom`, which also say where it goes.
+    /// Nil when the machine holds no call, or for a rate limit, which ends nothing.
+    static func end(_ reason: CallEndReason, in machine: CallMachine, nowMs: Int64) -> CallEnded? {
+        switch reason {
+        case .hangup(let r): return machine.endedByServer(reason: Self.reason(r), nowMs: nowMs)
+        case .error(let code):
+            return machine.serverError(error: callSignalErrorFromWire(value: Int32(truncatingIfNeeded: code.rawValue)), nowMs: nowMs)
+        case .local: return machine.fail(nowMs: nowMs)
+        }
+    }
+
+    /// The devices a hangup is sealed for, as `sendCallSignalProto` takes them: nil (the call's
+    /// targets, else the pinned device) when the machine knew none.
+    static func devices(_ targets: [String]) -> [String]? {
+        targets.isEmpty ? nil : targets
     }
 
     /// Which channels a hangup with this wire reason is written to (`call_hangup_route`).
