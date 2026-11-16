@@ -16,49 +16,27 @@ import UIKit
 #endif
 
 extension CallManager {
-    private func scheduleIceRestartIfNeeded() {
+    /// ICE reports the path disconnected. The machine decides (`mediaQuality`): only the caller
+    /// restarts, once media has been up, after the grace, at most three times — the deadline lands
+    /// in `deadlinePassed` as `.restartIce`.
+    private func iceDisconnected() {
         guard let active else { return }
-        guard active.mediaConnected else { return }
-        guard active.session.direction == .outgoing else {
+        switch withMachine({ $0.mediaQuality(reconnecting: true, nowMs: Self.nowMs()) }) {
+        case .schedule:
+            Log.info("ICE disconnected — scheduling restart for call_id=\(active.session.id.prefix(8))…", category: "Calls")
+        case .calleeWaits:
             Log.info("ICE disconnected on callee side — waiting for caller-driven restart", category: "Calls")
-            return
+        case .skip:
+            break
         }
-        guard active.webrtc != nil else { return }
-        guard !active.isIceRestartInFlight else { return }
-        guard active.iceRestartTask == nil else { return }
-        guard active.iceRestartAttempts < NetworkTiming.Calls.maxIceRestartAttempts else {
-            Log.error("ICE restart cap reached for call_id=\(active.session.id.prefix(8))…", category: "Calls")
-            return
-        }
-
-        let expectedSessionId = active.session.id
-        active.iceRestartTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer {
-                if self.active?.session.id == expectedSessionId {
-                    self.active?.iceRestartTask = nil
-                }
-            }
-            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.iceRestartGraceDelay))
-            guard !Task.isCancelled else { return }
-            guard let active = self.active, active.session.id == expectedSessionId else { return }
-            guard self.callQuality == .reconnecting else { return }
-            await self.performIceRestart(for: active)
-        }
-        Log.info("ICE disconnected — scheduling restart for call_id=\(active.session.id.prefix(8))…", category: "Calls")
     }
 
-    private func performIceRestart(for active: ActiveCall) async {
+    /// The grace passed with ICE still down: send the restart offer. The machine has counted the
+    /// attempt; `iceRestartSent` lets the next one be scheduled.
+    func performIceRestart(for active: ActiveCall) async {
         guard self.active === active else { return }
-        guard !active.isIceRestartInFlight else { return }
-        guard active.iceRestartAttempts < NetworkTiming.Calls.maxIceRestartAttempts else { return }
-
-        active.isIceRestartInFlight = true
-        active.iceRestartAttempts += 1
         defer {
-            if self.active === active {
-                active.isIceRestartInFlight = false
-            }
+            if self.active === active { withMachine { $0.iceRestartSent() } }
         }
 
         do {
@@ -69,7 +47,7 @@ extension CallManager {
             guard self.active === active else { return }
             try sendOffer(sdp: sdp, toUserId: active.session.peerUserId, isIceRestart: true)
             Log.info(
-                "ICE restart offer sent (attempt \(active.iceRestartAttempts)/\(NetworkTiming.Calls.maxIceRestartAttempts)) call_id=\(active.session.id.prefix(8))…",
+                "ICE restart offer sent (at most \(callTimings().maxIceRestarts) per connection) call_id=\(active.session.id.prefix(8))…",
                 category: "Calls"
             )
         } catch {
@@ -102,12 +80,8 @@ extension CallManager {
                 guard let self else { return }
                 // Media path is up — from now on the call survives signaling-stream drops
                 // (see receive-loop close handler in openStreamIfNeeded).
-                let firstConnect = self.active?.mediaConnected == false
-                self.active?.mediaConnected = true
-                self.active?.iceRestartTask?.cancel()
-                self.active?.iceRestartTask = nil
-                self.active?.isIceRestartInFlight = false
-                self.active?.iceRestartAttempts = 0
+                let firstConnect = self.machineCall?.mediaConnected == false
+                self.withMachine { $0.mediaConnected() }
                 // Promote the call to "answered" server-side so the aggressive
                 // ringing-without-answer reaper stops applying (E2EE answer never reaches
                 // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
@@ -121,7 +95,7 @@ extension CallManager {
                 // never delivered didActivate. Idempotent — peerConnectionState may
                 // bounce through .connected on reconnects.
                 #if os(iOS)
-                CallAudioController.shared.notifyMediaConnected(hasAnswered: self.active?.answeredAt != nil)
+                CallAudioController.shared.notifyMediaConnected(hasAnswered: self.machineCall?.answeredAtMs != nil)
                 if CallVideoAudio.movesToSpeakerWhenMediaConnects(
                     firstConnect: firstConnect,
                     isSending: self.video.canSend && self.video.localCameraOn,
@@ -138,10 +112,9 @@ extension CallManager {
                 self.callQuality = q
                 switch q {
                 case .reconnecting:
-                    self.scheduleIceRestartIfNeeded()
+                    self.iceDisconnected()
                 case .good:
-                    self.active?.iceRestartTask?.cancel()
-                    self.active?.iceRestartTask = nil
+                    self.withMachine { $0.mediaQuality(reconnecting: false, nowMs: Self.nowMs()) }
                 }
             }
         }
@@ -164,25 +137,17 @@ extension CallManager {
     /// they stored was ciphertext or not and none of them could tell. `pendingRemoteOfferSdp` holds
     /// plaintext SDP, from every path that writes it.
     func holdRemoteOffer(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        // An offer without SDP never gets here: the machine ends the call over it (`.fail`).
         let sdp = offer.sdp
-        // Same refusal as the message path: holding an empty offer is what made `answer()` and the
-        // ICE paths disagree about whether an offer was present at all.
-        guard offerSdpIsUsable(sdp) else {
-            Log.error(
-                "Held offer for call \(call.session.id.prefix(8))… carries no SDP — ending rather than waiting on it",
-                category: "Calls"
-            )
-            endActiveCall(reason: .local("Offer handling failed"))
-            return
-        }
         call.pendingRemoteOfferSdp = sdp
         Log.info(
             "Holding offer for unanswered call \(call.session.id.prefix(8))… — negotiation waits for the user (sdp=\(sdp.utf8.count)b)",
             category: "Calls"
         )
         // Already waiting on an SDP because the user answered first? Then consent exists and the
-        // answer can finish now. Same transition `.resumeAnswer` makes on the push-less path.
-        guard call.awaitingOfferAfterAnswer else { return }
+        // answer can finish now — once its WebRTC session is up. Before that the answer is still
+        // fetching TURN, and finds this SDP itself when it is done.
+        guard machineCall?.awaitingOfferAfterAnswer == true, call.webrtc != nil else { return }
         Log.info("Offer arrived after the user answered — resuming the answer (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
         PerformanceMetrics.shared.record(.answerBeforeOffer, label: "resumed")
         Task { [weak self] in
@@ -225,15 +190,13 @@ extension CallManager {
                 return
             }
             sendAnswer(sdp: answerSdp)
-            // Only ever a *first* answer for an outgoing/glare call. A renegotiation of a call the
-            // user already answered must not re-stamp this — `answeredAt` is what call duration and
-            // the completed/missed verdict are computed from, so restamping it on an ICE restart
-            // would report a two-minute call as ten seconds.
-            if active.answeredAt == nil {
-                active.answeredAt = Date()
+            // The setup metric ends on the first answer only. The machine stamps the answer once
+            // too: duration and the completed/missed verdict count from it, and restamping it on an
+            // ICE restart would report a two-minute call as ten seconds.
+            if machineCall?.answeredAtMs == nil {
                 PerformanceMetrics.shared.end(.callSetupStart, endEvent: .callSetupEnd, label: String(session.id.prefix(8)))
             }
-            state = .active(session)
+            withMachine { $0.answered(nowMs: Self.nowMs()) }
         } catch {
             Log.error("Failed to handle offer: \(error)", category: "Calls")
             endActiveCall(reason: .local("Offer handling failed"))
@@ -243,7 +206,7 @@ extension CallManager {
     func handleRemoteIceCandidate(_ c: Shared_Proto_Signaling_V1_IceCandidate, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
-            guard let device = active.peerDevice ?? SessionAddressing.pinnedDevice(ofPeer: session.peerUserId) else {
+            guard let device = machineCall?.chosen ?? SessionAddressing.pinnedDevice(ofPeer: session.peerUserId) else {
                 Log.error("ICE candidate on the stream with no device to open it — dropping", category: "Calls")
                 return
             }
@@ -329,9 +292,10 @@ extension CallManager {
         sig.senderDeviceID = Self.currentDeviceId()
         sig.timestamp = Self.nowMs()
         sig.signal = .offer(offer)
-        if !isIceRestart, active.peerDevice == nil, case .outgoing = active.session.direction {
-            active.offeredDevices = Self.offerDevices(ofPeer: toUserId)
-            Log.info("Offer goes to \(active.offeredDevices.count) device(s) of \(toUserId.prefix(8))…", category: "Calls")
+        if !isIceRestart, machineCall?.chosen == nil, case .outgoing = active.session.direction {
+            let devices = Self.offerDevices(ofPeer: toUserId)
+            withMachine { $0.offerSent(devices: devices) }
+            Log.info("Offer goes to \(devices.count) device(s) of \(toUserId.prefix(8))…", category: "Calls")
         }
         let encrypt = sendCallSignalProto(sig, to: toUserId)
         let kind = isIceRestart ? "ICE restart offer" : "Offer"

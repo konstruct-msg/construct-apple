@@ -49,12 +49,9 @@ extension CallManager {
             return
         }
 
-        switch incomingPushDisposition(
-            hasActiveCall: active != nil,
-            isBusyState: callStateIsBusy(state),
-            matchesTrackedCallId: active?.session.id == callId,
-            isGlareWithCaller: isOutgoingCall(to: callerId)
-        ) {
+        // What the push means is the machine's (`push`): the push and the offer are two carriers
+        // of one call, and the offer carries strictly more (build 630).
+        switch withMachine({ $0.push(callId: callId, peerUserId: callerId, nowMs: Self.nowMs()) }) {
         case .declineBusy:
             // `begin()` would silently close the active call via active?.close() — don't let that happen.
             Log.info("Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
@@ -65,7 +62,7 @@ extension CallManager {
             declineAsBusy(callId: callId, callerUserId: callerId)
             return
 
-        case .deferToGlareTieBreak:
+        case .deferToGlare:
             Log.info("Push from \(callerId.prefix(8))… while our call to them is up — the offer's tie-break decides", category: "Calls")
             #if os(iOS)
             CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
@@ -83,7 +80,7 @@ extension CallManager {
             pullMissedCallSignalsIfNeeded()
             return
 
-        case .beginNewCall:
+        case .begin:
             break
         }
 
@@ -126,12 +123,17 @@ extension CallManager {
             Log.info("Answer for unknown call uuid=\(callUUID.uuidString.prefix(8))…", category: "Calls")
             return
         }
-        guard case .incoming = active.session.direction else { return }
+        // The machine moves the call to connecting and, with no offer held, starts the offer wait.
+        // Whether to apply or to wait is read again below from the SDP itself: an offer may land
+        // while TURN is fetched.
+        guard withMachine({ $0.accept(nowMs: Self.nowMs()) }) != .ignore else {
+            Log.info("Answer for a call that is not ringing (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+            return
+        }
 
         #if os(iOS)
         DialTonePlayer.shared.stop()
         #endif
-        state = .connecting(active.session)
 
         Task { [weak self] in
             guard let self else { return }
@@ -161,30 +163,22 @@ extension CallManager {
 
                 // No offer yet. The user has answered a call whose SDP has not arrived — the two
                 // travel on different channels and the push can beat the offer by a wide margin.
-                // Record that so the late offer can finish what this answer started, and bound the
-                // wait so a call that never gets its SDP fails visibly instead of ringing forever.
-                self.active?.awaitingOfferAfterAnswer = true
+                // The machine waits for it (the late offer finishes this answer) and bounds the
+                // wait, so a call that never gets its SDP fails visibly instead of ringing forever.
                 try openStreamIfNeeded()
                 sendRinging()
-                Log.info("Answered before the offer arrived — waiting up to \(Int(Self.offerAfterAnswerTimeout))s for SDP (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+                Log.info("Answered before the offer arrived — waiting up to \(Int(callTimings().offerWaitMs / 1000))s for SDP (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
                 PerformanceMetrics.shared.record(.answerBeforeOffer, label: "wait")
                 // The offer is already on the server more often than not (7CDE9769: sent
                 // the same second as the VoIP push). Don't wait for a zombie stream to
                 // die — pull the backlog now.
                 self.pullMissedCallSignalsIfNeeded()
-                self.startOfferWaitTimeout(for: active)
             } catch {
                 Log.error("Failed to accept call: \(error)", category: "Calls")
                 endActiveCall(reason: .local("Accept failed"))
             }
         }
     }
-
-    /// How long the callee waits for the SDP offer after answering. Generous on purpose: the offer
-    /// rides the ordinary E2EE message stream and queues behind whatever else is on it — the
-    /// 2026-08-05 case took 30 s behind a backlog. Past this the call is honestly failed rather
-    /// than left ringing on both sides.
-    static let offerAfterAnswerTimeout: TimeInterval = 45
 
     /// Apply a remote offer and send the answer. The single authority for that sequence: it runs
     /// both when the offer beat the user's tap and when it arrived after it, and those two used to
@@ -196,9 +190,6 @@ extension CallManager {
         try await webrtc.setRemoteOffer(sdp: sdp)
         applyCamera()
         active?.pendingRemoteOfferSdp = nil
-        active?.awaitingOfferAfterAnswer = false
-        active?.offerWaitTimeout?.cancel()
-        active?.offerWaitTimeout = nil
         Log.info("Applied pending E2EE offer SDP", category: "Calls")
 
         // Drain ICE candidates that arrived before the offer was applied.
@@ -220,8 +211,7 @@ extension CallManager {
             return
         }
         sendAnswer(sdp: answerSdp)
-        active?.answeredAt = Date()
-        state = .active(call.session)
+        withMachine { $0.answered(nowMs: Self.nowMs()) }
         Log.info("E2EE incoming call answered: SDP exchanged", category: "Calls")
         // Note: no reportOutgoingCallConnected here — this is the callee.
         // CallKit promotes an incoming call to connected via the fulfilled
@@ -234,39 +224,6 @@ extension CallManager {
         // an otherwise-working media tunnel. Send it even though the SDP answer
         // already went via E2EE; the server treats ringing as a presence beacon.
         sendRinging()
-    }
-
-    /// Fail the call if the SDP never arrives after the user answered.
-    private func startOfferWaitTimeout(for call: ActiveCall) {
-        call.offerWaitTimeout?.cancel()
-        call.offerWaitTimeout = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.offerAfterAnswerTimeout * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            guard let self, self.active === call, call.awaitingOfferAfterAnswer else { return }
-            Log.error("Answered call never received its SDP offer in \(Int(Self.offerAfterAnswerTimeout))s — ending (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
-            PerformanceMetrics.shared.record(.answerBeforeOffer, label: "timeout")
-            self.endActiveCall(reason: .local("No offer received"))
-        }
-    }
-
-    /// End an incoming call that is still ringing after `unansweredIncomingTimeout`.
-    ///
-    /// Nothing else ends it. The callee opens its signaling stream only on answer, so the server's
-    /// reaper — which sends `ErrorToCaller` at 45 s without ringing, and `HangupBoth` only over a
-    /// stream — never reaches a callee that has not answered. The caller's E2EE hangup usually does;
-    /// a caller that crashed or lost the network sends none, and the call rang on — and now that
-    /// `.incoming` counts as busy, it would refuse every later caller. Android ends it at 90 s with
-    /// TIMEOUT; the
-    /// same value here, so both platforms give up on one schedule.
-    func startUnansweredTimeout(for call: ActiveCall) {
-        call.unansweredTimeout?.cancel()
-        call.unansweredTimeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.unansweredIncomingTimeout))
-            guard !Task.isCancelled, let self, self.active === call, case .incoming = self.state else { return }
-            Log.info("Incoming call unanswered for \(Int(NetworkTiming.Calls.unansweredIncomingTimeout))s — ending (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
-            self.sendHangup(reason: .timeout, origin: .local)
-            self.endActiveCall(reason: .hangup(.timeout), reportToCallKit: true)
-        }
     }
 
     /// An SDP offer, out of the Double Ratchet. What it means is the core's rule
@@ -287,19 +244,23 @@ extension CallManager {
             "Incoming offer SDP from \(callerUserId.prefix(8))… callId=\(callId.prefix(8))… sdp=\(sdp.utf8.count)b",
             category: "Calls"
         )
-        let held = CallRuleWire.held(
-            callId: callId, offerer: callerUserId, session: active?.session, isBusy: callStateIsBusy(state),
-            answered: active?.answeredAt != nil,
-            awaitingOfferAfterAnswer: active?.awaitingOfferAfterAnswer ?? false
-        )
-        let action = callOnOffer(
-            recentlyEnded: hasRecentlyEnded(callId: callId), held: held,
-            myUserId: AuthSessionManager.shared.currentUserId ?? "", offererUserId: callerUserId
-        )
-        switch action {
-        case .ignoreEnded:
+        let recentlyEnded = machine.recentlyEnded(callId: callId, nowMs: Self.nowMs())
+        let step = withMachine {
+            $0.offer(callId: callId, peerUserId: callerUserId, device: callerDevice, usable: offerSdpIsUsable(sdp),
+                     myUserId: AuthSessionManager.shared.currentUserId ?? "", nowMs: Self.nowMs())
+        }
+        switch step {
+        case .ignore where recentlyEnded:
             Log.info("Ignoring offer for already-ended call \(callId.prefix(8))… — not re-reporting to CallKit", category: "Calls")
             PerformanceMetrics.shared.record(.callSignalAfterEnd, label: "offer")
+
+        case .ignore:
+            // An unusable offer would ring CallKit for a call that cannot be negotiated, and the
+            // caller would learn nothing until a human hangs up (build 613).
+            Log.error(
+                "Incoming offer from \(callerUserId.prefix(8))… carries no SDP — not ringing for a call that cannot connect (callId=\(callId.prefix(8))…)",
+                category: "Calls"
+            )
 
         case .busy:
             Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
@@ -308,52 +269,45 @@ extension CallManager {
         case .keepOurs:
             Log.info("Glare: keeping our outgoing call to \(callerUserId.prefix(8))… (tie-break win) — ignoring their offer", category: "Calls")
 
-        case .holdUntilAnswered, .resumeAnswer:
+        case .hold, .resumeAnswer:
             // `holdRemoteOffer` finishes an answer that is waiting for this offer.
             guard let active, active.session.id == callId else { return }
-            if active.peerDevice == nil { active.peerDevice = callerDevice }
             ringAsOffered(offer, for: active)
             takeUpVideoCall(offer, for: active)
             holdRemoteOffer(offer, for: active)
 
         case .renegotiate:
             guard let active, active.session.id == callId else { return }
-            if active.peerDevice == nil { active.peerDevice = callerDevice }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 await self.handleRemoteOffer(offer, for: active.session)
             }
 
-        case .replaceOutgoing, .ring:
-            // Refused here rather than rung: an unusable offer rings CallKit for a call that cannot
-            // be negotiated, and the caller learns nothing until a human hangs up.
-            guard offerSdpIsUsable(sdp) else {
-                Log.error(
-                    "Incoming offer from \(callerUserId.prefix(8))… carries no SDP — not ringing for a call that cannot connect (callId=\(callId.prefix(8))…)",
-                    category: "Calls"
-                )
-                return
+        case .fail(let ended):
+            Log.error("Offer for call \(callId.prefix(8))… carries no SDP — ending rather than waiting on it", category: "Calls")
+            endActiveCall(reason: .local("Offer handling failed"), ended: ended)
+
+        case .replaceOutgoing:
+            // Glare, and theirs wins: our outgoing call gave way. End it in CallKit before begin()
+            // replaces it — begin() → close() tears down WebRTC and the stream, not the CallKit
+            // call, and with maximumCallGroups=1 the stale outgoing UUID would block the next
+            // CXStartCallAction and leave a phantom call on the lock screen.
+            Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
+            #if os(iOS)
+            if let active, active.callKitRegistered {
+                CallKitProvider.shared.reportCallEnded(uuid: active.session.uuid)
             }
-            if action == .replaceOutgoing, let active {
-                // Glare, and theirs wins: our outgoing call gives way. End it in CallKit before
-                // begin() replaces it — begin() → close() tears down WebRTC and the stream, not the
-                // CallKit call, and with maximumCallGroups=1 the stale outgoing UUID would block the
-                // next CXStartCallAction and leave a phantom call on the lock screen.
-                Log.info("Glare: yielding our outgoing call to \(callerUserId.prefix(8))… (tie-break lose) — accepting their offer", category: "Calls")
-                #if os(iOS)
-                if active.callKitRegistered {
-                    CallKitProvider.shared.reportCallEnded(uuid: active.session.uuid)
-                }
-                #endif
-            }
-            ringNewCall(offer, callId: callId, callerUserId: callerUserId, callerDevice: callerDevice)
+            #endif
+            ringNewCall(offer, callId: callId, callerUserId: callerUserId)
+
+        case .ring:
+            ringNewCall(offer, callId: callId, callerUserId: callerUserId)
         }
     }
 
     /// A call this device first hears of from its offer. The name is resolved from local Core Data
     /// (profile-shared name → username → generated fallback); the raw UUID is never shown.
-    private func ringNewCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, callId: String, callerUserId: String,
-                             callerDevice: String) {
+    private func ringNewCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, callId: String, callerUserId: String) {
         let hasVideo = CallVideoSignal.answersWithCamera(
             offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
         let name = Self.resolveContactDisplayName(userId: callerUserId)
@@ -373,7 +327,6 @@ extension CallManager {
         begin(session: session, initialState: .incoming(session))
         video.ringsAsVideo = hasVideo
         active?.pendingRemoteOfferSdp = offer.sdp
-        active?.peerDevice = callerDevice
         #if os(iOS)
         active?.callKitRegistered = true
         #endif

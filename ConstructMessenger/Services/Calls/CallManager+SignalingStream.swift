@@ -54,12 +54,15 @@ extension CallManager {
                 guard self.active === active, active.stream === stream else { return }
                 active.stream?.close()
                 active.stream = nil
-                active.streamRetryCount += 1
-                if active.streamRetryCount <= ActiveCall.maxStreamRetries {
-                    Log.info("Retrying signal stream (attempt \(active.streamRetryCount)/\(ActiveCall.maxStreamRetries))", category: "Calls")
+                // Not the machine's `streamClosed`: a stream the server did not accept in time
+                // does not end the call, which goes on over E2EE (`ActiveCall.acceptTimeouts`).
+                active.acceptTimeouts += 1
+                let cap = callTimings().maxStreamRetries
+                if active.acceptTimeouts <= cap {
+                    Log.info("Retrying signal stream (attempt \(active.acceptTimeouts)/\(cap))", category: "Calls")
                     try? self.openStreamIfNeeded()
                 } else {
-                    Log.error("Signal stream failed after \(ActiveCall.maxStreamRetries) retries — falling back to E2EE-only mode", category: "Calls")
+                    Log.error("Signal stream failed after \(cap) retries — falling back to E2EE-only mode", category: "Calls")
                 }
             } catch is CancellationError {
                 PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
@@ -108,38 +111,34 @@ extension CallManager {
             await MainActor.run { [weak self, weak active] in
                 guard let self, let active else { return }
                 guard self.active === active, active.stream === stream else { return }
-                let canReconnect = active.mediaConnected
-                    ? active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects
-                    : active.streamRetryCount < ActiveCall.maxStreamRetries
-                // The core's rule (`call_on_stream_closed`, todo 295): the stream is the only
-                // path for the server's own hangup, so a call outlives it only while media or an
-                // answer waiting for its offer bounds it (3C86C064).
-                switch callOnStreamClosed(
-                    canReconnect: canReconnect,
-                    mediaConnected: active.mediaConnected,
-                    awaitingOfferAfterAnswer: active.awaitingOfferAfterAnswer
-                ) {
+                // The machine decides (`streamClosed`): reopen within the budget (3 before media,
+                // 5 after); past it, the call outlives its stream only while media or an answer
+                // waiting for its offer bounds it — the stream is the only path for the server's
+                // own hangup (3C86C064).
+                let media = self.machineCall?.mediaConnected ?? false
+                switch self.withMachine({ $0.streamClosed(nowMs: Self.nowMs()) }) {
                 case .reconnect:
                     active.stream = nil
-                    if active.mediaConnected {
-                        active.postMediaStreamReconnects += 1
-                        Log.info("Signaling stream closed but media is up — reconnecting (\(active.postMediaStreamReconnects)/\(ActiveCall.maxPostMediaReconnects)), keeping call", category: "Calls")
-                    } else {
-                        active.streamRetryCount += 1
-                        Log.info("Signaling stream closed before media — retrying (\(active.streamRetryCount)/\(ActiveCall.maxStreamRetries)), call stays up", category: "Calls")
-                    }
+                    Log.info(
+                        media
+                            ? "Signaling stream closed but media is up — reconnecting, keeping call"
+                            : "Signaling stream closed before media — retrying, call stays up",
+                        category: "Calls"
+                    )
                     try? self.openStreamIfNeeded()
                 case .keepOnMessagePath:
                     active.stream = nil
                     Log.info(
-                        active.mediaConnected
+                        media
                             ? "Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path"
-                            : "Signaling stream closed before media — E2EE-only until the \(Int(Self.offerAfterAnswerTimeout))s offer wait decides",
+                            : "Signaling stream closed before media — E2EE-only until the \(Int(callTimings().offerWaitMs / 1000))s offer wait decides",
                         category: "Calls"
                     )
-                case .endCall:
+                case .end(let ended):
                     Log.error("Signaling stream gone before media and nothing else bounds this call — ending", category: "Calls")
-                    self.endActiveCall(reason: .local("Signal stream closed"))
+                    self.endActiveCall(reason: .local("Signal stream closed"), ended: ended)
+                case nil:
+                    break
                 }
             }
         }
@@ -182,7 +181,9 @@ extension CallManager {
                 ]
                 handleIncomingPush(payload, reportedUUID: reportedUUID)
                 #else
-                // macOS: no PushKit/CallKit; show incoming call UI directly.
+                // macOS: no PushKit/CallKit; show incoming call UI directly. The notice is a push by
+                // another carrier: the machine decides it the same way.
+                guard withMachine({ $0.push(callId: call.callID, peerUserId: call.callerID, nowMs: Self.nowMs()) }) == .begin else { return }
                 let session = CallSession(
                     id: call.callID,
                     uuid: UUID(),
@@ -204,7 +205,7 @@ extension CallManager {
             switch s.signal {
             case .ringing(let r):
                 Log.info("Ringing device=\(r.deviceID.prefix(8))…", category: "Calls")
-                state = .ringing(session)
+                withMachine { $0.ringing() }
             case .busy:
                 Log.info("Busy", category: "Calls")
                 endActiveCall(reason: .hangup(.busy))
