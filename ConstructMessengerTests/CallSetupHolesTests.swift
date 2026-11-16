@@ -64,10 +64,11 @@ final class CallSetupHolesTests: XCTestCase {
         for _ in 0..<callTimings().maxStreamRetries {
             XCTAssertEqual(machine.streamClosed(nowMs: 0), .reconnect)
         }
-        guard case .end(let ended) = machine.streamClosed(nowMs: 0) else {
+        guard case .end(let failure) = machine.streamClosed(nowMs: 0) else {
             return XCTFail("nothing else bounds the call")
         }
-        XCTAssertEqual(ended.cause, .local)
+        XCTAssertEqual(failure.ended.cause, .local)
+        XCTAssertEqual(failure.hangup?.reason, .connectionFailed, "the callee stops ringing")
     }
 
     /// A down stream never skips, with or without a call — that is the original wake path.

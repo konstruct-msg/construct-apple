@@ -148,10 +148,11 @@ final class CallOfferOrderingTests: XCTestCase {
         XCTAssertNil(machine.active())
 
         let machine2 = pushed()
-        guard case .fail(let ended) = offer(machine2, usable: false) else {
+        guard case .fail(let failure) = offer(machine2, usable: false) else {
             return XCTFail("an unusable offer for the call in progress ends it")
         }
-        XCTAssertEqual(ended.cause, .local)
+        XCTAssertEqual(failure.ended.cause, .local)
+        XCTAssertNil(failure.hangup, "still ringing: the caller's other devices ring on")
     }
 
     // MARK: - The push that arrives second (build 630, 2026-08-22)

@@ -56,10 +56,10 @@ extension CallManager {
             Log.info("Incoming call unanswered for \(Int(callTimings().unansweredMs / 1000))s — ending (call_id=\(hangup.ended.callId.prefix(8))…)", category: "Calls")
             sendHangup(hangup)
             endActiveCall(reason: .hangup(CallRuleWire.proto(hangup.reason)), ended: hangup.ended, reportToCallKit: true)
-        case .noOffer(let ended):
-            Log.error("Answered call never received its SDP offer in \(Int(callTimings().offerWaitMs / 1000))s — ending (call_id=\(ended.callId.prefix(8))…)", category: "Calls")
+        case .noOffer(let failure):
+            Log.error("Answered call never received its SDP offer in \(Int(callTimings().offerWaitMs / 1000))s — ending (call_id=\(failure.ended.callId.prefix(8))…)", category: "Calls")
             PerformanceMetrics.shared.record(.answerBeforeOffer, label: "timeout")
-            endActiveCall(reason: .local("No offer received"), ended: ended)
+            endActiveCall(failure: failure, what: "No offer received")
         case .restartIce:
             guard let active else { return }
             Task { @MainActor [weak self] in await self?.performIceRestart(for: active) }

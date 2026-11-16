@@ -82,7 +82,9 @@ enum CallRuleWire {
         case .hangup(let r): return machine.endedByServer(reason: Self.reason(r), nowMs: nowMs)
         case .error(let code):
             return machine.serverError(error: callSignalErrorFromWire(value: Int32(truncatingIfNeeded: code.rawValue)), nowMs: nowMs)
-        case .local: return machine.fail(nowMs: nowMs)
+        // `endActiveCall` ends a failure through `fail` itself and sends its hangup; this is
+        // reached with no call in the machine, or by a caller that only wants the end.
+        case .local: return machine.fail(nowMs: nowMs)?.ended
         }
     }
 

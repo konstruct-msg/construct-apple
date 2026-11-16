@@ -134,9 +134,9 @@ extension CallManager {
                             : "Signaling stream closed before media — E2EE-only until the \(Int(callTimings().offerWaitMs / 1000))s offer wait decides",
                         category: "Calls"
                     )
-                case .end(let ended):
+                case .end(let failure):
                     Log.error("Signaling stream gone before media and nothing else bounds this call — ending", category: "Calls")
-                    self.endActiveCall(reason: .local("Signal stream closed"), ended: ended)
+                    self.endActiveCall(failure: failure, what: "Signal stream closed")
                 case nil:
                     break
                 }

@@ -445,8 +445,17 @@ final class CallManager: CallUIManaging {
     /// Tear the call down here. `ended`: the machine's end of it, when the caller already ended it
     /// there (`hangUp`, `hangupFrom`, a deadline); otherwise the machine ends it now for `reason`
     /// (`CallRuleWire.end`). The history row and its length are the machine's.
+    ///
+    /// A failure of ours (`.local`) is the machine's `fail`, which says whether the peer is told —
+    /// here, so no failure path can end the call alone again: until construct-core 0.76.0 none
+    /// told, and the other side sat in "connecting" or "calling" until a person hung up
+    /// (2026-11-16, build 779: an ICE failure, a TURN fetch with the VEIL tunnel still down).
     func endActiveCall(reason: CallEndReason, ended: CallEnded? = nil, reportToCallKit: Bool = true) {
         guard let active else { return }
+        if ended == nil, case .local(let what) = reason,
+           let failure = withMachine({ $0.fail(nowMs: Self.nowMs()) }) {
+            return endActiveCall(failure: failure, what: what, reportToCallKit: reportToCallKit)
+        }
         let session = active.session
         let wasRegisteredWithCallKit = active.callKitRegistered
         let metricsLabel = String(session.id.prefix(8))
@@ -526,6 +535,15 @@ final class CallManager: CallUIManaging {
     /// Our hangup, as the machine decided it: its reason, its devices and its paths.
     func sendHangup(_ hangup: CallLocalHangup) {
         sendHangup(reason: CallRuleWire.proto(hangup.reason), route: hangup.route, targets: hangup.targets)
+    }
+
+    /// The call failed here and the machine has ended it: its hangup (`CONNECTION_FAILED`) first,
+    /// while the stream and the targets are still in hand, then the teardown.
+    func endActiveCall(failure: CallFailure, what: String, reportToCallKit: Bool = true) {
+        if let hangup = failure.hangup {
+            sendHangup(reason: CallRuleWire.proto(hangup.reason), route: hangup.route, targets: hangup.targets)
+        }
+        endActiveCall(reason: .local(what), ended: failure.ended, reportToCallKit: reportToCallKit)
     }
 
     /// A hangup on `route`: end to end to `targets` (none: the call's targets, else the pinned
