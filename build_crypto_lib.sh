@@ -109,10 +109,15 @@ build_target() {
   # безусловное «✅ Собрано». Ошибка компиляции печаталась и объявлялась успехом;
   # падало потом на «libconstruct_core.a не найден», то есть в другом месте и с
   # другим смыслом.
-  local log
+  #
+  # stdout — JSON-сообщения cargo: из них merge_veil берёт путь к архиву VEIL этой
+  # самой сборки (см. ниже). Диагностика и строки Compiling/Finished идут в stderr.
+  local log json
   log="$(mktemp)"
+  json="$CORE_PATH/target/$arch/$BUILD_DIR/.konstruct-cargo-artifacts.json"
+  mkdir -p "$(dirname "$json")"
   if ! env $deploy_env cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS \
-        > "$log" 2>&1; then
+        --message-format=json-render-diagnostics > "$json" 2> "$log"; then
     grep -E "^error|^error\[" -A 12 "$log" | head -40
     rm -f "$log"
     fail "cargo build провалился для $arch — см. вывод выше"
@@ -130,18 +135,27 @@ merge_veil() {
 
   [ -f "$core_lib" ] || fail "libconstruct_core.a не найден: $core_lib"
 
-  # Ищем libconstruct_veil*.a в deps/ — берём самый новый (последний build)
+  # Архив VEIL — тот, что cargo собрал в этот раз: путь из его сообщения
+  # compiler-artifact (build_target). Ядро не ссылается на construct-veil, поэтому
+  # rustc не кладёт его в staticlib ядра, и C-символы VEIL приходят только отсюда.
+  #
+  # До 2026-11-16 здесь искался самый новый libconstruct_veil*.a в target/…/deps/.
+  # С cargo 1.100 архив лежит в target/…/build/construct-veil/<hash>/out/, а в
+  # deps/ остался старый: сборка xcframework от 16.11 вклеила VEIL от 12.11.
+  # В клоне без старого deps/ `xargs ls -t` без входа печатал текущий каталог, и
+  # скрипт молча выходил с кодом 1.
+  local json="$CORE_PATH/target/$arch/$BUILD_DIR/.konstruct-cargo-artifacts.json"
+  [ -f "$json" ] || fail "нет сообщений cargo для $arch ($json) — сначала build_target"
   local veil_lib
-  veil_lib=$(find "$CORE_PATH/target/$arch/$BUILD_DIR/deps" \
-            -name "libconstruct_veil*.a" 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
+  veil_lib=$(grep '"reason":"compiler-artifact"' "$json" \
+             | grep -o '"[^"]*/libconstruct_veil-[^"/]*\.a"' | tr -d '"' | sort -u || true)
+  [ -n "$veil_lib" ] || fail "cargo не сообщил архив VEIL для $arch — без него VEIL-прокси не будет"
+  [ "$(printf '%s\n' "$veil_lib" | wc -l | tr -d ' ')" = "1" ] \
+    || fail "cargo сообщил больше одного архива VEIL для $arch: $veil_lib"
+  [ -f "$veil_lib" ] || fail "архив VEIL из сообщения cargo не найден: $veil_lib"
 
-  if [ -n "$veil_lib" ] && [ -f "$veil_lib" ]; then
-    libtool -static -o "$dest" "$core_lib" "$veil_lib"
-    info "Смёрджено с VEIL: $(basename "$veil_lib")"
-  else
-    cp "$core_lib" "$dest"
-    warn "VEIL-библиотека не найдена для $arch — VEIL-прокси символы отсутствуют"
-  fi
+  libtool -static -o "$dest" "$core_lib" "$veil_lib"
+  info "Смёрджено с VEIL: $(basename "$veil_lib")"
 
   local size
   size=$(du -sh "$dest" | cut -f1)
