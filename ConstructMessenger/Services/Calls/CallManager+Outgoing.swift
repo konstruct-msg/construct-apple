@@ -144,7 +144,7 @@ extension CallManager {
                 call.turn = turn
                 Log.info("TURN credentials ready for outgoing call (call_id=\(callId.prefix(8))…)", category: "Calls")
             } else {
-                Log.info("TURN unavailable after retries — proceeding STUN-only (call_id=\(callId.prefix(8))…)", category: "Calls")
+                Log.info("TURN unavailable after retries — no relay for this call (call_id=\(callId.prefix(8))…)", category: "Calls")
             }
 
             try openStreamIfNeeded()
@@ -163,36 +163,55 @@ extension CallManager {
                     break
                 }
             }
-            // InitiateCall may already have occupied the callee. Tear down on the
-            // signaling stream so they are not left ringing / we are not left "busy".
+            // InitiateCall may already have occupied the callee. The failure's hangup tells them
+            // and the server (`endActiveCall`), on the stream too once it is open, so they are not
+            // left ringing and we are not left "busy".
             guard self.active === call else { return }
             try? openStreamIfNeeded()
-            sendHangup(reason: .normal, route: CallRuleWire.hangupRoute(side: .local, reason: .normal),
-                       targets: machineCall?.targets ?? [])
             endActiveCall(reason: .local("Call setup failed"))
         }
     }
 
-    /// Fetch TURN credentials with quick retries before falling back to STUN-only.
-    /// STUN-only is a near-guaranteed failure on mobile/symmetric NAT (no relay path →
-    /// ICE can't connect or sustain), and a single getTurnCredentials over the shared
-    /// gRPC channel fails transiently (channel churn / timeout). A bare `try?` silently
-    /// degraded those transient failures into a doomed STUN-only call. Returns nil only
-    /// after all attempts are exhausted.
+    /// Fetch TURN credentials with quick retries. A single getTurnCredentials over the shared gRPC
+    /// channel fails transiently (channel churn / timeout), and without TURN there is no call
+    /// (`CallIcePlan`: never direct). Returns nil only after all attempts are exhausted.
+    ///
+    /// With VEIL `on` and the tunnel still coming up — a callee woken by its VoIP push — every try
+    /// got `VeilTunnelNotUp`, and all three were spent in two seconds: the answer failed with no
+    /// relay while the tunnel came up seconds later (2026-11-16, build 779: push 13:41:55, three
+    /// failures by 13:42:00, the offer through the tunnel at 13:42:04). Now the fetch waits for the
+    /// route once, as a token registration does, bounded by the machine's wait for an answered
+    /// call's offer; the wait is not an attempt.
     func fetchTurnWithRetry(
         callId: String,
-        attempts: Int = 3
+        attempts: Int = 3,
+        fetch: (String) async throws -> Shared_Proto_Signaling_V1_TurnCredentials = {
+            try await SignalingServiceClient.shared.getTurnCredentials(callId: $0)
+        },
+        waitForRoute: () async -> Bool = {
+            await VeilTunnelWait.untilRouted(limit: TimeInterval(callTimings().offerWaitMs) / 1000)
+        }
     ) async -> Shared_Proto_Signaling_V1_TurnCredentials? {
-        for attempt in 1...attempts {
+        var attempt = 1
+        var waitedForRoute = false
+        while attempt <= attempts {
             do {
-                let turn = try await SignalingServiceClient.shared.getTurnCredentials(callId: callId)
+                let turn = try await fetch(callId)
                 if !turn.urls.isEmpty { return turn }
                 Log.info("TURN fetch \(attempt)/\(attempts): empty urls (call_id=\(callId.prefix(8))…)", category: "Calls")
+            } catch is VeilTunnelNotUp where !waitedForRoute {
+                waitedForRoute = true
+                Log.info("TURN fetch: waiting for the VEIL tunnel (call_id=\(callId.prefix(8))…)", category: "Calls")
+                guard await waitForRoute() else {
+                    Log.error("TURN fetch: the VEIL tunnel did not come up (call_id=\(callId.prefix(8))…)", category: "Calls")
+                    return nil
+                }
+                continue
             } catch {
                 Log.error("TURN fetch \(attempt)/\(attempts) failed (call_id=\(callId.prefix(8))…): \(error)", category: "Calls")
                 // Rate limit is not a transient error — retrying immediately only burns the
-                // per-user budget faster. Bail to STUN-only now (cached creds, when present,
-                // are served before we ever reach this helper).
+                // per-user budget faster (cached creds, when present, are served before we ever
+                // reach this helper).
                 if let rpc = error as? RPCError, rpc.code == .resourceExhausted {
                     Log.info("TURN rate-limited — not retrying (call_id=\(callId.prefix(8))…)", category: "Calls")
                     break
@@ -201,6 +220,7 @@ extension CallManager {
             if attempt < attempts {
                 try? await Task.sleep(nanoseconds: 400_000_000 * UInt64(attempt))
             }
+            attempt += 1
         }
         return nil
     }

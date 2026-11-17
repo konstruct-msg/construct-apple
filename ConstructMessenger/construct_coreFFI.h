@@ -1967,6 +1967,11 @@ RustBuffer uniffi_construct_core_fn_func_call_on_stream_closed(int8_t can_reconn
 int8_t uniffi_construct_core_fn_func_call_outcome_wants_attention(RustBuffer outcome, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_RELAY_URLS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_RELAY_URLS
+RustBuffer uniffi_construct_core_fn_func_call_relay_urls(RustBuffer turn_urls, int8_t veil_on, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_SIGNAL_ERROR_FROM_WIRE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_CALL_SIGNAL_ERROR_FROM_WIRE
 RustBuffer uniffi_construct_core_fn_func_call_signal_error_from_wire(int32_t value, RustCallStatus *_Nonnull out_status
@@ -2875,6 +2880,12 @@ uint16_t uniffi_construct_core_checksum_func_call_on_stream_closed(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_OUTCOME_WANTS_ATTENTION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_OUTCOME_WANTS_ATTENTION
 uint16_t uniffi_construct_core_checksum_func_call_outcome_wants_attention(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_RELAY_URLS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_CALL_RELAY_URLS
+uint16_t uniffi_construct_core_checksum_func_call_relay_urls(void
     
 );
 #endif

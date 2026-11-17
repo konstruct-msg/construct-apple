@@ -150,7 +150,7 @@ extension CallManager {
                     self.active?.turn = turn
                     Log.info("TURN ready for incoming call", category: "Calls")
                 } else {
-                    Log.info("TURN unavailable after retries — proceeding STUN-only (incoming)", category: "Calls")
+                    Log.info("TURN unavailable after retries — no relay for this call (incoming)", category: "Calls")
                 }
                 try self.ensureWebRTC(role: .callee)
 
@@ -283,9 +283,9 @@ extension CallManager {
                 await self.handleRemoteOffer(offer, for: active.session)
             }
 
-        case .fail(let ended):
+        case .fail(let failure):
             Log.error("Offer for call \(callId.prefix(8))… carries no SDP — ending rather than waiting on it", category: "Calls")
-            endActiveCall(reason: .local("Offer handling failed"), ended: ended)
+            endActiveCall(failure: failure, what: "Offer handling failed")
 
         case .replaceOutgoing:
             // Glare, and theirs wins: our outgoing call gave way. End it in CallKit before begin()

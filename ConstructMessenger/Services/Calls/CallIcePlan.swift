@@ -2,10 +2,10 @@
 //  CallIcePlan.swift
 //  Construct Messenger
 //
-//  Which ICE servers a call uses. Every call goes through our TURN relay (owner, 2026-10-16, for
-//  1.0): a direct call hands each side the other's network address, and an address names a person
-//  where the account does not. Until then this held only with VEIL `on`, and the default (Auto)
-//  allowed host and server-reflexive candidates.
+//  Which ICE servers a call uses. Which urls is the core's rule (construct-rules
+//  `calls::relay_urls`, construct-core 0.76.0), shared with Android since its copy drifted: every
+//  call goes through our TURN relay (owner, 2026-10-16, for 1.0) — a direct call hands each side
+//  the other's network address, and an address names a person where the account does not.
 //
 //  - relay only (`iceTransportPolicy = .relay`): no host or server-reflexive candidates, so no
 //    direct UDP to the peer and neither side learns the other's address;
@@ -35,12 +35,9 @@ struct CallIcePlan: Equatable {
 
     /// Nil when the call must not be placed: no TURN to relay through.
     static func make(turnURLs: [String]?, username: String, credential: String, veilOn: Bool) -> CallIcePlan? {
-        let urls = turnURLs ?? []
-        guard !urls.isEmpty else { return nil }
-        let overTLS = urls.filter { $0.lowercased().hasPrefix("turns:") }
-        let chosen = veilOn && !overTLS.isEmpty ? overTLS : urls
+        guard let urls = callRelayUrls(turnUrls: turnURLs ?? [], veilOn: veilOn) else { return nil }
         return CallIcePlan(
-            servers: [Server(urls: chosen, username: username, credential: credential)],
+            servers: [Server(urls: urls, username: username, credential: credential)],
             policy: .relay
         )
     }

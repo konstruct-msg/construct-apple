@@ -678,9 +678,9 @@ public protocol CallMachineProtocol: AnyObject, Sendable {
     func endedByServer(reason: CallHangupReason, nowMs: Int64)  -> CallEnded?
     
     /**
-     * Our own setup or path failed.
+     * Our own setup or path failed; the peer is told unless their call still rings here.
      */
-    func fail(nowMs: Int64)  -> CallEnded?
+    func fail(nowMs: Int64)  -> CallFailure?
     
     /**
      * We end the call.
@@ -868,10 +868,10 @@ open func endedByServer(reason: CallHangupReason, nowMs: Int64) -> CallEnded?  {
 }
     
     /**
-     * Our own setup or path failed.
+     * Our own setup or path failed; the peer is told unless their call still rings here.
      */
-open func fail(nowMs: Int64) -> CallEnded?  {
-    return try!  FfiConverterOptionTypeCallEnded.lift(try! rustCall() {
+open func fail(nowMs: Int64) -> CallFailure?  {
+    return try!  FfiConverterOptionTypeCallFailure.lift(try! rustCall() {
     uniffi_construct_core_fn_method_callmachine_fail(
             self.uniffiCloneHandle(),
         FfiConverterInt64.lower(nowMs),$0
@@ -6591,6 +6591,121 @@ public func FfiConverterTypeCallEnded_lower(_ value: CallEnded) -> RustBuffer {
 }
 
 
+/**
+ * A failure of ours ended the call; `hangup` (`CONNECTION_FAILED`) tells the peer, null when
+ * nothing goes out (their call, still ringing here).
+ */
+public struct CallFailure: Equatable, Hashable {
+    public var ended: CallEnded
+    public var hangup: CallFailureHangup?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(ended: CallEnded, hangup: CallFailureHangup?) {
+        self.ended = ended
+        self.hangup = hangup
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension CallFailure: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallFailure: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallFailure {
+        return
+            try CallFailure(
+                ended: FfiConverterTypeCallEnded.read(from: &buf), 
+                hangup: FfiConverterOptionTypeCallFailureHangup.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CallFailure, into buf: inout [UInt8]) {
+        FfiConverterTypeCallEnded.write(value.ended, into: &buf)
+        FfiConverterOptionTypeCallFailureHangup.write(value.hangup, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallFailure_lift(_ buf: RustBuffer) throws -> CallFailure {
+    return try FfiConverterTypeCallFailure.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallFailure_lower(_ value: CallFailure) -> RustBuffer {
+    return FfiConverterTypeCallFailure.lower(value)
+}
+
+
+/**
+ * The hangup a failure sends: to `targets` (empty: the pinned device) on `route`.
+ */
+public struct CallFailureHangup: Equatable, Hashable {
+    public var reason: CallHangupReason
+    public var targets: [String]
+    public var route: CallHangupRoute
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(reason: CallHangupReason, targets: [String], route: CallHangupRoute) {
+        self.reason = reason
+        self.targets = targets
+        self.route = route
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension CallFailureHangup: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCallFailureHangup: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CallFailureHangup {
+        return
+            try CallFailureHangup(
+                reason: FfiConverterTypeCallHangupReason.read(from: &buf), 
+                targets: FfiConverterSequenceString.read(from: &buf), 
+                route: FfiConverterTypeCallHangupRoute.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: CallFailureHangup, into buf: inout [UInt8]) {
+        FfiConverterTypeCallHangupReason.write(value.reason, into: &buf)
+        FfiConverterSequenceString.write(value.targets, into: &buf)
+        FfiConverterTypeCallHangupRoute.write(value.route, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallFailureHangup_lift(_ buf: RustBuffer) throws -> CallFailureHangup {
+    return try FfiConverterTypeCallFailureHangup.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCallFailureHangup_lower(_ value: CallFailureHangup) -> RustBuffer {
+    return FfiConverterTypeCallFailureHangup.lower(value)
+}
+
+
 public struct CallHangupRoute: Equatable, Hashable {
     public var e2ee: Bool
     public var stream: Bool
@@ -11610,7 +11725,7 @@ public enum CallDue: Equatable, Hashable {
     
     case unanswered(hangup: CallLocalHangup
     )
-    case noOffer(ended: CallEnded
+    case noOffer(failure: CallFailure
     )
     case restartIce
 
@@ -11635,7 +11750,7 @@ public struct FfiConverterTypeCallDue: FfiConverterRustBuffer {
         case 1: return .unanswered(hangup: try FfiConverterTypeCallLocalHangup.read(from: &buf)
         )
         
-        case 2: return .noOffer(ended: try FfiConverterTypeCallEnded.read(from: &buf)
+        case 2: return .noOffer(failure: try FfiConverterTypeCallFailure.read(from: &buf)
         )
         
         case 3: return .restartIce
@@ -11653,9 +11768,9 @@ public struct FfiConverterTypeCallDue: FfiConverterRustBuffer {
             FfiConverterTypeCallLocalHangup.write(hangup, into: &buf)
             
         
-        case let .noOffer(ended):
+        case let .noOffer(failure):
             writeInt(&buf, Int32(2))
-            FfiConverterTypeCallEnded.write(ended, into: &buf)
+            FfiConverterTypeCallFailure.write(failure, into: &buf)
             
         
         case .restartIce:
@@ -12564,7 +12679,7 @@ public enum CallOfferStep: Equatable, Hashable {
     case hold
     case resumeAnswer
     case renegotiate
-    case fail(ended: CallEnded
+    case fail(failure: CallFailure
     )
 
 
@@ -12602,7 +12717,7 @@ public struct FfiConverterTypeCallOfferStep: FfiConverterRustBuffer {
         
         case 8: return .renegotiate
         
-        case 9: return .fail(ended: try FfiConverterTypeCallEnded.read(from: &buf)
+        case 9: return .fail(failure: try FfiConverterTypeCallFailure.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -12646,9 +12761,9 @@ public struct FfiConverterTypeCallOfferStep: FfiConverterRustBuffer {
             writeInt(&buf, Int32(8))
         
         
-        case let .fail(ended):
+        case let .fail(failure):
             writeInt(&buf, Int32(9))
-            FfiConverterTypeCallEnded.write(ended, into: &buf)
+            FfiConverterTypeCallFailure.write(failure, into: &buf)
             
         }
     }
@@ -13005,7 +13120,7 @@ public enum CallStreamStep: Equatable, Hashable {
     
     case reconnect
     case keepOnMessagePath
-    case end(ended: CallEnded
+    case end(failure: CallFailure
     )
 
 
@@ -13030,7 +13145,7 @@ public struct FfiConverterTypeCallStreamStep: FfiConverterRustBuffer {
         
         case 2: return .keepOnMessagePath
         
-        case 3: return .end(ended: try FfiConverterTypeCallEnded.read(from: &buf)
+        case 3: return .end(failure: try FfiConverterTypeCallFailure.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -13049,9 +13164,9 @@ public struct FfiConverterTypeCallStreamStep: FfiConverterRustBuffer {
             writeInt(&buf, Int32(2))
         
         
-        case let .end(ended):
+        case let .end(failure):
             writeInt(&buf, Int32(3))
-            FfiConverterTypeCallEnded.write(ended, into: &buf)
+            FfiConverterTypeCallFailure.write(failure, into: &buf)
             
         }
     }
@@ -17709,6 +17824,54 @@ fileprivate struct FfiConverterOptionTypeCallEnded: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeCallFailure: FfiConverterRustBuffer {
+    typealias SwiftType = CallFailure?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCallFailure.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCallFailure.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeCallFailureHangup: FfiConverterRustBuffer {
+    typealias SwiftType = CallFailureHangup?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeCallFailureHangup.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeCallFailureHangup.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeCallHeldCall: FfiConverterRustBuffer {
     typealias SwiftType = CallHeldCall?
 
@@ -18421,6 +18584,30 @@ fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiCo
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterCallbackInterfacePowProgressCallback.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceString.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -19400,6 +19587,19 @@ public func callOutcomeWantsAttention(outcome: CallEndOutcome) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_call_outcome_wants_attention(
         FfiConverterTypeCallEndOutcome_lower(outcome),$0
+    )
+})
+}
+/**
+ * The TURN urls a call relays through; null: the call is not placed. Every call is
+ * relay-only — the platform sets the ICE transport policy to relay (construct-rules
+ * `calls::relay_urls`).
+ */
+public func callRelayUrls(turnUrls: [String], veilOn: Bool) -> [String]?  {
+    return try!  FfiConverterOptionSequenceString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_call_relay_urls(
+        FfiConverterSequenceString.lower(turnUrls),
+        FfiConverterBool.lower(veilOn),$0
     )
 })
 }
@@ -20581,6 +20781,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_call_outcome_wants_attention() != 65524) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_call_relay_urls() != 51209) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_call_signal_error_from_wire() != 50313) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20923,7 +21126,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_callmachine_ended_by_server() != 4791) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_callmachine_fail() != 39277) {
+    if (uniffi_construct_core_checksum_method_callmachine_fail() != 62397) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_callmachine_hang_up() != 63859) {
