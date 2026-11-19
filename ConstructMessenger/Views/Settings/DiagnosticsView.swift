@@ -19,6 +19,10 @@ struct DiagnosticsView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @Environment(ChatsViewModel.self) private var chatsViewModel
+    @State private var pickingLogChat = false
+    #endif
     
     @State private var logText: String = ""
     @State private var logSize: String = ""
@@ -331,6 +335,12 @@ struct DiagnosticsView: View {
                     ConstructActionRow(systemImage: "square.and.arrow.up", title: LocalizedStringKey("diagnostics_share_logs"), role: .accent) {
                         shareArchive()
                     }
+                    #if os(iOS)
+                    ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
+                    ConstructActionRow(systemImage: "paperplane", title: LocalizedStringKey("diagnostics_send_logs_to_chat"), role: .accent) {
+                        pickingLogChat = true
+                    }
+                    #endif
                 }
 
                 // MARK: - Recent Logs
@@ -363,6 +373,10 @@ struct DiagnosticsView: View {
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
         .screenTitle(NSLocalizedString("diagnostics", comment: ""), shown: showNavBar)
+        .sheet(isPresented: $pickingLogChat) {
+            ForwardPickerView(onPick: sendLogs(to:), title: NSLocalizedString("diagnostics_send_logs_to_chat", comment: ""))
+                .sheetNavigation()
+        }
         #endif
         .onAppear {
             // Pull MetricKit's retained window now. Its own delivery fires at most once every
@@ -424,6 +438,20 @@ struct DiagnosticsView: View {
     private func shareArchive() {
         DiagnosticLogShare.present()
     }
+
+    #if os(iOS)
+    /// The archive goes into the picked chat's composer; the person sends it there as an ordinary
+    /// encrypted file. Nothing is sent from here.
+    private func sendLogs(to chat: ChatRecord) {
+        guard let archive = try? LogCollector.shared.createLogArchive() else {
+            Log.error("Failed to create log archive for a chat", category: "Diagnostics")
+            return
+        }
+        ComposerFileDrafts.shared.hand([archive], to: chat.id)
+        chatsViewModel.selectedTab = 0
+        chatsViewModel.chatToOpen = chat.id
+    }
+    #endif
 
     private func clearLogs() {
         // Refresh when the deletion has actually happened, not after a fixed guess at how long it

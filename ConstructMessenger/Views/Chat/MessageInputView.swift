@@ -12,9 +12,7 @@ import Combine
 struct MessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
-    #if os(macOS)
     @Binding var droppedFileURLs: [URL]
-    #endif
     let replyingTo: TranscriptRow?
     let quoteOverride: String?
     let editingMessage: TranscriptRow?
@@ -29,6 +27,7 @@ struct MessageInputView: View {
         IOSMessageInputView(
             text: $text,
             droppedImages: $droppedImages,
+            droppedFileURLs: $droppedFileURLs,
             replyingTo: replyingTo,
             quoteOverride: quoteOverride,
             editingMessage: editingMessage,
@@ -60,12 +59,14 @@ struct MessageInputView: View {
 #Preview("Input — idle") {
     @Previewable @State var text = ""
     @Previewable @State var dropped: [PlatformImage] = []
+    @Previewable @State var droppedFiles: [URL] = []
 
     VStack {
         Spacer()
         MessageInputView(
             text: $text,
             droppedImages: $dropped,
+            droppedFileURLs: $droppedFiles,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

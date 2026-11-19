@@ -62,6 +62,7 @@ struct ChatView: View {
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
     @State private var chatDropImages: [PlatformImage] = []
+    @State private var chatDropFiles: [URL] = []
     @State private var isChatDropTargeted = false
 
     // Flood guard observer — updates when IncomingFloodGuard suppresses this chat's sender
@@ -306,6 +307,9 @@ struct ChatView: View {
         .task(id: ForwardDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
             await sendForwardedHere()
         }
+        .task(id: ComposerFileDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
+            chatDropFiles.append(contentsOf: ComposerFileDrafts.shared.take(for: viewModel.conversation.chatId))
+        }
         .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
         }
@@ -460,6 +464,7 @@ struct ChatView: View {
         IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
+            droppedFileURLs: $chatDropFiles,
             replyingTo: replyingTo,
             quoteOverride: replyQuoteText,
             editingMessage: viewModel.editingMessage,

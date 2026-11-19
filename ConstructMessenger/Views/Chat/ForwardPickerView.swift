@@ -28,8 +28,30 @@ final class ForwardDrafts {
     }
 }
 
+/// Files waiting for a chat's composer: the chat puts them there when it appears, and the person
+/// sends them. Today only "Send logs to a chat" (Diagnostics) hands files over. Unlike
+/// `ForwardDrafts` nothing is sent on its own — a file in the composer is a draft.
+@MainActor
+@Observable
+final class ComposerFileDrafts {
+    static let shared = ComposerFileDrafts()
+
+    private(set) var pending: [String: [URL]] = [:]
+
+    func hand(_ files: [URL], to chatId: String) {
+        guard !files.isEmpty else { return }
+        pending[chatId, default: []].append(contentsOf: files)
+    }
+
+    func take(for chatId: String) -> [URL] {
+        pending.removeValue(forKey: chatId) ?? []
+    }
+}
+
 struct ForwardPickerView: View {
     let onPick: (ChatRecord) -> Void
+    /// The same list picks the chat for the log archive; only the title differs.
+    var title: String = NSLocalizedString("forward_to", comment: "")
 
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -56,7 +78,7 @@ struct ForwardPickerView: View {
         .scrollContentBackground(.hidden)
         .ctBackground()
         .searchable(text: $query, prompt: LocalizedStringKey("search_prompt"))
-        .navigationTitle(NSLocalizedString("forward_to", comment: ""))
+        .navigationTitle(title)
         .overlay {
             if chats.isEmpty {
                 ContentUnavailableView.search(text: query)
