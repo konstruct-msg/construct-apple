@@ -49,3 +49,23 @@ enum AlertDecision: Equatable {
         return .hide(controlFrames: control)
     }
 }
+
+/// What the system is handed for a decision. Dropping a frame-only alert needs Apple's filtering
+/// entitlement (`KonstructFiltersAlerts`); until it is granted the alert is kept but made passive —
+/// it goes to Notification Center without a sound, a vibration or a lit screen, and the app
+/// withdraws it on its next wake. The server sends the same push either way and learns nothing.
+enum AlertPresentation: Equatable {
+    /// The alert as the server sent it.
+    case asIs
+    /// Notification Center only (`interruptionLevel = .passive`, no sound).
+    case passive
+    /// Nothing (empty content): only with the filtering entitlement.
+    case dropped
+
+    static func of(_ decision: AlertDecision, filtersAlerts: Bool) -> AlertPresentation {
+        switch decision {
+        case .show: return .asIs
+        case .hide: return filtersAlerts ? .dropped : .passive
+        }
+    }
+}

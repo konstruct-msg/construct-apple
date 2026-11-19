@@ -94,4 +94,22 @@ final class AlertDecisionTests: XCTestCase {
         VeilProxyStore.saveMode(.auto)
         XCTAssertTrue(ExtensionDirectPath.permits(KeychainManager.shared.loadData(forKey: key)))
     }
+
+    // MARK: - What the system is handed
+
+    /// Without the filtering entitlement a frame-only alert is kept but made quiet — never shown
+    /// as it came (it would ring for a receipt), never emptied (iOS presents empty content).
+    func testAFrameOnlyAlertIsPassiveWithoutTheEntitlement() {
+        XCTAssertEqual(AlertPresentation.of(.hide(controlFrames: 2), filtersAlerts: false), .passive)
+    }
+
+    func testAFrameOnlyAlertIsDroppedWithTheEntitlement() {
+        XCTAssertEqual(AlertPresentation.of(.hide(controlFrames: 1), filtersAlerts: true), .dropped)
+    }
+
+    /// A message, or any doubt, keeps its sound and banner whatever the entitlement.
+    func testAShownAlertIsDeliveredAsItCame() {
+        XCTAssertEqual(AlertPresentation.of(.show(reason: "a message"), filtersAlerts: false), .asIs)
+        XCTAssertEqual(AlertPresentation.of(.show(reason: "fetch failed"), filtersAlerts: true), .asIs)
+    }
 }

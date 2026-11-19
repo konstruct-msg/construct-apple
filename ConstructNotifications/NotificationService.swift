@@ -9,7 +9,8 @@
 //  keychain and writes nothing anywhere; every path in doubt shows the alert as it came.
 //
 //  Dropping needs Apple's filtering entitlement. Until `KonstructFiltersAlerts` is set in
-//  Info.plist (with the entitlement), a frame-only push is shown and logged as "would hide".
+//  Info.plist (with the entitlement), a frame-only push is made passive: Notification Center only,
+//  no sound, no lit screen (`AlertPresentation`).
 //
 
 import UserNotifications
@@ -108,21 +109,33 @@ private final class OneDelivery: @unchecked Sendable {
         }
         guard let (original, handler) = taken else { return }
 
+        let why: String
         switch decision {
-        case .hide(let frames) where Self.filtersAlerts:
-            log.notice("NSE: hide — \(frames, privacy: .public) protocol frame(s)")
-            handler(UNNotificationContent())
-        case .hide(let frames):
-            // Not entitled: the push is shown as it came, and the app withdraws it once a wake
-            // finds nothing new (`withdrawPushBannersIfNothingNew`). The empty-content trial that
-            // stood here (Debug and Beta, 2026-10-16 → 10-19) answered its question: iOS 27
-            // presents empty content — testers got notifications "with no message at all".
-            log.notice("NSE: would hide — \(frames, privacy: .public) protocol frame(s); not entitled, shown")
-            handler(ProbeBanner.marked(original, "\(frames) frame(s) · would hide"))
-        case .show(let reason):
-            log.notice("NSE: show — \(reason, privacy: .public)")
-            handler(ProbeBanner.marked(original, reason))
+        case .hide(let frames): why = "\(frames) protocol frame(s)"
+        case .show(let reason): why = reason
         }
+        switch AlertPresentation.of(decision, filtersAlerts: Self.filtersAlerts) {
+        case .dropped:
+            log.notice("NSE: hide — \(why, privacy: .public)")
+            handler(UNNotificationContent())
+        case .passive:
+            // Not entitled: iOS 27 presents empty content (the 2026-10-16 → 10-19 trial — testers
+            // got notifications "with no message at all"), so the alert stays, made passive, and
+            // the app withdraws it once a wake finds nothing new (`withdrawPushBannersIfNothingNew`).
+            log.notice("NSE: passive — \(why, privacy: .public); not entitled to hide")
+            handler(ProbeBanner.marked(Self.passive(original), "\(why) · passive"))
+        case .asIs:
+            log.notice("NSE: show — \(why, privacy: .public)")
+            handler(ProbeBanner.marked(original, why))
+        }
+    }
+
+    /// The same alert, delivered quietly: Notification Center only, no sound, the screen stays dark.
+    private static func passive(_ content: UNNotificationContent) -> UNNotificationContent {
+        guard let quiet = content.mutableCopy() as? UNMutableNotificationContent else { return content }
+        quiet.interruptionLevel = .passive
+        quiet.sound = nil
+        return quiet
     }
 }
 
