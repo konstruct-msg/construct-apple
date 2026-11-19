@@ -11,6 +11,50 @@ class MessageRetryManager {
     static let shared = MessageRetryManager()
 
     private let messageQueueManager = MessageQueueManager.shared
+
+    // MARK: - Route
+
+    /// Peers whose queue waits for a route (todo 320, `RouteWaitGate`).
+    private var routeWait = RouteWaitGate()
+
+    /// Whether a send can leave now: the tunnel is up, or the mode may go direct. The same test
+    /// `GRPCChannelManager` refuses a channel on (`VeilTunnelNotUp`).
+    private static let liveIsRouted: () -> Bool = {
+        GRPCChannelManager.shared.veilProxyPort() != nil || VeilProxyStore.loadMode().allowsDirectPath
+    }
+    private static let liveWaitForRoute: () async -> Bool = { await VeilTunnelWait.untilRouted() }
+    private var isRouted = MessageRetryManager.liveIsRouted
+    private var waitForRoute = MessageRetryManager.liveWaitForRoute
+
+    /// Whether the send can go now. If not, one wait per peer drains [peer]'s queue when the route
+    /// is back, and the caller leaves the rows as they are.
+    private func admitted(peer recipientId: String, chatId: String, currentUserId: String) -> Bool {
+        let admission = routeWait.admit(recipientId, routed: isRouted())
+        if admission == .startWaiting {
+            Log.info("Queue for \(recipientId.prefix(8))… waits for the route — VEIL on, no tunnel", category: "MessageRetryManager")
+            Task { [weak self] in
+                guard let self else { return }
+                let routed = await self.waitForRoute()
+                self.routeWait.finished(recipientId)
+                guard routed else {
+                    Log.info("Queue for \(recipientId.prefix(8))…: no route within the wait — left queued for the next trigger", category: "MessageRetryManager")
+                    return
+                }
+                self.sendQueuedMessages(inChat: chatId, recipientId: recipientId, currentUserId: currentUserId)
+            }
+        }
+        return admission.sendsNow
+    }
+
+#if DEBUG
+    /// Tests: the route as given, and a wait that ends when the test says; nil puts the live
+    /// ones back.
+    func useRouteForTesting(isRouted: (() -> Bool)?, waitForRoute: (() async -> Bool)?) {
+        self.isRouted = isRouted ?? Self.liveIsRouted
+        self.waitForRoute = waitForRoute ?? Self.liveWaitForRoute
+        routeWait = RouteWaitGate()
+    }
+#endif
     
     // MARK: - Single Message Retry
     
@@ -33,6 +77,15 @@ class MessageRetryManager {
         // Ensure decrypted content exists before proceeding
         guard !MessageDisplayCache.shared.payloadData(messageId: message.id).isEmpty else {
             Log.error("Cannot retry - no decrypted content", category: "MessageRetryManager")
+            return
+        }
+
+        // No route: the tap is kept, not spent. The row waits as queued and goes with its chat's
+        // queue when the route is back (build 782: five taps in a tunnel outage, each one an
+        // attempt that failed at once).
+        if !isRouted(), let currentUserId = AuthSessionManager.shared.currentUserId {
+            if message.deliveryStatus != .queued { recordOutcome(message.id, .queued) }
+            _ = admitted(peer: recipientId, chatId: message.chatId, currentUserId: currentUserId)
             return
         }
 
@@ -327,22 +380,29 @@ class MessageRetryManager {
     private static var retryCeiling: Int16 { Int16(clamping: FeatureFlags.maxMessageRetryAttempts) }
 
     // MARK: - Queued Messages Processing
+
+    /// How one drain of a chat's queue ended. Callers act on none of it; it says what the drain
+    /// did, so a test can tell a queue that waits for the route from one stopped further on.
+    enum QueueDrain: Equatable {
+        case nothingOwed, waitingForRoute, noSession, unsendable, sending
+    }
     
     /// Send all queued messages for a chat (called when connection is restored)
     /// - Parameters:
     ///   - chatId: The chat to process queued messages for
     ///   - recipientId: Recipient user ID
     ///   - currentUserId: Current user ID
+    @discardableResult
     func sendQueuedMessages(
         inChat chatId: String,
         recipientId: String,
         currentUserId: String
-    ) {
+    ) -> QueueDrain {
         // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during VEIL startup window)
         guard let queuedMessages = try? LocalRepositories.messages.pendingSends(
             inChat: chatId, retryCeiling: Self.retryCeiling, limit: .max
         ) else {
-            return
+            return .nothingOwed
         }
 
         // Nothing owed, nothing to do. This has to come before the session guard below, which
@@ -359,13 +419,17 @@ class MessageRetryManager {
         // A peer we owe nothing needs no session until we write to them, and the write path
         // establishes one. The "zombie session" this rescues is a queue that cannot drain; an
         // empty queue is not one.
-        guard !queuedMessages.isEmpty else { return }
+        guard !queuedMessages.isEmpty else { return .nothingOwed }
 
         // Before the session guard. A placeholder has decrypted content and no wire payload, so
         // everything below would treat it as a text message — including opening a session for a
         // queue that owes nothing. A launch that already ran the old reset has these at `.queued`.
         let sendable = withoutUploadPlaceholders(queuedMessages)
-        guard !sendable.isEmpty else { return }
+        guard !sendable.isEmpty else { return .nothingOwed }
+
+        // No route: nothing below can leave, and marking attempts would flip the rows to
+        // "sending" only to fail them a moment later. One wait drains them when the route is back.
+        guard admitted(peer: recipientId, chatId: chatId, currentUserId: currentUserId) else { return .waitingForRoute }
 
         // Guard: no live session for this contact.
         //
@@ -389,7 +453,7 @@ class MessageRetryManager {
             } else {
                 Log.debug("sendQueuedMessages: no active session for \(recipientId.prefix(8))… and core not ready — deferring", category: "MessageRetryManager")
             }
-            return
+            return .noSession
         }
 
         let pendingIds = prepareMessagesForGlobalRetry(sendable)
@@ -425,7 +489,7 @@ class MessageRetryManager {
                 "plaintext for \(recipientId.prefix(8))… — \(stranded) unsendable row(s) marked failed",
                 category: "MessageRetryManager"
             )
-            return
+            return .unsendable
         }
 
         // Mark the re-encrypt targets as sending up front so the UI reflects progress and the
@@ -521,6 +585,7 @@ class MessageRetryManager {
                 }
             }
         }
+        return .sending
     }
 
     /// Mirror for the stored-ciphertext branch, which holds no plaintext of its own.

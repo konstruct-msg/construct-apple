@@ -347,6 +347,7 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
         // handshake would stall to the timeout.
         let connQueue = DispatchQueue(label: "veil.front.external.conn", qos: .userInitiated)
         let conn = makeConnection(callbackQueue: connQueue)
+        let dialStarted = Date()
 
         do {
             let exporter = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
@@ -357,6 +358,10 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
                 // cancels the timer.
                 let timeout = DispatchWorkItem {
                     conn.stateUpdateHandler = nil
+                    // todo 320: after a network change this waited the whole 8 s while rustls to
+                    // the same front took 0.4 s. Which path the connection was on says whether it
+                    // waited on the one that had just gone.
+                    Log.info("VEIL native-TLS: handshake timed out on path \(Self.describe(conn.currentPath))", category: "VEIL")
                     conn.cancel()
                     cont.resume(throwing: DialError.handshakeFailed("timeout after \(Self.handshakeTimeout)s"))
                 }
@@ -378,6 +383,11 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
                         timeout.cancel()
                         conn.stateUpdateHandler = nil
                         cont.resume(throwing: DialError.handshakeFailed("cancelled"))
+                    case .waiting(let error):
+                        // Network.framework waits for a better path here, and the handshake
+                        // timer keeps running. Logged only, for now (todo 320, measure first).
+                        let ms = Int(Date().timeIntervalSince(dialStarted) * 1000)
+                        Log.info("VEIL native-TLS: handshake waiting after \(ms)ms: \(error) path \(Self.describe(conn.currentPath))", category: "VEIL")
                     default:
                         break
                     }
@@ -390,6 +400,23 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
             conn.cancel()
             throw error
         }
+    }
+
+    /// A path as one log word: its status and the kinds of interface it runs over — never a name
+    /// or an address.
+    private static func describe(_ path: NWPath?) -> String {
+        guard let path else { return "none" }
+        let kinds = path.availableInterfaces.map { interface -> String in
+            switch interface.type {
+            case .wifi: return "wifi"
+            case .cellular: return "cellular"
+            case .wiredEthernet: return "wired"
+            case .loopback: return "loopback"
+            case .other: return "other"
+            @unknown default: return "unknown"
+            }
+        }
+        return "\(path.status)[\(kinds.joined(separator: ","))]"
     }
 
     private func makeConnection(callbackQueue: DispatchQueue) -> NWConnection {
