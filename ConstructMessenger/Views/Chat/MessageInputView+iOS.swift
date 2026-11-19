@@ -16,6 +16,8 @@ struct IOSMessageInputView: View {
 
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
+    /// Files another screen put into this chat's composer (`ComposerFileDrafts`).
+    @Binding var droppedFileURLs: [URL]
     let replyingTo: TranscriptRow?
     let quoteOverride: String?
     let editingMessage: TranscriptRow?
@@ -68,6 +70,11 @@ struct IOSMessageInputView: View {
         .onChange(of: droppedImages) { _, newImages in
             attachments.appendDroppedImages(newImages)
             droppedImages.removeAll()
+        }
+        .onChange(of: droppedFileURLs) { _, files in
+            guard !files.isEmpty else { return }
+            attachments.handlePickedFiles(files)
+            droppedFileURLs.removeAll()
         }
         .sheet(isPresented: $showMediaPicker) {
             MediaPickerSheet(
@@ -355,12 +362,14 @@ struct CameraPickerView: UIViewControllerRepresentable {
 #Preview("Input") {
     @Previewable @State var text = ""
     @Previewable @State var dropped: [PlatformImage] = []
+    @Previewable @State var droppedFiles: [URL] = []
 
     VStack {
         Spacer()
         IOSMessageInputView(
             text: $text,
             droppedImages: $dropped,
+            droppedFileURLs: $droppedFiles,
             replyingTo: nil,
             quoteOverride: nil,
             editingMessage: nil,

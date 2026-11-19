@@ -722,6 +722,7 @@
 "diagnostics_status_off" = "Désactivée";
 "diagnostics_size" = "Taille";
 "diagnostics_share_logs" = "Partager les journaux";
+"diagnostics_send_logs_to_chat" = "Envoyer les journaux dans une discussion";
 "diagnostics_clear_logs" = "Effacer les journaux";
 "diagnostics_stealth_override_title" = "Expéditeur furtif (surcharge debug)";
 "diagnostics_stealth_override_hint" = "Toujours actif en Release. Désactivez ici pour exercer l’ancien chemin d’envoi identifié pendant le développement.";

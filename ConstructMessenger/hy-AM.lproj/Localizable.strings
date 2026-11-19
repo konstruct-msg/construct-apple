@@ -710,6 +710,7 @@
 "diagnostics_status_off" = "Անջատված";
 "diagnostics_size" = "Չափ";
 "diagnostics_share_logs" = "Կիսվել մատյաններով";
+"diagnostics_send_logs_to_chat" = "Ուղարկել մատյանները զրույցում";
 "diagnostics_clear_logs" = "Մաքրել մատյանները";
 "diagnostics_stealth_override_title" = "Թաքնված ուղարկող (վրիպազերծման շրջանցում)";
 "diagnostics_stealth_override_hint" = "Թողարկման մեջ միշտ միացված է։ Այստեղ անջատեք՝ մշակման ժամանակ հին նույնականացված ուղու վրա աշխատելու համար։";
