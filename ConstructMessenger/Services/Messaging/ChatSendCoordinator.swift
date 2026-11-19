@@ -929,13 +929,19 @@ final class ChatSendCoordinator {
                     plaintext: payload,
                     messageId: UUID(uuidString: actionId) ?? UUID()
                 )
-                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                    plan: chunkPlan,
-                    baseMessageId: actionId,
-                    senderId: currentUserId,
-                    recipientId: recipientId,
-                    timestamp: UInt64(Date().timeIntervalSince1970)
-                )
+                // Waits for the route and tries once more after a transport failure (todo 320).
+                _ = try await ActionSend.whenRouted(
+                    waitForRoute: { await VeilTunnelWait.untilRouted() },
+                    isRetryable: SendFailure.isRetryableTransport
+                ) {
+                    try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                        plan: chunkPlan,
+                        baseMessageId: actionId,
+                        senderId: currentUserId,
+                        recipientId: recipientId,
+                        timestamp: UInt64(Date().timeIntervalSince1970)
+                    )
+                }
 
                 if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
                     let now = UInt64(Date().timeIntervalSince1970)
@@ -1007,13 +1013,19 @@ final class ChatSendCoordinator {
                 let editActionId = UUID().uuidString.lowercased()
                 let plan = ChunkedMessageSender.shared.buildPlan(plaintext: editPayload, messageId: UUID(uuidString: editActionId) ?? UUID())
 
-                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                    plan: plan,
-                    baseMessageId: editActionId,
-                    senderId: currentUserId,
-                    recipientId: recipientId,
-                    timestamp: UInt64(Date().timeIntervalSince1970)
-                )
+                // Waits for the route and tries once more after a transport failure (todo 320).
+                _ = try await ActionSend.whenRouted(
+                    waitForRoute: { await VeilTunnelWait.untilRouted() },
+                    isRetryable: SendFailure.isRetryableTransport
+                ) {
+                    try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                        plan: plan,
+                        baseMessageId: editActionId,
+                        senderId: currentUserId,
+                        recipientId: recipientId,
+                        timestamp: UInt64(Date().timeIntervalSince1970)
+                    )
+                }
 
                 let editedDate = Date()
                 persistenceService.updateMessageContent(
