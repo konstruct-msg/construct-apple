@@ -31,9 +31,7 @@ final class ProfileRebroadcastTests: XCTestCase {
         ProfileShareViewModel.setAvatarRemoved(false, accountId: me)
         ProfileShareViewModel.siblingSyncEnabled = true
         ProfileShareViewModel.resetRebroadcastGateForTesting()
-        if let savedUserId, !savedUserId.isEmpty {
-            AuthSessionManager.shared.updateUserId(savedUserId)
-        }
+        AuthSessionManager.shared.restoreUserIdForTesting(savedUserId)
         try await super.tearDown()
     }
 

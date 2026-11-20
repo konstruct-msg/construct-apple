@@ -40,6 +40,22 @@ class AuthSessionManager {
         syncAuthCache()
     }
 
+    #if DEBUG
+    /// Puts back what a test found: the account it replaced, or none. `updateUserId` cannot say
+    /// «none», and a test that skipped the restore when there was no account left its own id in
+    /// the simulator's Keychain — every later test then took that peer for this account
+    /// (`DeviceCertificateLinkTests`, 11 red on a simulator nobody had signed in on, 2026-11-20).
+    func restoreUserIdForTesting(_ uid: String?) {
+        guard let uid, !uid.isEmpty else {
+            KeychainManager.shared.deleteUserID()
+            self.userId = nil
+            syncAuthCache()
+            return
+        }
+        updateUserId(uid)
+    }
+    #endif
+
     /// Clears stored tokens so restoreOrAuthenticateDevice() will fall through to device
     /// signing-key auth. Does NOT remove device keys, userId, or deviceId — identity is preserved.
     func invalidateTokensForReauth() {
