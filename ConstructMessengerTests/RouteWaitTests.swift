@@ -134,9 +134,14 @@ final class QueueWaitsForRouteTests: XCTestCase {
     private var chat: Chat!
     private var waits = 0
     private var release: CheckedContinuation<Bool, Never>?
+    private var savedUserId: String?
 
     override func setUp() async throws {
         try await super.setUp()
+        // A retry tap reads the signed-in account: on a simulator nobody signed in on there is
+        // none, and the tap would take the no-account path instead of the one this tests.
+        savedUserId = AuthSessionManager.shared.currentUserId
+        AuthSessionManager.shared.updateUserId("me")
         let container = PersistenceController(inMemory: true).container
         context = container.viewContext
         LocalRepositories.useMessagesForTesting(container)
@@ -163,6 +168,7 @@ final class QueueWaitsForRouteTests: XCTestCase {
         await Task.yield()
         MessageRetryManager.shared.useRouteForTesting(isRouted: nil, waitForRoute: nil)
         LocalRepositories.useMessagesForTesting(nil)
+        AuthSessionManager.shared.restoreUserIdForTesting(savedUserId)
         chat = nil
         context = nil
         try await super.tearDown()

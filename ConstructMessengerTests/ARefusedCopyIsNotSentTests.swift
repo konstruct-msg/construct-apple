@@ -54,9 +54,7 @@ final class ARefusedCopyIsNotSentTests: XCTestCase {
         siblings = []
         answersByDevice = [:]
         askedDevices = []
-        if let savedUserId, !savedUserId.isEmpty {
-            AuthSessionManager.shared.updateUserId(savedUserId)
-        }
+        AuthSessionManager.shared.restoreUserIdForTesting(savedUserId)
         try await super.tearDown()
     }
 

@@ -99,9 +99,7 @@ final class SessionQueueWiringTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        if let savedUserId, !savedUserId.isEmpty {
-            AuthSessionManager.shared.updateUserId(savedUserId)
-        }
+        AuthSessionManager.shared.restoreUserIdForTesting(savedUserId)
         LocalRepositories.useProcessedMessagesForTesting(nil)
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
