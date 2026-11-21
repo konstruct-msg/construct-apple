@@ -214,7 +214,14 @@ class SessionInitializationService {
                 if case .notifyError(let code, _) = $0 { return code == "OPEN_SESSION_REFUSED" }
                 return false
             }
-            if case .sessionBundleFetched = event, !refused {
+            // An open from a stale signed prekey is the core's call now (0.77.0), and its answer
+            // says so with `sessionOpenedAtRisk`, which sets the flag when it is executed. Clearing
+            // it here first would leave a degraded session looking sound.
+            let atRisk = actions.contains {
+                if case .sessionOpenedAtRisk = $0 { return true }
+                return false
+            }
+            if case .sessionBundleFetched = event, !refused, !atRisk {
                 KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: device)
                 Log.info("SESSION_STATE[open_session_done]: new session with device \(device.prefix(8))…, the held one kept as previous", category: "SessionInit")
             }

@@ -671,21 +671,21 @@ final class OutboundMessagePipeline {
 }
 
 /// What the answer to a send says about the recipient's devices.
+///
+/// `named` and `shouldAsk` are the core's rule (`construct-rules` `device_set`, construct-core
+/// 0.78.0), which Android calls too; this is only the conversion to Swift types. Until then both
+/// lived here and Android asked the key server before every send instead (todo 321).
 enum DeviceSetAnswer {
-    /// The set the server named across these copies, the last answer winning; empty when none did.
+    /// The set the server named across these copies, the last answer naming any winning; empty
+    /// when none did.
     nonisolated static func named(in copies: [RecipientSendReport.Copy]) -> Set<String> {
-        let answers = copies.compactMap { $0.response?.recipientActiveDevices }
-        return Set(answers.last { !$0.isEmpty } ?? [])
+        Set(deviceSetNamed(answers: copies.compactMap { $0.response?.recipientActiveDevices }))
     }
 
-    /// Whether this named set is one the key server has not been asked about yet.
-    ///
-    /// **The set is the address, not a timer.** A device the key server named and we refused, or one
-    /// with no bundle, stays out of the plan, so the two sets keep differing. Without this every
-    /// later message would ask again, and `BUNDLE_RATE_LIMIT_PER_MIN` would take the budget session
-    /// setup needs. The same set is asked about once; a changed set is asked about again.
+    /// Whether this named set is one the key server has not been asked about yet. **The set is the
+    /// address, not a timer**: the same set is asked about once, a changed one again.
     nonisolated static func shouldAsk(named: Set<String>, alreadyAsked: Set<String>?) -> Bool {
-        !named.isEmpty && named != alreadyAsked
+        deviceSetShouldAsk(named: named.sorted(), alreadyAsked: alreadyAsked?.sorted())
     }
 
     /// The set to ask the key server about so that a device seen without a verdict, from a first
