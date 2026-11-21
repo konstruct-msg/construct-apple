@@ -288,6 +288,15 @@ class MessageRetryManager {
         if !report.accepted.isEmpty, !report.owed.isEmpty {
             MultiDeviceSendCoordinator.shared.noteOwed(baseMessageId, recipientId, senderId, owed: report.owed)
         }
+        // Our own other devices are told here, by the resend itself, not by its callers. The
+        // stored chunks are bound to the peer's ratchets, so the copy is rebuilt from the row
+        // (`mirrorStoredResend`). Each caller used to make its own call and the single-message
+        // retry made none: a message that failed its first send reached the peer on retry and
+        // never our other devices (Desktop log 2026-11-21, four messages behind a rate limit).
+        let status = report.status.deliveryStatus
+        if status == .sent || status == .delivered {
+            await mirrorStoredResend(messageId: baseMessageId, recipientId: recipientId, senderId: senderId)
+        }
         return report
     }
 
@@ -544,14 +553,7 @@ class MessageRetryManager {
                         }
                         Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \((try? LocalRepositories.messages.message(messageId))?.retryCount ?? 0))", category: "MessageRetryManager")
                     }
-                    // The stored-ciphertext resend reached the recipient's devices (or owes the
-                    // rest to the fan-out queue). Our own other devices still need the message,
-                    // and the stored chunks cannot give it to them: that ciphertext is bound to
-                    // the peer's ratchets. So the copy is rebuilt from the row's plaintext.
-                    if finalStatus == .sent || finalStatus == .delivered {
-                        await self.mirrorStoredResend(messageId: messageId, recipientId: recipientId,
-                                                      senderId: currentUserId)
-                    }
+                    // Our own other devices were told by `resendStored` itself.
                 } catch is StealthDowngradeBlocked {
                     await MainActor.run {
                         // The message must still be there; everything below acts on it.
@@ -588,12 +590,11 @@ class MessageRetryManager {
         return .sending
     }
 
-    /// Mirror for the stored-ciphertext branch, which holds no plaintext of its own.
+    /// Mirror for the stored-ciphertext branch, which holds no plaintext of its own. Called from
+    /// `resendStored` only, so every stored resend mirrors.
     ///
-    /// Media is the one case that cannot be mirrored here and says so instead of returning
-    /// quietly: its wire plaintext is not reconstructable from the persisted model, so a media
-    /// message that went out on retry still reaches none of our own other devices. That is a
-    /// smaller hole than the one this closes, and it is now a line in the log rather than nothing.
+    /// A row with nothing to rebuild (a legacy media body, an empty one) says so instead of
+    /// returning quietly.
     @MainActor
     private func mirrorStoredResend(
         messageId: String,
@@ -615,14 +616,23 @@ class MessageRetryManager {
 
     /// The pre-KNST `MessageContent` bytes for a stored row, or nil when they cannot be rebuilt.
     ///
-    /// Media returns nil: its wire plaintext is a binary album proto that the persisted model
-    /// cannot reconstruct. Both retry branches need this — one to re-encrypt, the other only to
+    /// A media row rebuilds from its album: the composer stores exactly the album it sends
+    /// (`ChatSendCoordinator`, `encodeMediaAlbum(wireContent.mediaAlbum)`), so wrapping it back in
+    /// a `MessageContent` gives the bytes that went out. A media row from before CTM1 (a JSON
+    /// body) returns nil. Both retry branches need this — one to re-encrypt, the other only to
     /// mirror — so it lives in one place rather than being inlined at the first caller and
     /// forgotten at the second, which is how the mirror went missing in the first place.
     /// The type is `@MainActor` for retry UI; this reconstruction is pure on the record and
     /// callable from any queue.
     nonisolated static func recoverWirePlaintext(for message: MessageRecord) -> Data? {
-        guard message.contentType != .media else { return nil }
+        if message.contentType == .media {
+            guard case .mediaAlbum(let body) = message.payload,
+                  let album = try? Shared_Proto_Messaging_V1_MediaAlbumMessage(serializedBytes: body),
+                  !album.items.isEmpty else { return nil }
+            var content = Shared_Proto_Messaging_V1_MessageContent()
+            content.mediaAlbum = album
+            return try? content.serializedData()
+        }
         let text = message.payload.displayString
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
         // An upload placeholder is `.regular` and its decrypted body is non-empty, so without
@@ -680,9 +690,12 @@ class MessageRetryManager {
     /// ciphertext (and risks dedup-drop on the peer) → permanent desync. A fresh wire UUID is safe:
     /// the new ratchet output is a normal forward message the peer's DR handles via skipped keys.
     ///
-    /// Only text content (content_type 0) is re-encryptable — media wire plaintext is a binary
-    /// album proto not reconstructable from the persisted model, so media returns `.failed` for
-    /// manual resend. Returns the resulting status; the caller persists it on MainActor.
+    /// Only text content (content_type 0) is re-encrypted. Media returns `.failed` for manual
+    /// resend: its album rebuilds from the row (`recoverWirePlaintext`), but this path runs once
+    /// the stored ciphertext is gone — past its 24 h, or purged — and the album names uploads the
+    /// server keeps for a limited time. Re-sending them to the peer is a decision of its own; the
+    /// mirror to our own devices is not this path. Returns the resulting status; the caller
+    /// persists it on MainActor.
     private func reencryptAndSend(
         messageId: String,
         recipientId: String,
@@ -697,6 +710,10 @@ class MessageRetryManager {
             // Session vanished again before we got here — nudge a re-establish and keep it queued.
             SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
             return .queued
+        }
+        guard message.contentType != .media else {
+            Log.error("reencryptAndSend: \(messageId.prefix(8))… is media — not re-encrypted, failing for manual resend", category: "MessageRetryManager")
+            return .failed
         }
         guard let plaintext = Self.recoverWirePlaintext(for: message) else {
             // Which guard refused, never the content (TODO 165: a 74-character text came back
