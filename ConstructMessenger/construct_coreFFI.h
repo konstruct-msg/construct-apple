@@ -2034,6 +2034,16 @@ RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed
 RustBuffer uniffi_construct_core_fn_func_device_refusal_of(uint32_t status_code, RustBuffer trailer, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_SET_NAMED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_SET_NAMED
+RustBuffer uniffi_construct_core_fn_func_device_set_named(RustBuffer answers, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_SET_SHOULD_ASK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_DEVICE_SET_SHOULD_ASK
+int8_t uniffi_construct_core_fn_func_device_set_should_ask(RustBuffer named, RustBuffer already_asked, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FANOUT_RETRY_BASE_BACKOFF_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_FANOUT_RETRY_BASE_BACKOFF_MS
 int64_t uniffi_construct_core_fn_func_fanout_retry_base_backoff_ms(RustCallStatus *_Nonnull out_status
@@ -2958,6 +2968,18 @@ uint16_t uniffi_construct_core_checksum_func_derive_recovery_keypair(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_REFUSAL_OF
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_REFUSAL_OF
 uint16_t uniffi_construct_core_checksum_func_device_refusal_of(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_SET_NAMED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_SET_NAMED
+uint16_t uniffi_construct_core_checksum_func_device_set_named(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_SET_SHOULD_ASK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_DEVICE_SET_SHOULD_ASK
+uint16_t uniffi_construct_core_checksum_func_device_set_should_ask(void
     
 );
 #endif

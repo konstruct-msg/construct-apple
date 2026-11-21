@@ -49,6 +49,8 @@ extension CryptoManager {
             return "sessionBundleFetched contactId=\(contactId.prefix(8))…"
         case .sessionBundleUnavailable(let contactId):
             return "sessionBundleUnavailable contactId=\(contactId.prefix(8))…"
+        case .sessionNeeded(let contactId):
+            return "sessionNeeded contactId=\(contactId.prefix(8))…"
         case .networkReconnected:
             return "networkReconnected"
         case .appLaunched:
@@ -79,6 +81,7 @@ extension CryptoManager {
             case .resendMessage:            labels.insert("resend")
             case .openReceiving:            labels.insert("open_receiving")
             case .openSession:              labels.insert("open_session")
+            case .sessionOpenedAtRisk:      labels.insert("opened_at_risk")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break

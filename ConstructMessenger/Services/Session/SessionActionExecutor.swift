@@ -203,6 +203,20 @@ final class SessionActionExecutor {
             }
             onOpenSession(contactId)
 
+        case .sessionOpenedAtRisk(let contactId):
+            // The core opened from a bundle past the signed-prekey age limit (core 0.77.0: the
+            // at-risk decision is the core's, `plan_stale_spk`). The flag is what the at-risk
+            // banner and the foreground upgrade sweep read, as for a degraded init.
+            KeychainManager.shared.saveSessionAtRiskFlag(forDevice: contactId)
+            Log.info("SESSION_STATE[opened_at_risk]: \(contactId.prefix(8))… opened from a stale signed prekey", category: "SessionActionExecutor")
+
+        case .openInFlight(let contactId), .sessionHeld(let contactId):
+            // Answers to `SessionNeeded`, which this app does not send yet: a first send still
+            // calls `init_session` (the Android twin moved in todo 305; iOS is its own task). One
+            // arriving here answers an event nobody sent, so it says so.
+            let name = if case .openInFlight = action { "openInFlight" } else { "sessionHeld" }
+            Log.error("\(name) for \(contactId.prefix(8))… reached the executor — this app sends no SessionNeeded", category: "SessionActionExecutor")
+
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core behind an in-flight init and drained on SessionInitCompleted.
             // Nothing is lost — which is the point of it having a name.
