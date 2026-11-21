@@ -102,6 +102,8 @@ enum A11y {
     enum MediaPicker {
         static let tabStickers    = "mediaPicker.tab.stickers"
         static let installFixture = "mediaPicker.stickers.installFixture"
+        /// A library asset in the gallery grid, by its Photos identifier — never by position.
+        static func asset(_ localIdentifier: String) -> String { "mediaPicker.asset.\(localIdentifier)" }
 
         static func sticker(_ ref: StickerReference) -> String {
             "mediaPicker.sticker.\(ref.pack.hex.prefix(16)).\(ref.index)"
