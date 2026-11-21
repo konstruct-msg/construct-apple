@@ -82,21 +82,34 @@ final class OutgoingMirrorTests: XCTestCase {
                       "the fan-out was removed with the primary send; nothing may grow one back")
     }
 
-    /// Both retry branches have to call it, or the defect is back with the calls merely renamed.
+    /// Every stored resend mirrors, because the resend does it itself.
     ///
-    /// The assertions name the **call**, not the identifier. The first draft looked for
-    /// `mirrorStoredResend(` anywhere in the file and passed against a build where the call was
-    /// deleted — the function's own declaration contains that text. A source test that matches a
-    /// definition when it means a call is a test that cannot fail for the thing it is about.
+    /// Until 2026-11-21 each caller of `resendStored` made its own call, and this test looked for
+    /// one call anywhere in the file. The batch retry had it; the single-message retry did not,
+    /// and the test stayed green while a message that failed its first send reached the peer on
+    /// retry and none of our own devices (Desktop log 2026-11-21). So the call now lives in the
+    /// body of `resendStored`, and the assertion reads that body, not the file.
     ///
-    /// Mutation: delete either call from MessageRetryManager — this reddens.
-    func testBothRetryBranchesMirror() throws {
+    /// The assertions name the **call**, not the identifier: the declaration also contains
+    /// `mirrorStoredResend(`, and a test that matches it cannot fail.
+    ///
+    /// Mutation: move the call back out of `resendStored`, or delete it — this reddens.
+    func testEveryStoredResendMirrors() throws {
         let retry = sourceRoot.appendingPathComponent("Services/Messaging/MessageRetryManager.swift")
         let text = try String(contentsOf: retry, encoding: .utf8)
         XCTAssertTrue(text.contains("MultiDeviceSendCoordinator.shared.mirrorOutgoing("),
                       "the retry path must mirror — the composer path is not the only way a message is sent")
-        XCTAssertTrue(text.contains("await self.mirrorStoredResend("),
-                      "the stored-ciphertext resend is a second retry branch and needs the mirror too")
+
+        let start = try XCTUnwrap(text.range(of: "private func resendStored("), "resendStored is gone")
+        let rest = text[start.upperBound...]
+        let end = rest.range(of: "\n    (private |nonisolated |static |@MainActor|func )", options: .regularExpression)?.lowerBound
+            ?? rest.endIndex
+        let body = rest[..<end]
+        XCTAssertTrue(body.contains("await mirrorStoredResend("),
+                      "resendStored must mirror itself — a caller that forgets is how the single retry synced nothing")
+
+        let calls = text.components(separatedBy: "mirrorStoredResend(").count - 1
+        XCTAssertEqual(calls, 2, "one declaration and one call, inside resendStored; a second call mirrors twice")
     }
 }
 
@@ -136,11 +149,37 @@ final class RecoveredWirePlaintextTests: XCTestCase {
         XCTAssertEqual(content.text.quoted.textPreview, "the question")
     }
 
-    /// Media is the one case that cannot be rebuilt — its wire plaintext is a binary album proto
-    /// the persisted model does not hold. `nil` is the honest answer, and the caller logs the skip
-    /// rather than mirroring something wrong.
-    func testMediaCannotBeRecovered() {
+    /// A media row rebuilds the album it sent. The composer stores the wire album as the row
+    /// (`encodeMediaAlbum(wireContent.mediaAlbum)`), so the copy for another device is the same
+    /// `MessageContent` the recipient got. Until 2026-11-21 this returned nil, and a photo that
+    /// went out on retry reached none of our own devices (three of the four in that day's log).
+    ///
+    /// Mutation: return nil for media again, or drop the quote — this reddens.
+    func testAMediaRowRebuildsTheAlbumItSent() throws {
+        var item = Shared_Proto_Messaging_V1_MediaMessage()
+        item.mediaID = "media-1"
+        var album = Shared_Proto_Messaging_V1_MediaAlbumMessage()
+        album.items = [item]
+        album.caption = "caption"
+        var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+        quoted.messageID = "8a0c1f6e-0000-0000-0000-000000000002"
+        album.quoted = quoted
+        var message = makeMessage(text: "", contentType: .media)
+        message.body = LocalMessagePayload.encodeMediaAlbum(album)
+
+        let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))
+        var sent = Shared_Proto_Messaging_V1_MessageContent()
+        sent.mediaAlbum = album
+        XCTAssertEqual(try Shared_Proto_Messaging_V1_MessageContent(serializedBytes: recovered), sent)
+    }
+
+    /// A media row with nothing to rebuild from — a pre-CTM1 text body, or an album with no
+    /// items — is nil, and the caller logs the skip rather than mirroring something wrong.
+    func testAMediaRowWithoutAnAlbumIsNotRecoverable() {
         XCTAssertNil(MessageRetryManager.recoverWirePlaintext(for: makeMessage(text: "caption", contentType: .media)))
+        var empty = makeMessage(text: "", contentType: .media)
+        empty.body = LocalMessagePayload.encodeMediaAlbum(Shared_Proto_Messaging_V1_MediaAlbumMessage())
+        XCTAssertNil(MessageRetryManager.recoverWirePlaintext(for: empty))
     }
 
     /// A control payload that leaked into the transcript must not be mirrored as a message.

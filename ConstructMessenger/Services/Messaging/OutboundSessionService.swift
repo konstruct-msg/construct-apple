@@ -353,6 +353,9 @@ final class OutboundSessionService {
         return devices.filter { CryptoManager.shared.hasSession(for: $0) }
     }
 
+    /// The devices a `sendContactCard` call is handing the card to right now.
+    private var contactCardsInFlight = DevicesInFlight()
+
     /// Whether any device of `contactId` we can reach is still without our contact card.
     static func peerNeedsOurContactCard(_ contactId: String) -> Bool {
         !IntakeCredentialService.shared.devicesNeedingOurKey(among: sessionDevices(of: contactId)).isEmpty
@@ -385,8 +388,17 @@ final class OutboundSessionService {
             // sealed one. Leave the peer unmarked so the next send retries.
             return
         }
-        let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
+        // Taken before the first suspension, given back when this call ends. Everything between
+        // the owed check and `markOurKeySent` awaits, so without it every caller arriving in that
+        // window sees the same devices owed and sends its own card: a Desktop catching up on 28
+        // messages from a contact's new device sent that contact 31 cards in one second, hit the
+        // server's sealed-sender limit, and the user's own sends behind them failed (log
+        // 2026-11-21). A device another call is handing the card to is not owed to this one.
+        let owed = contactCardsInFlight.take(
+            IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
+        )
         guard !owed.isEmpty else { return }
+        defer { contactCardsInFlight.release(owed) }
 
         // No key of a generation yet (unreadable, or due from our own devices), or one the server
         // does not hold yet: no card now, the devices stay owed and the next exchange retries.
@@ -571,5 +583,29 @@ final class OutboundSessionService {
             }
             return ok // send-critical: carries the ratchet coordination state
         }
+    }
+}
+
+/// Devices one call has taken to send something to, so a call arriving meanwhile leaves them out.
+///
+/// The send it guards awaits between deciding a device is owed and recording that it was served;
+/// two calls inside that window both decide the same way. A taken device is held until the
+/// taking call gives it back, whatever its send did: a failed one stays owed and the next call
+/// takes it again. No timer — the call that took it is the one that ends it.
+struct DevicesInFlight {
+    private(set) var held: Set<String> = []
+
+    /// The devices of `owed` nobody holds, now held by the caller. The order of `owed` is kept.
+    mutating func take(_ owed: [String]) -> [String] {
+        var taken: [String] = []
+        for device in owed where !held.contains(device) {
+            held.insert(device)
+            taken.append(device)
+        }
+        return taken
+    }
+
+    mutating func release(_ devices: [String]) {
+        held.subtract(devices)
     }
 }
