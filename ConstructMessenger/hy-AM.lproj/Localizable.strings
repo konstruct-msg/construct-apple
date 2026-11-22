@@ -1503,3 +1503,11 @@
 "call_studio_stop" = "Դուրս գալ Studio-ից";
 "studio_screen_window_title" = "Հյուրընկալողի էկրանը";
 "studio_screen_waiting" = "Սպասում ենք հյուրընկալողի էկրանին…";
+
+/* Chat media gallery (todo 327) */
+"profile_media_section" = "Մեդիա";
+"chat_media_title" = "Զրույցի մեդիա";
+"chat_media_tab_visual" = "Լուսանկարներ և տեսանյութեր";
+"chat_media_tab_files" = "Ֆայլեր";
+"chat_media_empty_visual" = "Այս զրույցում դեռ լուսանկարներ կամ տեսանյութեր չկան";
+"chat_media_empty_files" = "Այս զրույցում դեռ ֆայլեր չկան";

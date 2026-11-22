@@ -1503,3 +1503,11 @@
 "call_studio_stop" = "Studio を終了";
 "studio_screen_window_title" = "ホストの画面";
 "studio_screen_waiting" = "ホストの画面を待っています…";
+
+/* Chat media gallery (todo 327) */
+"profile_media_section" = "メディア";
+"chat_media_title" = "チャットのメディア";
+"chat_media_tab_visual" = "写真と動画";
+"chat_media_tab_files" = "ファイル";
+"chat_media_empty_visual" = "このチャットにはまだ写真や動画がありません";
+"chat_media_empty_files" = "このチャットにはまだファイルがありません";

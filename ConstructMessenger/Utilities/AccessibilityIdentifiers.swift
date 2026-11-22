@@ -116,6 +116,13 @@ enum A11y {
         static let addStickers = "mediaPicker.stickers.add"
     }
 
+    // MARK: - Profile
+
+    enum Profile {
+        /// The row into the chat's media gallery (todo 327).
+        static let chatMedia = "profile.chatMedia"
+    }
+
     // MARK: - Pairing
 
     enum ContactQR {

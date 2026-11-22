@@ -113,6 +113,7 @@ struct UserProfileView: View {
                     avatarHeader
                     identitySection
                     sharingSection
+                    mediaSection
                     securitySection
                     dangerSection
                 }
@@ -338,6 +339,31 @@ struct UserProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
             }
+            }
+        }
+    }
+
+    // MARK: - Media section
+
+    /// The chat with this person, when there is one: its media lives there (todo 327).
+    private var chatId: String? {
+        (try? LocalRepositories.chats.chat(withPeer: userId))?.id
+    }
+
+    /// What was sent in the chat with this person — the gallery. Not shown before a chat exists.
+    @ViewBuilder
+    private var mediaSection: some View {
+        if let chatId {
+            VStack(alignment: .leading, spacing: 0) {
+                CTSettingsSectionHeader(title: NSLocalizedString("profile_media_section", comment: ""))
+                CTSectionGroup {
+                    ConstructNavRow(
+                        icon: "photo.on.rectangle",
+                        title: "chat_media_title",
+                        destination: ChatMediaGalleryView(chatId: chatId)
+                    )
+                    .accessibilityIdentifier(A11y.Profile.chatMedia)
+                }
             }
         }
     }
