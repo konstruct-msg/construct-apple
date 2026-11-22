@@ -136,8 +136,9 @@ final class MessageMediaIndexTests: XCTestCase {
     }
 
     /// A message written one at a time or in a batch is in the chat's media at once; a body
-    /// replaced by a text clears what it indexed. Mutations: drop the index in `insert`, in the
-    /// batch `insert`, or the clearing in `setBody` — each reddens.
+    /// replaced by a text clears what it indexed, and an edit indexes its new body. Mutations: drop
+    /// the index in `insert`, in the batch `insert`, or in `edit`, or the clearing in `setBody` —
+    /// each reddens.
     func testWritingAMessageIndexesItsMedia() throws {
         let photo = LocalMessagePayload.encodeMediaAlbum(album([item("p1", mime: "image/jpeg")]))
         XCTAssertTrue(try messages.insert(record("m1", key: "k1", body: photo), searchText: nil))
@@ -152,6 +153,10 @@ final class MessageMediaIndexTests: XCTestCase {
 
         XCTAssertTrue(try messages.setBody("m1", body: LocalMessagePayload.encodeText("gone"), searchText: "gone"))
         XCTAssertEqual(try galleryIds(), ["v2"])
+
+        let edited = LocalMessagePayload.encodeMediaAlbum(album([item("e3", mime: "image/png")]))
+        XCTAssertTrue(try messages.edit("m3", body: edited, searchText: nil, editedAt: Date(timeIntervalSince1970: 2_000)))
+        XCTAssertEqual(try galleryIds(), ["e3", "v2"])
     }
 
     /// What an older build wrote — straight into the store, no index — is indexed by the backfill,
