@@ -42,6 +42,12 @@ enum RPCFailureClassifier {
         // `.transportUnknown`.
         if error is ApplicationLayerError { return .applicationError }
 
+        // The server's edge answered — before the heuristics below, which read any UNAVAILABLE as
+        // the path's failure. Not over WebTunnel, where a middlebox can answer the upgrade itself.
+        if method != .webTunnel, let rpc = error as? RPCError, let status = edgeHTTPStatus(rpc.message), (500...599).contains(status) {
+            return .serverNotReady
+        }
+
         if let reason = VeilFailurePolicy.classify(error, method: method) {
             return translate(reason)
         }
@@ -56,6 +62,19 @@ enum RPCFailureClassifier {
             }
         }
         return .transportUnknown
+    }
+
+    /// The HTTP status of a response that carried no gRPC status, from the message grpc-swift
+    /// gives it ("Unexpected non-200 HTTP Status Code (502 Bad Gateway)." —
+    /// `GRPCStreamStateMachine.clientValidateHeadersReceivedFromServer`); nil for anything else.
+    /// Over VEIL the inner HTTP/2 is the server's: the relay ferries bytes and writes no status
+    /// (construct-veil `crates/construct-veil-relay/src/tunnel.rs`), so the answer is Caddy's.
+    static func edgeHTTPStatus(_ message: String) -> Int? {
+        let prefix = "Unexpected non-200 HTTP Status Code ("
+        guard let start = message.range(of: prefix)?.upperBound else { return nil }
+        let digits = message[start...].prefix(3)
+        guard digits.count == 3, digits.allSatisfy(\.isNumber) else { return nil }
+        return Int(digits)
     }
 
     /// Public variant of the VeilFailureReason→RPCFailureKind translation, for code

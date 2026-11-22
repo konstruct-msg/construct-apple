@@ -188,6 +188,88 @@ final class VeilFailurePolicyTests: XCTestCase {
         XCTAssertEqual(RPCFailureClassifier.classify(CancellationError()), .transientCancellation)
     }
 
+    // MARK: - The server's edge answered
+
+    /// What grpc-swift raises for an HTTP response with no `grpc-status`
+    /// (`GRPCStreamStateMachine.clientValidateHeadersReceivedFromServer`): 502/503/504 map to
+    /// UNAVAILABLE, 500 to UNKNOWN.
+    private func edgeAnswer(_ status: String, code: RPCError.Code = .unavailable) -> RPCError {
+        makeRPCError(code: code, message: "Unexpected non-200 HTTP Status Code (\(status)).")
+    }
+
+    /// 2026-11-21 18:00 UTC: the server's Caddy answered 502 while the messaging service was not up.
+    /// The VEIL relay is a byte ferry — the 502 came through it from the server — yet three of them
+    /// demoted a healthy front and the rotation went on to a dead one. A 5xx with no gRPC status is
+    /// the server's edge answering: the path works. Mutations: drop the 5xx rule, or accept a 4xx —
+    /// each reddens.
+    func testA5xxFromTheServersEdgeIsNotAPathFailure() {
+        XCTAssertEqual(RPCFailureClassifier.classify(edgeAnswer("502 Bad Gateway"), method: .veilFront), .serverNotReady)
+        XCTAssertEqual(RPCFailureClassifier.classify(edgeAnswer("503 Service Unavailable")), .serverNotReady)
+        XCTAssertEqual(RPCFailureClassifier.classify(edgeAnswer("504 Gateway Timeout")), .serverNotReady)
+        XCTAssertEqual(RPCFailureClassifier.classify(edgeAnswer("500 Internal Server Error", code: .unknown)), .serverNotReady)
+        XCTAssertFalse(RPCFailureKind.serverNotReady.isTransportFailure)
+
+        // A 4xx keeps what it meant: a 404 over veil-front is the server's answer, as before.
+        XCTAssertEqual(
+            RPCFailureClassifier.classify(edgeAnswer("404 Not Found", code: .unimplemented), method: .veilFront),
+            .applicationError
+        )
+        // Anything that is not an HTTP answer is still the path's failure.
+        XCTAssertEqual(RPCFailureClassifier.classify(makeRPCError(code: .unavailable, message: "connection lost")), .transportUnknown)
+    }
+
+    /// WebTunnel is the one carrier where something in the middle can answer the HTTP upgrade
+    /// itself, so there an HTTP status still says nothing about the server. Mutation: apply the
+    /// rule to every method — this reddens.
+    func testOverWebTunnelAnHTTPStatusIsStillThePathsFailure() {
+        XCTAssertEqual(RPCFailureClassifier.classify(edgeAnswer("502 Bad Gateway"), method: .webTunnel), .transportUnknown)
+    }
+
+    /// The incident end to end: three 502s through a working front leave it active and demote
+    /// nothing; on the direct path they count no failure toward VEIL. Mutation: make the kind a
+    /// transport failure — the front is demoted and the direct path escalates.
+    func testThreeEdge502sNeitherDemoteTheFrontNorEscalateTheDirectPath() {
+        let kind = RPCFailureClassifier.classify(edgeAnswer("502 Bad Gateway"), method: .veilFront)
+        let via = TransportTarget.veil(port: 7000, relay: "front#a:443")
+        let active = TransportState.veilActive(relay: "front#a:443", port: 7000, since: Date(timeIntervalSince1970: 0))
+        var state = active
+        var effects: [TransportEffect] = []
+        for _ in 0..<(TransportConfig().veilSoftFailThreshold + 1) {
+            let out = TransportReducer.route(
+                state: state, event: .rpcFailed(kind: kind, via: via, foreground: true, lane: .auth),
+                mode: .on, config: TransportConfig(), now: Date(timeIntervalSince1970: 60)
+            )
+            state = out.state
+            effects += out.effects
+        }
+        XCTAssertEqual(state, active)
+        XCTAssertFalse(effects.contains { if case .demoteRelay = $0 { return true } else { return false } })
+
+        var direct = TransportState.direct(consecutiveFails: 0)
+        for _ in 0..<(TransportConfig().directFailThreshold + 1) {
+            direct = TransportReducer.route(
+                state: direct, event: .rpcFailed(kind: kind, via: .direct(.h2), foreground: true, lane: .auth),
+                mode: .auto, config: TransportConfig(), now: Date(timeIntervalSince1970: 60)
+            ).state
+        }
+        XCTAssertEqual(direct, .direct(consecutiveFails: 0))
+    }
+
+    /// A stream the edge's 5xx ended is not reported as the path's failure; any other stream death
+    /// still is. Mutation: report every kind — the first assertion reddens.
+    @MainActor
+    func testAStreamEndedByAnEdge5xxIsNotReportedToTheRouter() {
+        XCTAssertFalse(MessageStreamManager.streamFailureReachesRouter(.serverNotReady))
+        XCTAssertTrue(MessageStreamManager.streamFailureReachesRouter(.transportUnknown))
+        XCTAssertTrue(MessageStreamManager.streamFailureReachesRouter(.streamTimeout))
+    }
+
+    /// The connection that carried a 5xx reached the server and stays. Mutation: leave the kind out
+    /// of `sealedFailureKeepsConnection` — a deploy would tear down the sealed channel every send.
+    func testAnEdge5xxKeepsTheSealedConnection() {
+        XCTAssertTrue(GRPCChannelManager.sealedFailureKeepsConnection(edgeAnswer("503 Service Unavailable")))
+    }
+
     // MARK: - The person reads it
 
     func testNoTunnelSaysSoInWords() {

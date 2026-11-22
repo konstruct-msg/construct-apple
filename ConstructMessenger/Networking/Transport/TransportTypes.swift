@@ -226,6 +226,11 @@ enum RPCFailureKind: Sendable, Equatable {
     case authRejected
     /// Application-layer error (validation, not-found, etc.). Reducer ignores.
     case applicationError
+    /// The server's edge answered with an HTTP status and no gRPC status — Caddy's 502/503/504
+    /// while a service behind it restarts. The path works; the server is not ready. Neither the
+    /// direct path nor the VEIL front is to blame, so the reducer ignores it, and retrying is the
+    /// stream's own backoff (2026-11-21: three of these demoted a healthy front).
+    case serverNotReady
     /// TLS alert 40 / handshake failure — relay's TLS fingerprint is being blocked.
     case tlsFingerprintBlocked
     /// TLS certificate expired or unverified.
@@ -243,7 +248,7 @@ enum RPCFailureKind: Sendable, Equatable {
     /// failures that the transport router should ignore.
     var isTransportFailure: Bool {
         switch self {
-        case .applicationError, .authRejected, .transientCancellation:
+        case .applicationError, .authRejected, .transientCancellation, .serverNotReady:
             return false
         default:
             return true
