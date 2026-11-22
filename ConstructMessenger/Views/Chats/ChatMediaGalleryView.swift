@@ -23,7 +23,7 @@ struct ChatMediaGalleryView: View {
     )
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: .zero) {
             tabBar
             ZStack {
                 if model.items.isEmpty, model.isComplete {

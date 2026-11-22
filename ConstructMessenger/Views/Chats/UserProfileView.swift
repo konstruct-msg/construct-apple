@@ -354,7 +354,7 @@ struct UserProfileView: View {
     @ViewBuilder
     private var mediaSection: some View {
         if let chatId {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: .zero) {
                 CTSettingsSectionHeader(title: NSLocalizedString("profile_media_section", comment: ""))
                 CTSectionGroup {
                     ConstructNavRow(
