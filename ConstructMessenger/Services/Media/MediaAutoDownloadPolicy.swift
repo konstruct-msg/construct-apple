@@ -60,13 +60,12 @@ enum MediaAutoDownloadPolicy {
     /// fetches at once (`AttachmentDownloadJob.kt`: no delay, only network constraints).
     static let prefetchDelayMilliseconds: ClosedRange<Int64> = 2_000...30_000
 
-    static func prefetchDelay<G: RandomNumberGenerator>(using generator: inout G) -> Duration {
-        .milliseconds(Int64.random(in: prefetchDelayMilliseconds, using: &generator))
-    }
-
-    static func prefetchDelay() -> Duration {
-        var generator = SystemRandomNumberGenerator()
-        return prefetchDelay(using: &generator)
+    /// `fraction` in [0, 1) onto `prefetchDelayMilliseconds`; the default is a fresh random draw.
+    /// The draw is a parameter so each end of the range can be pinned in a test.
+    static func prefetchDelay(fraction: Double = Double.random(in: 0..<1)) -> Duration {
+        let low = prefetchDelayMilliseconds.lowerBound
+        let span = Double(prefetchDelayMilliseconds.upperBound - low)
+        return .milliseconds(low + Int64(min(max(fraction, 0), 1) * span))
     }
 
     /// The setting as stored, falling back to the default when nothing has been chosen.

@@ -118,29 +118,20 @@ final class MediaAutoDownloadPolicyTests: XCTestCase {
 
     // MARK: - The wait before an arrival fetch
 
-    /// A generator that always answers the same word, to pin each end of the range.
-    private struct Fixed: RandomNumberGenerator {
-        let word: UInt64
-        mutating func next() -> UInt64 { word }
-    }
-
     /// Never sooner than 2 s: a fetch at the moment of delivery is the link the wait blurs.
     /// Mutation: a lower bound of 0 — this reddens.
     func testTheWaitIsNeverShorterThanTwoSeconds() {
-        var low = Fixed(word: 0)
-        XCTAssertEqual(MediaAutoDownloadPolicy.prefetchDelay(using: &low), .seconds(2))
+        XCTAssertEqual(MediaAutoDownloadPolicy.prefetchDelay(fraction: 0), .seconds(2))
     }
 
     /// Never longer than 30 s: a photo in an open chat with auto-download on is not held up for long.
     /// Mutation: an upper bound of 300 s — this reddens.
     func testTheWaitIsNeverLongerThanThirtySeconds() {
-        var high = Fixed(word: .max)
-        let longest = MediaAutoDownloadPolicy.prefetchDelay(using: &high)
+        let longest = MediaAutoDownloadPolicy.prefetchDelay(fraction: 0.999_999)
         XCTAssertLessThanOrEqual(longest, .seconds(30))
         XCTAssertGreaterThan(longest, .seconds(29))
-        var system = SystemRandomNumberGenerator()
         for _ in 0..<1_000 {
-            let wait = MediaAutoDownloadPolicy.prefetchDelay(using: &system)
+            let wait = MediaAutoDownloadPolicy.prefetchDelay()
             XCTAssertTrue(wait >= .seconds(2) && wait <= .seconds(30), "\(wait)")
         }
     }
