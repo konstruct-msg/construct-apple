@@ -55,6 +55,42 @@ struct MessageRecord: Equatable, Sendable, Identifiable {
     var payload: LocalMessagePayload { LocalMessagePayload.decode(body) }
 }
 
+/// One item of a chat's media, as the store's index holds it (todo 327): which message, which
+/// item of its album, and what kind. What the item looks like is read from the message's body.
+struct ChatMediaItem: Equatable, Sendable, Identifiable {
+    let messageId: String
+    let item: Int
+    let mediaId: String
+    let kind: LocalMediaKind
+    /// What the sender declared, not what is on disk.
+    let byteSize: Int64
+    let timestamp: Date
+    let isSentByMe: Bool
+    let orderKey: String
+
+    var id: String { "\(messageId)_\(item)" }
+
+    init(messageId: String, item: Int, mediaId: String, kind: LocalMediaKind, byteSize: Int64,
+         timestamp: Date, isSentByMe: Bool, orderKey: String) {
+        self.messageId = messageId
+        self.item = item
+        self.mediaId = mediaId
+        self.kind = kind
+        self.byteSize = byteSize
+        self.timestamp = timestamp
+        self.isSentByMe = isSentByMe
+        self.orderKey = orderKey
+    }
+
+    init(_ row: LocalChatMedia) {
+        self.init(
+            messageId: row.messageId, item: Int(row.item), mediaId: row.mediaId, kind: row.kind,
+            byteSize: row.byteSize, timestamp: Date(unixMs: row.timestamp),
+            isSentByMe: row.isSentByMe, orderKey: row.orderKey
+        )
+    }
+}
+
 protocol MessageStore: Sendable {
     /// The message `id`. Ids are compared without case: rows written before ids were lowercased
     /// at the seam still answer.
@@ -83,6 +119,11 @@ protocol MessageStore: Sendable {
 
     /// Ours in `status`, every chat, transcript order (`own_messages_in_status`).
     func ownMessages(in status: DeliveryStatus, limit: Int) throws -> [MessageRecord]
+
+    /// A page of the chat's media of `kinds` (every kind when empty), newest first, from the
+    /// store's media index (todo 327). `before` is the last item of the previous page, so an album
+    /// a page cuts continues where it stopped (`chat_media`).
+    func media(inChat chatId: String, kinds: [LocalMediaKind], before: ChatMediaItem?, limit: Int) throws -> [ChatMediaItem]
 
     /// The ids of messages written or deleted, once per save.
     func changes() -> AsyncStream<Set<String>>
@@ -125,6 +166,12 @@ protocol MessageStore: Sendable {
 }
 
 extension MessageStore {
+    /// Core Data has no media index: a chat there has no gallery until the install moves to
+    /// `construct.db` (`LocalStoreImport`), whose import indexes what it writes.
+    func media(inChat chatId: String, kinds: [LocalMediaKind], before: ChatMediaItem?, limit: Int) throws -> [ChatMediaItem] {
+        []
+    }
+
     /// The peer has the message, so it is not waiting for a position any more: a row of ours
     /// still on the `pending` key moves to its own time. Without this a send whose acknowledgement
     /// was lost — the receipt came, the RPC then failed — kept the pending key for good and sat
@@ -468,6 +515,14 @@ final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
             afterOrderKey: after?.orderKey, afterId: after?.id.lowercased(), limit: UInt32(clamping: limit)
         ).map { MessageRecord($0) }
     }
+    func media(inChat chatId: String, kinds: [LocalMediaKind], before: ChatMediaItem?, limit: Int) throws -> [ChatMediaItem] {
+        try store.chatMedia(
+            chatId: chatId, kinds: kinds, beforeOrderKey: before?.orderKey,
+            beforeMessageId: before?.messageId, beforeItem: before.map { UInt32($0.item) },
+            limit: UInt32(clamping: limit)
+        ).map(ChatMediaItem.init)
+    }
+
     func pendingSends(inChat chatId: String?, retryCeiling: Int16, limit: Int) throws -> [MessageRecord] {
         try store.pendingSends(chatId: chatId, retryCeiling: retryCeiling, limit: UInt32(clamping: limit))
             .map { MessageRecord($0) }

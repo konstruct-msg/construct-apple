@@ -1503,3 +1503,11 @@
 "call_studio_stop" = "Leave Studio";
 "studio_screen_window_title" = "Host’s screen";
 "studio_screen_waiting" = "Waiting for the host’s screen…";
+
+/* Chat media gallery (todo 327) */
+"profile_media_section" = "Media";
+"chat_media_title" = "Chat media";
+"chat_media_tab_visual" = "Photos & videos";
+"chat_media_tab_files" = "Files";
+"chat_media_empty_visual" = "No photos or videos in this chat yet";
+"chat_media_empty_files" = "No files in this chat yet";

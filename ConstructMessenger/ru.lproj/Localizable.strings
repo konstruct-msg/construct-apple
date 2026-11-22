@@ -1514,3 +1514,11 @@
 "call_studio_stop" = "Выйти из Студии";
 "studio_screen_window_title" = "Экран ведущего";
 "studio_screen_waiting" = "Ждём экран ведущего…";
+
+/* Chat media gallery (todo 327) */
+"profile_media_section" = "Медиа";
+"chat_media_title" = "Медиа чата";
+"chat_media_tab_visual" = "Фото и видео";
+"chat_media_tab_files" = "Файлы";
+"chat_media_empty_visual" = "В этом чате пока нет фото и видео";
+"chat_media_empty_files" = "В этом чате пока нет файлов";
