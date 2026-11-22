@@ -2084,7 +2084,23 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func chat(id: String) throws  -> LocalChat?
     
+    /**
+     * Off for a chat that is not there.
+     */
+    func chatAutoSaveMedia(id: String) throws  -> Bool
+    
     func chatForPeer(peerId: String) throws  -> LocalChat?
+    
+    /**
+     * A page of a chat's media of `kinds` (all when empty), newest first. The cursor is the last
+     * item of the previous page — all three of `before_*` or none — so a cut album continues.
+     */
+    func chatMedia(chatId: String, kinds: [LocalMediaKind], beforeOrderKey: String?, beforeMessageId: String?, beforeItem: UInt32?, limit: UInt32) throws  -> [LocalChatMedia]
+    
+    /**
+     * Every media item of a chat in a message older than `before_timestamp` (the messages' unit).
+     */
+    func chatMediaOlderThan(chatId: String, beforeTimestamp: Int64) throws  -> [LocalChatMedia]
     
     /**
      * How many messages a chat holds.
@@ -2230,6 +2246,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func markProcessed(messageId: String, senderId: String, processedAt: Int64) throws  -> Bool
     
+    /**
+     * Which chat and message hold each id; unknown ids are left out, a shared id listed per message.
+     */
+    func mediaOwners(mediaIds: [String]) throws  -> [LocalMediaOwner]
+    
     func message(id: String) throws  -> LocalMessage?
     
     func messageCount() throws  -> UInt64
@@ -2335,6 +2356,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setAccountAddress(id: String, address: Data?) throws  -> Bool
     
+    /**
+     * The chat's "save received media to Photos"; off by default. False when there is no such chat.
+     */
+    func setChatAutoSaveMedia(id: String, on: Bool) throws  -> Bool
+    
     func setChatPinned(id: String, pinned: Bool) throws  -> Bool
     
     /**
@@ -2378,6 +2404,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func setMessageBody(id: String, body: Data, searchText: String?) throws  -> Bool
     
+    /**
+     * The media `message_id` holds (todo 327), replacing what was indexed for it; the message is
+     * marked indexed, with no entries too. False when there is no such message. Called after
+     * `insert_message` / `set_message_body`, and for each id `unindexed_media_messages` lists.
+     */
+    func setMessageMedia(messageId: String, entries: [LocalMediaEntry]) throws  -> Bool
+    
     func setObserver(observer: LocalStoreObserver?) 
     
     func setOrderKey(id: String, orderKey: String) throws  -> Bool
@@ -2412,6 +2445,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * The ids we share our profile with; `except_account` (our own) left out.
      */
     func sharingWith(exceptAccount: String?) throws  -> [String]
+    
+    /**
+     * Up to `limit` messages not indexed yet whose body may hold media (CTM1 album or message
+     * content — a text among them too), oldest first: rows an older build wrote, and any a crash
+     * caught between the insert and `set_message_media`.
+     */
+    func unindexedMediaMessages(limit: UInt32) throws  -> [String]
     
     func upsertCall(call: LocalCall) throws 
     
@@ -2599,11 +2639,54 @@ open func chat(id: String)throws  -> LocalChat?  {
 })
 }
     
+    /**
+     * Off for a chat that is not there.
+     */
+open func chatAutoSaveMedia(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_auto_save_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
 open func chatForPeer(peerId: String)throws  -> LocalChat?  {
     return try  FfiConverterOptionTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_chat_for_peer(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * A page of a chat's media of `kinds` (all when empty), newest first. The cursor is the last
+     * item of the previous page — all three of `before_*` or none — so a cut album continues.
+     */
+open func chatMedia(chatId: String, kinds: [LocalMediaKind], beforeOrderKey: String?, beforeMessageId: String?, beforeItem: UInt32?, limit: UInt32)throws  -> [LocalChatMedia]  {
+    return try  FfiConverterSequenceTypeLocalChatMedia.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterSequenceTypeLocalMediaKind.lower(kinds),
+        FfiConverterOptionString.lower(beforeOrderKey),
+        FfiConverterOptionString.lower(beforeMessageId),
+        FfiConverterOptionUInt32.lower(beforeItem),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Every media item of a chat in a message older than `before_timestamp` (the messages' unit).
+     */
+open func chatMediaOlderThan(chatId: String, beforeTimestamp: Int64)throws  -> [LocalChatMedia]  {
+    return try  FfiConverterSequenceTypeLocalChatMedia.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_media_older_than(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterInt64.lower(beforeTimestamp),$0
     )
 })
 }
@@ -3020,6 +3103,18 @@ open func markProcessed(messageId: String, senderId: String, processedAt: Int64)
 })
 }
     
+    /**
+     * Which chat and message hold each id; unknown ids are left out, a shared id listed per message.
+     */
+open func mediaOwners(mediaIds: [String])throws  -> [LocalMediaOwner]  {
+    return try  FfiConverterSequenceTypeLocalMediaOwner.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_media_owners(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(mediaIds),$0
+    )
+})
+}
+    
 open func message(id: String)throws  -> LocalMessage?  {
     return try  FfiConverterOptionTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_message(
@@ -3315,6 +3410,19 @@ open func setAccountAddress(id: String, address: Data?)throws  -> Bool  {
 })
 }
     
+    /**
+     * The chat's "save received media to Photos"; off by default. False when there is no such chat.
+     */
+open func setChatAutoSaveMedia(id: String, on: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_chat_auto_save_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(on),$0
+    )
+})
+}
+    
 open func setChatPinned(id: String, pinned: Bool)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_set_chat_pinned(
@@ -3451,6 +3559,21 @@ open func setMessageBody(id: String, body: Data, searchText: String?)throws  -> 
 })
 }
     
+    /**
+     * The media `message_id` holds (todo 327), replacing what was indexed for it; the message is
+     * marked indexed, with no entries too. False when there is no such message. Called after
+     * `insert_message` / `set_message_body`, and for each id `unindexed_media_messages` lists.
+     */
+open func setMessageMedia(messageId: String, entries: [LocalMediaEntry])throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_message_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterSequenceTypeLocalMediaEntry.lower(entries),$0
+    )
+})
+}
+    
 open func setObserver(observer: LocalStoreObserver?)  {try! rustCall() {
     uniffi_construct_core_fn_method_localstore_set_observer(
             self.uniffiCloneHandle(),
@@ -3560,6 +3683,20 @@ open func sharingWith(exceptAccount: String?)throws  -> [String]  {
     uniffi_construct_core_fn_method_localstore_sharing_with(
             self.uniffiCloneHandle(),
         FfiConverterOptionString.lower(exceptAccount),$0
+    )
+})
+}
+    
+    /**
+     * Up to `limit` messages not indexed yet whose body may hold media (CTM1 album or message
+     * content — a text among them too), oldest first: rows an older build wrote, and any a crash
+     * caught between the insert and `set_message_media`.
+     */
+open func unindexedMediaMessages(limit: UInt32)throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_unindexed_media_messages(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(limit),$0
     )
 })
 }
@@ -8545,6 +8682,86 @@ public func FfiConverterTypeLocalChat_lower(_ value: LocalChat) -> RustBuffer {
 }
 
 
+/**
+ * A chat's media item, read through its message. `order_key`, `message_id` and `item` of the
+ * last one are the next page's cursor.
+ */
+public struct LocalChatMedia: Equatable, Hashable {
+    public var messageId: String
+    public var item: UInt32
+    public var mediaId: String
+    public var kind: LocalMediaKind
+    public var byteSize: Int64
+    public var timestamp: Int64
+    public var isSentByMe: Bool
+    public var orderKey: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, item: UInt32, mediaId: String, kind: LocalMediaKind, byteSize: Int64, timestamp: Int64, isSentByMe: Bool, orderKey: String) {
+        self.messageId = messageId
+        self.item = item
+        self.mediaId = mediaId
+        self.kind = kind
+        self.byteSize = byteSize
+        self.timestamp = timestamp
+        self.isSentByMe = isSentByMe
+        self.orderKey = orderKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalChatMedia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalChatMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalChatMedia {
+        return
+            try LocalChatMedia(
+                messageId: FfiConverterString.read(from: &buf), 
+                item: FfiConverterUInt32.read(from: &buf), 
+                mediaId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterTypeLocalMediaKind.read(from: &buf), 
+                byteSize: FfiConverterInt64.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf), 
+                isSentByMe: FfiConverterBool.read(from: &buf), 
+                orderKey: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalChatMedia, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterUInt32.write(value.item, into: &buf)
+        FfiConverterString.write(value.mediaId, into: &buf)
+        FfiConverterTypeLocalMediaKind.write(value.kind, into: &buf)
+        FfiConverterInt64.write(value.byteSize, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+        FfiConverterBool.write(value.isSentByMe, into: &buf)
+        FfiConverterString.write(value.orderKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChatMedia_lift(_ buf: RustBuffer) throws -> LocalChatMedia {
+    return try FfiConverterTypeLocalChatMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChatMedia_lower(_ value: LocalChatMedia) -> RustBuffer {
+    return FfiConverterTypeLocalChatMedia.lower(value)
+}
+
+
 public struct LocalContact: Equatable, Hashable {
     public var id: String
     public var username: String
@@ -8841,6 +9058,140 @@ public func FfiConverterTypeLocalKvEntry_lift(_ buf: RustBuffer) throws -> Local
 #endif
 public func FfiConverterTypeLocalKvEntry_lower(_ value: LocalKvEntry) -> RustBuffer {
     return FfiConverterTypeLocalKvEntry.lower(value)
+}
+
+
+/**
+ * One media item of a message, as the client indexes it from the descriptor it decoded.
+ */
+public struct LocalMediaEntry: Equatable, Hashable {
+    /**
+     * Position in the message (album order), from 0.
+     */
+    public var item: UInt32
+    public var mediaId: String
+    public var kind: LocalMediaKind
+    /**
+     * The size the descriptor declares; what is on disk is the client's to measure.
+     */
+    public var byteSize: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Position in the message (album order), from 0.
+         */item: UInt32, mediaId: String, kind: LocalMediaKind, 
+        /**
+         * The size the descriptor declares; what is on disk is the client's to measure.
+         */byteSize: Int64) {
+        self.item = item
+        self.mediaId = mediaId
+        self.kind = kind
+        self.byteSize = byteSize
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMediaEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMediaEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMediaEntry {
+        return
+            try LocalMediaEntry(
+                item: FfiConverterUInt32.read(from: &buf), 
+                mediaId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterTypeLocalMediaKind.read(from: &buf), 
+                byteSize: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMediaEntry, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.item, into: &buf)
+        FfiConverterString.write(value.mediaId, into: &buf)
+        FfiConverterTypeLocalMediaKind.write(value.kind, into: &buf)
+        FfiConverterInt64.write(value.byteSize, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaEntry_lift(_ buf: RustBuffer) throws -> LocalMediaEntry {
+    return try FfiConverterTypeLocalMediaEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaEntry_lower(_ value: LocalMediaEntry) -> RustBuffer {
+    return FfiConverterTypeLocalMediaEntry.lower(value)
+}
+
+
+/**
+ * Which chat and message hold a media id.
+ */
+public struct LocalMediaOwner: Equatable, Hashable {
+    public var mediaId: String
+    public var chatId: String
+    public var messageId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mediaId: String, chatId: String, messageId: String) {
+        self.mediaId = mediaId
+        self.chatId = chatId
+        self.messageId = messageId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMediaOwner: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMediaOwner: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMediaOwner {
+        return
+            try LocalMediaOwner(
+                mediaId: FfiConverterString.read(from: &buf), 
+                chatId: FfiConverterString.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMediaOwner, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.mediaId, into: &buf)
+        FfiConverterString.write(value.chatId, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaOwner_lift(_ buf: RustBuffer) throws -> LocalMediaOwner {
+    return try FfiConverterTypeLocalMediaOwner.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaOwner_lower(_ value: LocalMediaOwner) -> RustBuffer {
+    return FfiConverterTypeLocalMediaOwner.lower(value)
 }
 
 
@@ -15769,6 +16120,102 @@ public func FfiConverterTypeLocalInsert_lower(_ value: LocalInsert) -> RustBuffe
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What one media item is, for the chat gallery and the storage screen (todo 327).
+ */
+
+public enum LocalMediaKind: Equatable, Hashable {
+    
+    case photo
+    case video
+    case file
+    case voice
+    case videoNote
+    case animation
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalMediaKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMediaKind: FfiConverterRustBuffer {
+    typealias SwiftType = LocalMediaKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMediaKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .photo
+        
+        case 2: return .video
+        
+        case 3: return .file
+        
+        case 4: return .voice
+        
+        case 5: return .videoNote
+        
+        case 6: return .animation
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalMediaKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .photo:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .video:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .file:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .voice:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .videoNote:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .animation:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaKind_lift(_ buf: RustBuffer) throws -> LocalMediaKind {
+    return try FfiConverterTypeLocalMediaKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMediaKind_lower(_ value: LocalMediaKind) -> RustBuffer {
+    return FfiConverterTypeLocalMediaKind.lower(value)
+}
+
+
 
 public enum LocalStoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
@@ -18949,6 +19396,31 @@ fileprivate struct FfiConverterSequenceTypeLocalChat: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeLocalChatMedia: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalChatMedia]
+
+    public static func write(_ value: [LocalChatMedia], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalChatMedia.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalChatMedia] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalChatMedia]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalChatMedia.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeLocalContact: FfiConverterRustBuffer {
     typealias SwiftType = [LocalContact]
 
@@ -19041,6 +19513,56 @@ fileprivate struct FfiConverterSequenceTypeLocalKvEntry: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLocalKvEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMediaEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMediaEntry]
+
+    public static func write(_ value: [LocalMediaEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMediaEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMediaEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMediaEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMediaEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMediaOwner: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMediaOwner]
+
+    public static func write(_ value: [LocalMediaOwner], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMediaOwner.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMediaOwner] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMediaOwner]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMediaOwner.read(from: &buf))
         }
         return seq
     }
@@ -19441,6 +19963,31 @@ fileprivate struct FfiConverterSequenceTypeHistoryEvent: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeHistoryEvent.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMediaKind: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMediaKind]
+
+    public static func write(_ value: [LocalMediaKind], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMediaKind.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMediaKind] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMediaKind]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMediaKind.read(from: &buf))
         }
         return seq
     }
@@ -21425,7 +21972,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_chat() != 45451) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_chat_auto_save_media() != 61484) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_chat_for_peer() != 26460) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat_media() != 15048) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat_media_older_than() != 9610) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_chat_message_count() != 28786) {
@@ -21542,6 +22098,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_mark_processed() != 32160) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_media_owners() != 38942) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21620,6 +22179,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_account_address() != 23284) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_chat_auto_save_media() != 53183) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_chat_pinned() != 63084) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21653,6 +22215,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_message_body() != 28116) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_message_media() != 49275) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21681,6 +22246,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 44917) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_unindexed_media_messages() != 54505) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_upsert_call() != 6097) {
