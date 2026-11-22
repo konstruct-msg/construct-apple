@@ -279,6 +279,8 @@ enum NetworkTiming {
 
     enum Media {
         static let retryDelaysNs: [UInt64] = [3_000_000_000, 6_000_000_000]
+        /// Longer than an upload's: a download under DPI takes ~40 s to fail.
+        static let downloadRetryDelaysNs: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
     }
 
     // MARK: - WebRTC
