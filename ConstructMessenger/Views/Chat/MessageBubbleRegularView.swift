@@ -141,7 +141,7 @@ struct MessageBubbleRegularView: View {
                         // the text bubble's, scoped the same way (not on the column).
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(Text(
-                            ReplyPreviewPayload.projecting(originalContent: message.legacyBody)?
+                            ReplyPreviewPayload.projecting(originalContent: message.legacyBody)?  // parser input
                                 .localizedDisplayText ?? NSLocalizedString("photo", comment: "")
                         ))
                         .accessibilityAddTraits([.isImage, .isButton])
