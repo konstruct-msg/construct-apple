@@ -690,7 +690,7 @@
 "media_autodownload_never" = "Jamais";
 "media_autodownload_unmetered" = "Wi-Fi uniquement";
 "media_autodownload_always" = "Toujours";
-"media_autodownload_footer" = "Les pièces jointes sont récupérées à l’arrivée des messages. Le serveur conserve les fichiers 7 jours : les médias d’un chat que vous n’avez pas ouvert en une semaine ne pourront plus être téléchargés.";
+"media_autodownload_footer" = "Désactivé, un fichier est téléchargé à l’ouverture de sa conversation, et le serveur en apprend moins sur le moment où vous l’avez reçu. Le serveur conserve les fichiers 7 jours : les médias d’une conversation que vous n’ouvrez pas dans la semaine sont perdus. Activé, les fichiers sont récupérés dans la demi-minute qui suit l’arrivée du message.";
 "quality_label" = "Qualité";
 "quality_compressed" = "Compressée";
 "quality_original" = "Originale";

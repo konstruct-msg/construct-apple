@@ -1224,7 +1224,7 @@
 "media_autodownload_never" = "しない";
 "media_autodownload_unmetered" = "Wi-Fiのみ";
 "media_autodownload_always" = "常に";
-"media_autodownload_footer" = "添付ファイルはメッセージの到着時に取得されます。サーバーはファイルを7日間だけ保持するため、1週間開かなかったチャットのメディアは後からダウンロードできません。";
+"media_autodownload_footer" = "オフの場合、ファイルはチャットを開いたときにダウンロードされ、いつ受け取ったかがサーバーに伝わりにくくなります。サーバーはファイルを7日間保存するため、1週間開かなかったチャットのメディアは失われます。オンの場合、メッセージの到着から30秒以内にファイルを取得します。";
 "diagnostics_force_silent_reinit" = "サイレント再初期化（相手には通知しない）";
 "diagnostics_replace_otpk_pool" = "OTPKプールを置き換え（一度きりの復旧）";
 "diagnostics_silent_reinit_footer" = "END_SESSIONを送らずにINITIATORとしてセッションを作り直すため、相手は古いセッションを保持したままになります。次のメッセージは既存セッション上のX3DHキャリアとして届きます。実行後は2通送ってください。PQ寄与が対称に混ざったことを示すのは2通目です。";

@@ -209,8 +209,8 @@ enum MediaWireCodec {
         }
     }
 
-    /// Fetch the attachments now, so the seven-day server retention cannot expire underneath a chat
-    /// the user has not opened yet (see MediaAutoDownloadPolicy).
+    /// Fetch the attachments after `MediaAutoDownloadPolicy.prefetchDelay`, so the seven-day server
+    /// retention cannot expire underneath a chat the user has not opened yet. Off by default.
     ///
     /// Deliberately silent and unawaited. This is speculative work on behalf of a message that has
     /// already been delivered and displayed: a failure here must not surface as an error, must not
@@ -228,6 +228,8 @@ enum MediaWireCodec {
         let reachability = NetworkReachabilityManager.shared
         let isExpensive = reachability.isExpensive
         let isConstrained = reachability.isConstrained
+        // One wait for the album: its items are one message, and spacing them apart hides nothing.
+        let delay = MediaAutoDownloadPolicy.prefetchDelay()
 
         for item in album.items {
             guard !item.mediaID.isEmpty, !item.fileURL.isEmpty, !item.encryptionKey.isEmpty else { continue }
@@ -243,10 +245,14 @@ enum MediaWireCodec {
             let mediaKey = item.encryptionKey
             Task {
                 do {
+                    // Not before the wait: a download at the moment of delivery is the timing
+                    // link `prefetchDelay` exists to blur. A bubble shown meanwhile downloads on
+                    // its own, and this one is then answered from cache.
+                    try await Task.sleep(for: delay)
                     _ = try await MediaManager.shared.downloadAndDecryptMedia(
                         mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey
                     )
-                    Log.debug("Prefetched \(mediaId.prefix(8))… on arrival", category: "MediaManager")
+                    Log.debug("Prefetched \(mediaId.prefix(8))… on arrival after \(delay)", category: "MediaManager")
                 } catch {
                     // Expected often enough to be uninteresting: offline, VEIL not up yet, blob
                     // already expired. The bubble will try again when it is looked at.
