@@ -135,6 +135,18 @@ struct MessageBubbleRegularView: View {
                             isSelected: isSelected,
                             onTapFullScreen: { itemIndex in onTapMedia?(message, itemIndex) }
                         )
+                        // Its pictures carry no label, so VoiceOver dropped the whole album and
+                        // nobody using it could open, quote or answer a photo. One element: what
+                        // the reply strip would call it, opening as a tap does. The identifier is
+                        // the text bubble's, scoped the same way (not on the column).
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text(
+                            ReplyPreviewPayload.projecting(originalContent: message.legacyBody)?  // parser input
+                                .localizedDisplayText ?? NSLocalizedString("photo", comment: "")
+                        ))
+                        .accessibilityAddTraits([.isImage, .isButton])
+                        .accessibilityAction { onTapMedia?(message, 0) }
+                        .accessibilityIdentifier(A11y.Chat.message(message.id))
                     }
                 } else if let fileContent {
                     VStack(alignment: .leading, spacing: 0) {

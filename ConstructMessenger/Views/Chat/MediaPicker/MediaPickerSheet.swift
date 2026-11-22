@@ -487,6 +487,13 @@ private struct MediaPickerCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+        // A tap gesture is not a control to VoiceOver: without these the grid was a set of
+        // unlabeled images nobody using it could select, and UI automation could not find them.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(LocalizedStringKey(asset.mediaType == .video ? "video" : "photo")))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { onTap() }
+        .accessibilityIdentifier(A11y.MediaPicker.asset(asset.localIdentifier))
         .onAppear { loadThumb() }
         .onDisappear {
             if requestId != PHInvalidImageRequestID {

@@ -182,6 +182,53 @@ final class RecoveredWirePlaintextTests: XCTestCase {
         XCTAssertNil(MessageRetryManager.recoverWirePlaintext(for: empty))
     }
 
+    /// A voice note answering a photo goes out on retry as the voice note it was, quote and all.
+    /// It used to be read through `displayString` and sent as a text message whose text was the
+    /// voice note's JSON descriptor.
+    ///
+    /// Mutation: drop the `.messageContent` branch — this reddens.
+    func testAVoiceRowGoesOutAsTheVoiceNoteItSent() throws {
+        var voice = Shared_Proto_Messaging_V1_VoiceMessage()
+        voice.fileURL = "https://media.example/v1"
+        voice.durationMs = 4_000
+        var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
+        quoted.messageID = "8a0c1f6e-0000-0000-0000-000000000003"
+        quoted.mediaType = .image
+        voice.quoted = quoted
+        var sent = Shared_Proto_Messaging_V1_MessageContent()
+        sent.voice = voice
+        var message = makeMessage(text: "")
+        message.body = LocalMessagePayload.storagePayload(forWireContent: sent)
+
+        let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))
+        XCTAssertEqual(try Shared_Proto_Messaging_V1_MessageContent(serializedBytes: recovered), sent)
+    }
+
+    /// A sticker has no display string, so it was not recoverable at all: never retried by
+    /// re-encryption and never copied to our other devices.
+    ///
+    /// Mutation: drop the `.messageContent` branch — this reddens.
+    func testAStickerRowIsRecoverable() throws {
+        var sticker = Shared_Proto_Messaging_V1_StickerRef()
+        sticker.emoji = "🙂"
+        var sent = Shared_Proto_Messaging_V1_MessageContent()
+        sent.sticker = sticker
+        var message = makeMessage(text: "")
+        message.body = LocalMessagePayload.storagePayload(forWireContent: sent)
+
+        let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))
+        XCTAssertEqual(try Shared_Proto_Messaging_V1_MessageContent(serializedBytes: recovered), sent)
+    }
+
+    /// A stored `MessageContent` with nothing in it is not a message to send.
+    ///
+    /// Mutation: drop the `content != nil` guard — this reddens.
+    func testAnEmptyMessageContentRowIsNotRecoverable() {
+        var message = makeMessage(text: "")
+        message.body = LocalMessagePayload.storagePayload(forWireContent: Shared_Proto_Messaging_V1_MessageContent())
+        XCTAssertNil(MessageRetryManager.recoverWirePlaintext(for: message))
+    }
+
     /// A control payload that leaked into the transcript must not be mirrored as a message.
     func testAnEmptyRowIsNotRecoverable() {
         XCTAssertNil(MessageRetryManager.recoverWirePlaintext(for: makeMessage(text: "")))

@@ -633,6 +633,16 @@ class MessageRetryManager {
             content.mediaAlbum = album
             return try? content.serializedData()
         }
+        // A voice note or a sticker row holds the very `MessageContent` that went out
+        // (`LocalMessagePayload.storagePayload(forWireContent:)`), quote included. Read through
+        // `displayString` below it became a *text* message: a voice note's JSON descriptor as its
+        // text, and a sticker — whose display string is empty — nothing at all, so a sticker was
+        // never retried nor copied to our other devices.
+        if case .messageContent(let body) = message.payload {
+            guard let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body),
+                  content.content != nil else { return nil }
+            return body
+        }
         let text = message.payload.displayString
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
         // An upload placeholder is `.regular` and its decrypted body is non-empty, so without
