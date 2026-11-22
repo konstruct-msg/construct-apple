@@ -100,6 +100,7 @@ enum LocalRepositories {
             session = open
             storeFailure = nil
             upgradeLegacyBodies(.localStore(open))
+            indexMediaInBackground(open)
             return .localStore(open)
         case .failure(let failure):
             Log.error("LocalRepositories: the app's store is not open — \(failure)", category: "Storage")
@@ -203,6 +204,25 @@ enum LocalRepositories {
             }
         } catch {
             Log.error("LocalRepositories: legacy media bodies not converted, again at the next open — \(error)", category: "Storage")
+        }
+    }
+
+    /// Fill the media index for what an older build wrote (todo 327). After the legacy upgrade,
+    /// whose `setBody` already indexes what it converts; off the open, which it would otherwise
+    /// hold for as long as a long history takes to parse.
+    private static func indexMediaInBackground(_ session: LocalStoreSession) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        let messages = LocalStoreMessageStore(session: session)
+        Task.detached(priority: .utility) {
+            let started = Date()
+            do {
+                let indexed = try messages.indexUnindexedMedia()
+                if indexed > 0 {
+                    Log.info("LocalRepositories: media index — \(indexed) messages indexed, \(Int(Date().timeIntervalSince(started) * 1000)) ms", category: "Storage")
+                }
+            } catch {
+                Log.error("LocalRepositories: media index not filled, again at the next open — \(error)", category: "Storage")
+            }
         }
     }
 

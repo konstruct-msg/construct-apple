@@ -312,19 +312,26 @@ enum MediaWireCodec {
         return content
     }
 
-    /// Rehydrate legacy voice JSON for `parseVoiceContent` / bubbles.
-    static func voiceJSON(from voice: Shared_Proto_Messaging_V1_VoiceMessage) -> String? {
+    /// The `mime|mediaId|size` a voice note's `codec` carries (`voiceMessageContent`): what the
+    /// bubble and the media index read, one parse for both.
+    static func voiceMediaRef(from voice: Shared_Proto_Messaging_V1_VoiceMessage) -> (mediaType: String, mediaId: String, size: Int) {
         let parts = voice.codec.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         let mediaType = parts.count > 0 && !parts[0].isEmpty ? parts[0] : "audio/m4a"
         let mediaId = parts.count > 1 ? parts[1] : ""
         let size = parts.count > 2 ? (Int(parts[2]) ?? 0) : 0
+        return (mediaType, mediaId, size)
+    }
+
+    /// Rehydrate legacy voice JSON for `parseVoiceContent` / bubbles.
+    static func voiceJSON(from voice: Shared_Proto_Messaging_V1_VoiceMessage) -> String? {
+        let ref = voiceMediaRef(from: voice)
         let content = VoiceMessageContent(
             type: "voice",
-            mediaId: mediaId,
+            mediaId: ref.mediaId,
             mediaUrl: voice.fileURL,
             mediaKey: voice.encryptionKey,
-            mediaType: mediaType,
-            size: size,
+            mediaType: ref.mediaType,
+            size: ref.size,
             duration: Double(voice.durationMs) / 1000.0,
             waveform: voice.waveform.map { Float($0) / 255.0 },
             hash: dataToHex(voice.fileHash)

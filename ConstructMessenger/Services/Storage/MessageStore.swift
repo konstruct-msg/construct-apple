@@ -480,23 +480,66 @@ final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
     // MARK: Writes
 
     func insert(_ message: MessageRecord, searchText: String?) throws -> Bool {
-        try store.insertMessage(message: Self.row(message), searchText: searchText) == .inserted
+        let row = Self.row(message)
+        guard try store.insertMessage(message: row, searchText: searchText) == .inserted else { return false }
+        indexMedia(row.id, body: row.body, replacing: false)
+        return true
     }
 
     func insert(_ messages: [(message: MessageRecord, searchText: String?)]) throws -> Set<String> {
         guard !messages.isEmpty else { return [] }
-        let added = try store.insertMessages(messages: messages.map {
-            LocalMessageInsert(message: Self.row($0.message), searchText: $0.searchText)
-        })
-        return Set(added)
+        let rows = messages.map { (row: Self.row($0.message), searchText: $0.searchText) }
+        let added = Set(try store.insertMessages(messages: rows.map {
+            LocalMessageInsert(message: $0.row, searchText: $0.searchText)
+        }))
+        for (row, _) in rows where added.contains(row.id) {
+            indexMedia(row.id, body: row.body, replacing: false)
+        }
+        return added
     }
 
     func edit(_ id: String, body: Data, searchText: String?, editedAt: Date) throws -> Bool {
-        try store.editMessage(id: id.lowercased(), body: body, searchText: searchText, editedAt: editedAt.unixMs)
+        guard try store.editMessage(id: id.lowercased(), body: body, searchText: searchText, editedAt: editedAt.unixMs) else {
+            return false
+        }
+        indexMedia(id.lowercased(), body: body, replacing: true)
+        return true
     }
 
     func setBody(_ id: String, body: Data, searchText: String?) throws -> Bool {
-        try store.setMessageBody(id: id.lowercased(), body: body, searchText: searchText)
+        guard try store.setMessageBody(id: id.lowercased(), body: body, searchText: searchText) else { return false }
+        indexMedia(id.lowercased(), body: body, replacing: true)
+        return true
+    }
+
+    /// The media index for a message just written (`MessageMediaIndex`). A body that cannot hold
+    /// media is not indexed on insert; one that replaces a body clears what the old one indexed.
+    /// A failure is logged, not thrown: the message is written, and the backfill after the next
+    /// open lists it again (`indexUnindexedMedia`).
+    private func indexMedia(_ id: String, body: Data, replacing: Bool) {
+        guard let entries = MessageMediaIndex.entries(for: body) ?? (replacing ? [] : nil) else { return }
+        do {
+            _ = try store.setMessageMedia(messageId: id, entries: entries)
+        } catch {
+            Log.error("MessageStore: media index for \(id.prefix(8))… not written, the next open retries — \(error)", category: "Storage")
+        }
+    }
+
+    /// Index what the store lists as not indexed yet — rows an older build wrote, or one a failed
+    /// `indexMedia` left — a page at a time; the number indexed. Off the main thread: the first run
+    /// on a long history parses every album and message content once.
+    func indexUnindexedMedia(pageSize: UInt32 = 200) throws -> Int {
+        var indexed = 0
+        while true {
+            let ids = try store.unindexedMediaMessages(limit: pageSize)
+            guard !ids.isEmpty else { return indexed }
+            for id in ids {
+                let body = try store.message(id: id)?.body ?? Data()
+                // Indexed with no entries when nothing is found, so the store stops listing it.
+                _ = try store.setMessageMedia(messageId: id, entries: MessageMediaIndex.entries(for: body) ?? [])
+                indexed += 1
+            }
+        }
     }
 
     func setDeliveryStatus(_ id: String, _ status: DeliveryStatus) throws -> Bool {
