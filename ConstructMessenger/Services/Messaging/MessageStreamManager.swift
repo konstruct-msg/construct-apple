@@ -1139,6 +1139,10 @@ final class MessageStreamManager {
         routingKeyAtLoopStart: String,
         error: Error? = nil
     ) async {
+        guard Self.streamFailureReachesRouter(kind) else {
+            Log.info("Stream ended on the server's answer (rpcKind=\(kind)) — not the path's failure, not reported", category: "MessageStream")
+            return
+        }
         let method = streamMethod(
             wasH3: lastStreamTransportWasFastUdp || routingKeyAtLoopStart.hasPrefix("engine-quic:"),
             routingKey: routingKeyAtLoopStart,
@@ -1181,6 +1185,13 @@ final class MessageStreamManager {
     }
 
     /// Map legacy RPC classification + error text into stream-specific kinds for the FSM.
+    /// Whether a stream that ended with `kind` tells the router anything about the path. The
+    /// server's edge answering 5xx (`.serverNotReady`) does not: counted, a deploy's 502s escalated
+    /// the direct path to VEIL and left VEIL's front blamed (2026-11-21).
+    static func streamFailureReachesRouter(_ kind: RPCFailureKind) -> Bool {
+        kind != .serverNotReady
+    }
+
     static func mapStreamFailureKind(
         rpcKind: RPCFailureKind,
         error: Error?,

@@ -338,7 +338,7 @@ enum TransportReducer {
              .tlsFingerprintBlocked:
             return true
         case .streamTimeout, .transportUnknown,
-             .authRejected, .applicationError, .transientCancellation:
+             .authRejected, .applicationError, .transientCancellation, .serverNotReady:
             return false
         }
     }

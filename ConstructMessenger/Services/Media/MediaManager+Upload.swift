@@ -389,11 +389,15 @@ extension MediaManager {
             return cached
         }
 
-        let result = try await retryingTransfer(
-            delays: NetworkTiming.Media.retryDelaysNs,
-            waitForTunnel: { await VeilTunnelWait.untilRouted() }
-        ) {
-            try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
+        // Under a background task: a photo sent and the app left at once was suspended mid-upload,
+        // its socket reclaimed, and the 4 MB sent again on return (iPhone log 2026-11-22 18:23).
+        let result = try await BackgroundAssertion.run("media-upload") {
+            try await retryingTransfer(
+                delays: NetworkTiming.Media.retryDelaysNs,
+                waitForTunnel: { await VeilTunnelWait.untilRouted() }
+            ) {
+                try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
+            }
         }
         onProgress?(1.0)
         await MediaSendCache.shared.storeUpload(result, for: data, reuse: reuse)

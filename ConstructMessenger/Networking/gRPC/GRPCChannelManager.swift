@@ -762,7 +762,7 @@ final class GRPCChannelManager: Sendable {
     /// expired would tear down the channel sends are using, every time.
     nonisolated static func sealedFailureKeepsConnection(_ error: Error, method: VeilMethod? = nil) -> Bool {
         switch RPCFailureClassifier.classify(error, method: method) {
-        case .applicationError, .authRejected: return true
+        case .applicationError, .authRejected, .serverNotReady: return true
         default: return false
         }
     }
