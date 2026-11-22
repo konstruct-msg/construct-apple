@@ -566,7 +566,7 @@
 "media_autodownload_never" = "Never";
 "media_autodownload_unmetered" = "Wi-Fi only";
 "media_autodownload_always" = "Always";
-"media_autodownload_footer" = "Attachments are fetched as messages arrive. The server keeps files for 7 days, so media in a chat you have not opened within a week cannot be downloaded later.";
+"media_autodownload_footer" = "When off, a file is downloaded when you open its chat, and the server learns less about when you received it. The server keeps files for 7 days, so media in a chat you do not open within a week is lost. When on, files are fetched within half a minute of their message arriving.";
 "storage_auto_clear" = "Keep media for";
 "storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
 "storage_keep_forever" = "Forever";

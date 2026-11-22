@@ -27,12 +27,12 @@ final class MediaAutoDownloadPolicyTests: XCTestCase {
         )
     }
 
-    // MARK: - The default must not cost anything on cellular
+    // MARK: - Wi-Fi only must not cost anything on cellular
 
-    /// The whole argument for turning this on by default: on a metered connection it behaves
-    /// exactly as the app did before, so nobody's bill changes. If this ever returns true, the
-    /// default has quietly become a bandwidth decision made on the user's behalf.
-    func testTheDefaultFetchesNothingOnCellular() {
+    /// On a metered connection "Wi-Fi only" behaves exactly as the app does with it off, so nobody's
+    /// bill changes for choosing it. If this ever returns true, the option has quietly become a
+    /// bandwidth decision made on the user's behalf.
+    func testWiFiOnlyFetchesNothingOnCellular() {
         XCTAssertFalse(shouldFetch(.unmetered, size: photo, expensive: true))
     }
 
@@ -42,13 +42,13 @@ final class MediaAutoDownloadPolicyTests: XCTestCase {
         XCTAssertFalse(shouldFetch(.unmetered, size: photo, expensive: false, constrained: true))
     }
 
-    func testTheDefaultFetchesAPhotoOnWiFi() {
+    func testWiFiOnlyFetchesAPhotoOnWiFi() {
         XCTAssertTrue(shouldFetch(.unmetered, size: photo))
     }
 
     /// A photo is bounded at 4 MB by MediaOptimizer; a transcoded clip is not. Pulling 80 MB
-    /// because a message arrived is not what leaving the default on means.
-    func testTheDefaultDoesNotPullALargeVideoEvenOnWiFi() {
+    /// because a message arrived is not what choosing Wi-Fi only means.
+    func testWiFiOnlyDoesNotPullALargeVideoEvenOnWiFi() {
         XCTAssertFalse(shouldFetch(.unmetered, size: bigVideo))
     }
 
@@ -73,16 +73,27 @@ final class MediaAutoDownloadPolicyTests: XCTestCase {
 
     // MARK: - Reading the setting
 
-    /// A fresh install has nothing stored. It must land on `.unmetered`, not on `.never` via a
-    /// zero-valued raw — which is exactly what `rawValue: 0` would give if this fell back to
-    /// `MediaAutoDownloadSetting(rawValue:) ?? .init(rawValue: 0)`.
-    func testAnUnsetPreferenceResolvesToTheDefaultNotToNever() throws {
+    /// A fresh install, or one that never chose, fetches nothing on arrival (owner 2026-11-22, vault
+    /// todo 134): a fetch at delivery ties the object to the device it was delivered to.
+    /// Mutation: the default back to `.unmetered` — this reddens.
+    func testAnUnsetPreferenceFetchesNothingOnArrival() throws {
         let suite = "autodownload-tests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
 
+        XCTAssertEqual(MediaAutoDownloadSetting.default, .never)
+        XCTAssertEqual(MediaAutoDownloadPolicy.current(defaults: defaults), .never)
+    }
+
+    /// Someone who chose Wi-Fi only before the default changed keeps it: the stored value is read
+    /// first, the default only fills in an absent one.
+    func testAChoiceStoredBeforeTheDefaultChangedIsKept() throws {
+        let suite = "autodownload-tests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+
+        defaults.set(MediaAutoDownloadSetting.unmetered.rawValue, forKey: MediaAutoDownloadSetting.defaultsKey)
         XCTAssertEqual(MediaAutoDownloadPolicy.current(defaults: defaults), .unmetered)
-        XCTAssertEqual(MediaAutoDownloadSetting.default, .unmetered)
     }
 
     func testAStoredPreferenceIsHonoured() throws {
@@ -102,6 +113,50 @@ final class MediaAutoDownloadPolicyTests: XCTestCase {
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
 
         defaults.set(99, forKey: MediaAutoDownloadSetting.defaultsKey)
-        XCTAssertEqual(MediaAutoDownloadPolicy.current(defaults: defaults), .unmetered)
+        XCTAssertEqual(MediaAutoDownloadPolicy.current(defaults: defaults), MediaAutoDownloadSetting.default)
+    }
+
+    // MARK: - The wait before an arrival fetch
+
+    /// A generator that always answers the same word, to pin each end of the range.
+    private struct Fixed: RandomNumberGenerator {
+        let word: UInt64
+        mutating func next() -> UInt64 { word }
+    }
+
+    /// Never sooner than 2 s: a fetch at the moment of delivery is the link the wait blurs.
+    /// Mutation: a lower bound of 0 — this reddens.
+    func testTheWaitIsNeverShorterThanTwoSeconds() {
+        var low = Fixed(word: 0)
+        XCTAssertEqual(MediaAutoDownloadPolicy.prefetchDelay(using: &low), .seconds(2))
+    }
+
+    /// Never longer than 30 s: a photo in an open chat with auto-download on is not held up for long.
+    /// Mutation: an upper bound of 300 s — this reddens.
+    func testTheWaitIsNeverLongerThanThirtySeconds() {
+        var high = Fixed(word: .max)
+        let longest = MediaAutoDownloadPolicy.prefetchDelay(using: &high)
+        XCTAssertLessThanOrEqual(longest, .seconds(30))
+        XCTAssertGreaterThan(longest, .seconds(29))
+        var system = SystemRandomNumberGenerator()
+        for _ in 0..<1_000 {
+            let wait = MediaAutoDownloadPolicy.prefetchDelay(using: &system)
+            XCTAssertTrue(wait >= .seconds(2) && wait <= .seconds(30), "\(wait)")
+        }
+    }
+
+    /// The arrival fetch sleeps the drawn wait before it downloads.
+    /// Mutation: drop the `Task.sleep(for: delay)` in `prefetch` — this reddens.
+    func testTheArrivalFetchWaitsBeforeItDownloads() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Media/MediaWireCodec.swift")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        let start = try XCTUnwrap(text.range(of: "private static func prefetch("))
+        let body = String(text[start.upperBound...].prefix(3_000))
+        let wait = try XCTUnwrap(body.range(of: "try await Task.sleep(for: delay)"), "prefetch does not wait")
+        let download = try XCTUnwrap(body.range(of: "downloadAndDecryptMedia("), "prefetch does not download")
+        XCTAssertLessThan(wait.lowerBound, download.lowerBound, "prefetch downloads before it waits")
+        XCTAssertTrue(body.contains("MediaAutoDownloadPolicy.prefetchDelay()"), "the wait is not drawn from the policy")
     }
 }
