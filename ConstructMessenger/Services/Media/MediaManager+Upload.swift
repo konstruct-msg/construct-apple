@@ -389,7 +389,7 @@ extension MediaManager {
             return cached
         }
 
-        let result = try await retryingUpload(
+        let result = try await retryingTransfer(
             delays: NetworkTiming.Media.retryDelaysNs,
             waitForTunnel: { await VeilTunnelWait.untilRouted() }
         ) {
@@ -415,10 +415,10 @@ extension MediaManager {
 
     static let maxTunnelWaits = 3
 
-    /// The upload's retry rule, apart from the network. A dropped RPC is tried again after each
-    /// delay; VEIL `on` with no tunnel yet waits for the tunnel and does not spend a try — the
-    /// upload has not started, so nothing about it failed.
-    static func retryingUpload<T>(
+    /// A media transfer's retry rule, apart from the network — uploads and downloads alike. A
+    /// dropped RPC is tried again after each delay; VEIL `on` with no tunnel yet waits for the
+    /// tunnel and does not spend a try — the transfer has not started, so nothing about it failed.
+    static func retryingTransfer<T>(
         delays: [UInt64],
         waitForTunnel: () async -> Bool,
         _ upload: () async throws -> T
@@ -442,54 +442,33 @@ extension MediaManager {
                 }
                 return try await upload()
             } catch let notUp as VeilTunnelNotUp {
-                Log.info("Upload waits for the VEIL tunnel", category: "MediaManager")
+                Log.info("Media transfer waits for the VEIL tunnel", category: "MediaManager")
                 tunnelWaits += 1
                 guard tunnelWaits <= maxTunnelWaits, await waitForTunnel() else { throw notUp }
                 continue
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
-                Log.info("Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
+                Log.info("Media transfer dropped (code=\(error.code)) — will retry", category: "MediaManager")
             }
             attempt += 1
         }
-        throw lastError ?? RPCError(code: .unknown, message: "Upload failed: no error captured")
+        throw lastError ?? RPCError(code: .unknown, message: "Media transfer failed: no error captured")
     }
 
     /// Downloads encrypted media data with up to 3 automatic retries on transient VEIL/stream failures.
+    ///
+    /// The same rule as an upload (`retryingTransfer`). Until 2026-11-22 a download caught RPC
+    /// errors only: with VEIL `on` and the tunnel still coming up it threw `VeilTunnelNotUp` at
+    /// once and the bubble showed a failure — "No VEIL relay is answering" on a voice note in the
+    /// 2026-11-21 iPhone log, the tunnel up again seconds later.
     static func downloadWithRetry(mediaId: String, onProgress: (@Sendable (Int64) -> Void)? = nil) async throws -> Data {
-        let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
-        // Generous delays: media downloads take 40 s to fail under DPI; VEIL needs ~1–2 s to come up.
-        let delays: [UInt64] = [3_000_000_000, 8_000_000_000, 15_000_000_000]
-
-        // Pre-flight: if DPI was confirmed this session and VEIL proxy isn't routing yet,
-        // start it and wait before the first download attempt.  Without this, a long-running
-        // streaming RPC goes direct and gets silently blocked by the middlebox.
-        await ensureVEILForMedia()
-
-        var lastError: Error?
-        for (index, delay) in ([0] + delays.map { Optional($0) }).enumerated() {
-            do {
-                if let ns = delay {
-                    try await Task.sleep(nanoseconds: ns)
-                }
-                return try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId, onProgress: onProgress)
-            } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
-                lastError = error
-                Log.info("Download dropped (code=\(error.code)) — will retry", category: "MediaManager")
-                // Start VEIL after any transient failure and wait for it to be ready so the
-                // next attempt uses the obfs4 tunnel instead of the blocked direct path.
-                if error.code == .unavailable || error.code == .deadlineExceeded {
-                    await ensureVEILForMedia()
-                }
-                _ = index  // suppress unused-variable warning
-            }
+        try await retryingTransfer(
+            delays: NetworkTiming.Media.downloadRetryDelaysNs,
+            waitForTunnel: { await VeilTunnelWait.untilRouted() }
+        ) {
+            try await MediaServiceClient.shared.downloadEncryptedFile(mediaId: mediaId, onProgress: onProgress)
         }
-        throw lastError ?? RPCError(code: .unknown, message: "Download failed: no error captured")
     }
-
-    /// No-op: ConnectionLoop manages proxy lifecycle — readiness is guaranteed
-    /// when veilProxyPort() is non-nil and GRPCCallExecutor routes through it.
-    private static func ensureVEILForMedia() async {}
 
     /// Upload a file (document, PDF, etc.) for a chat message.
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.

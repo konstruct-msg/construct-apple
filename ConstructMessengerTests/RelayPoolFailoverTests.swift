@@ -115,7 +115,7 @@ final class UploadWaitsForTunnelTests: XCTestCase {
 
     func testAnUploadRefusedForNoTunnelRunsOnceTheTunnelIsUp() async throws {
         let attempts = Attempts()
-        let result = try await MediaManager.retryingUpload(delays: [], waitForTunnel: { true }) { () -> Int in
+        let result = try await MediaManager.retryingTransfer(delays: [], waitForTunnel: { true }) { () -> Int in
             attempts.count += 1
             if attempts.count == 1 { throw VeilTunnelNotUp() }
             return 7
@@ -126,13 +126,29 @@ final class UploadWaitsForTunnelTests: XCTestCase {
 
     func testATunnelThatNeverComesFailsTheUpload() async {
         do {
-            _ = try await MediaManager.retryingUpload(delays: [], waitForTunnel: { false }) { () -> Int in
+            _ = try await MediaManager.retryingTransfer(delays: [], waitForTunnel: { false }) { () -> Int in
                 throw VeilTunnelNotUp()
             }
             XCTFail("expected VeilTunnelNotUp")
         } catch {
             XCTAssertTrue(error is VeilTunnelNotUp, "\(error)")
         }
+    }
+
+    /// A download takes the same rule: refused for no tunnel, it waits instead of failing.
+    /// Until 2026-11-22 it caught RPC errors only, and a voice note failed while the tunnel
+    /// came back up.
+    ///
+    /// Mutation: give `downloadWithRetry` its own loop again, without the tunnel wait — this reddens.
+    func testADownloadWaitsForTheTunnelAsAnUploadDoes() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Media/MediaManager+Upload.swift")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        let start = try XCTUnwrap(text.range(of: "static func downloadWithRetry("))
+        let body = String(text[start.upperBound...].prefix(600))
+        XCTAssertTrue(body.contains("try await retryingTransfer("), "downloadWithRetry has its own retry loop again")
+        XCTAssertTrue(body.contains("VeilTunnelWait.untilRouted()"), "downloadWithRetry does not wait for the tunnel")
     }
 
     func testTheWaitEndsWhenTheRouteOpens() async {
