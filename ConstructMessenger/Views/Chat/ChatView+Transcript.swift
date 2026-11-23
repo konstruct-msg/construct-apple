@@ -325,7 +325,8 @@ extension ChatView {
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
                             },
-                            onForward: { msg in startForward([msg]) }
+                            onForward: { msg in startForward([msg]) },
+                            onSaveToNotes: saveToNotes
                         ) }
                         .id(message.id)
                         // The LAST message only, and no longer just a probe. Auto-scroll

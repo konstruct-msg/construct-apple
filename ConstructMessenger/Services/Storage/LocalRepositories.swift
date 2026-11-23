@@ -28,6 +28,7 @@ enum LocalRepositories {
         let pendingChunks: any PendingChunkStore
         let keyValue: any KeyValueStore
         let issuedInvites: any IssuedInviteStore
+        let notes: any NotesStore
 
         /// iOS: Core Data, and the three service stores where they have always been — sealed files
         /// for chunks, `UserDefaults` for the key-value pairs and the invite journal.
@@ -44,7 +45,8 @@ enum LocalRepositories {
                 calls: CoreDataCallStore(container: container),
                 pendingChunks: FilePendingChunkStore(),
                 keyValue: DefaultsKeyValueStore(),
-                issuedInvites: DefaultsIssuedInviteStore()
+                issuedInvites: DefaultsIssuedInviteStore(),
+                notes: NoNotesStore()
             )
         }
 
@@ -61,7 +63,8 @@ enum LocalRepositories {
                 calls: LocalStoreCallStore(session: session),
                 pendingChunks: LocalStorePendingChunkStore(session: session),
                 keyValue: LocalStoreKeyValueStore(session: session),
-                issuedInvites: LocalStoreIssuedInviteStore(session: session)
+                issuedInvites: LocalStoreIssuedInviteStore(session: session),
+                notes: LocalStoreNotesStore(session: session)
             )
         }
     }
@@ -239,6 +242,7 @@ enum LocalRepositories {
         _pendingChunks = backing.pendingChunks
         _keyValue = backing.keyValue
         _issuedInvites = backing.issuedInvites
+        _notes = backing.notes
     }
 
     // Read under the lock: `replaceAppStore` swaps them all while the app runs, and an
@@ -255,6 +259,7 @@ enum LocalRepositories {
     static var pendingChunks: any PendingChunkStore { lock.withLock { _pendingChunks } }
     static var keyValue: any KeyValueStore { lock.withLock { _keyValue } }
     static var issuedInvites: any IssuedInviteStore { lock.withLock { _issuedInvites } }
+    static var notes: any NotesStore { lock.withLock { _notes } }
 
     nonisolated(unsafe) private static var _peerDevices: any PeerDeviceStore = initial.peerDevices
     nonisolated(unsafe) private static var _serverMessageIds: any ServerMessageIdStore = initial.serverMessageIds
@@ -268,6 +273,7 @@ enum LocalRepositories {
     nonisolated(unsafe) private static var _pendingChunks: any PendingChunkStore = initial.pendingChunks
     nonisolated(unsafe) private static var _keyValue: any KeyValueStore = initial.keyValue
     nonisolated(unsafe) private static var _issuedInvites: any IssuedInviteStore = initial.issuedInvites
+    nonisolated(unsafe) private static var _notes: any NotesStore = initial.notes
 
     #if DEBUG
     /// Every repository on `session`, as macOS runs — a test that drives a whole path on the

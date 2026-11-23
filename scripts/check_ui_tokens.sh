@@ -28,8 +28,8 @@ CHECKS=(
   "text style past CTFont — use a CTFont role|\.font\(\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\b|7"
   "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|0"
   "colour literal — use Color.CT|(foregroundStyle|foregroundColor|background|fill|stroke|tint)\(\.?(Color\.)?(white|black|gray|red|green|blue|orange|yellow)\b|0"
-  "padding by number — use CTSpace|\.padding\((\.[a-zA-Z]+, *|\[[^]]*\], *)?[0-9]|316"
-  "stack spacing by number — use CTSpace|spacing: *[0-9]|328"
+  "padding by number — use CTSpace|\.padding\((\.[a-zA-Z]+, *|\[[^]]*\], *)?[0-9]|314"
+  "stack spacing by number — use CTSpace|spacing: *[0-9]|324"
 )
 
 failed=0

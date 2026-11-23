@@ -166,15 +166,34 @@ extension MediaManager {
 
     // MARK: - Cache Management
 
-    /// Total bytes used by the disk cache.
-    func diskCacheSize() -> Int64 {
+    /// The files notes hold (todo 279): not cache, so no limit, age or "clear" takes them. Nil when
+    /// the store did not answer — then nothing is deleted, since any file might be one of them.
+    nonisolated static func heldByNotes(_ notes: any NotesStore = LocalRepositories.notes) -> Set<String>? {
+        do {
+            return try notes.heldMediaIds()
+        } catch {
+            Log.error("Media: which files notes hold is unknown, nothing is evicted — \(error)", category: "MediaManager")
+            return nil
+        }
+    }
+
+    /// Deletes the copies of `mediaIds`, which no note and no message holds any more.
+    func deleteFiles(_ mediaIds: [String]) {
+        for id in mediaIds {
+            try? FileManager.default.removeItem(at: Self.onDiskURL(for: id))
+            mediaCache.removeObject(forKey: id as NSString)
+        }
+    }
+
+    /// Bytes on disk: the cache, and beside it the files notes hold.
+    func diskUsage(held: Set<String> = heldByNotes() ?? []) -> (cache: Int64, notes: Int64) {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: mediaDirectory,
             includingPropertiesForKeys: [.fileSizeKey]
-        ) else { return 0 }
-        return files.reduce(Int64(0)) { total, url in
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            return total + Int64(size)
+        ) else { return (0, 0) }
+        return files.reduce((Int64(0), Int64(0))) { total, url in
+            let size = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            return held.contains(url.lastPathComponent) ? (total.0, total.1 + size) : (total.0 + size, total.1)
         }
     }
 
@@ -188,9 +207,9 @@ extension MediaManager {
     func evictToQuota() {
         let maxBytes = UserDefaults.standard.object(forKey: Self.maxDiskCacheBytesKey) as? Int
             ?? Self.defaultMaxDiskCacheBytes
-        guard maxBytes > 0 else { return } // 0 = unlimited
+        guard maxBytes > 0, let held = Self.heldByNotes() else { return } // 0 = unlimited
 
-        let totalSize = diskCacheSize()
+        let totalSize = diskUsage(held: held).cache
         guard totalSize > Int64(maxBytes) else { return }
 
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -199,7 +218,7 @@ extension MediaManager {
         ) else { return }
 
         let now = Date()
-        let candidates = files.map { url -> (id: String, bytes: Int64, secondsSinceDownload: TimeInterval) in
+        let candidates = files.filter { !held.contains($0.lastPathComponent) }.map { url -> (id: String, bytes: Int64, secondsSinceDownload: TimeInterval) in
             let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             let modified = values?.contentModificationDate ?? .distantPast
             return (
@@ -243,7 +262,7 @@ extension MediaManager {
     /// It defaults to 0 (off) and must stay that way.
     func evictOldFiles() {
         let days = UserDefaults.standard.object(forKey: Self.evictAfterDaysKey) as? Int ?? 0
-        guard days > 0 else { return }
+        guard days > 0, let held = Self.heldByNotes() else { return }
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
 
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -252,7 +271,7 @@ extension MediaManager {
         ) else { return }
 
         var count = 0
-        for file in files {
+        for file in files where !held.contains(file.lastPathComponent) {
             let mod = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantFuture
             if mod < cutoff {
                 try? FileManager.default.removeItem(at: file)

@@ -91,17 +91,17 @@ extension MediaManager {
     /// `includingDisk: true` deletes the user's received media permanently — anything past the
     /// server's 7-day retention cannot be fetched again. That is a legitimate thing for a person to
     /// ask for (it is wired to an explicit control in Data & Storage settings) and it is not
-    /// something anything else should call.
+    /// something anything else should call. The files notes hold stay: they are not cache.
     func clearCache(includingDisk: Bool = false) {
         mediaCache.removeAllObjects()
         notFoundMedia.removeAll()
         if includingDisk {
-            try? FileManager.default.removeItem(at: mediaDirectory)
-            try? FileManager.default.createDirectory(
-                at: mediaDirectory,
-                withIntermediateDirectories: true,
-                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
-            )
+            guard let held = Self.heldByNotes(),
+                  let files = try? FileManager.default.contentsOfDirectory(at: mediaDirectory, includingPropertiesForKeys: nil)
+            else { return }
+            for file in files where !held.contains(file.lastPathComponent) {
+                try? FileManager.default.removeItem(at: file)
+            }
             Log.info("Media cache cleared (memory + disk)", category: "MediaManager")
         } else {
             Log.info("Media cache cleared (memory only)", category: "MediaManager")

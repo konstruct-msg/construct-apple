@@ -49,7 +49,8 @@ extension MessageBubble {
                     onReplyWithQuote: onReplyWithQuote,
                     onJumpToReply: onJumpToReply,
                     onReact: onReact,
-                    onForward: onForward
+                    onForward: onForward,
+                    onSaveToNotes: onSaveToNotes
                 )
             }
         }

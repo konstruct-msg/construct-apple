@@ -279,9 +279,10 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
-            NavigationLink(destination: DraftsView()) {
-                CTSettingsRow(label: NSLocalizedString("drafts", comment: ""), icon: "folder", disclosure: true)
+            NavigationLink(destination: NotesView()) {
+                CTSettingsRow(label: NSLocalizedString("notes_title", comment: ""), icon: "note.text", disclosure: true)
             }
+            .accessibilityIdentifier(A11y.Notes.open)
             .buttonStyle(.plain)
         }
     }

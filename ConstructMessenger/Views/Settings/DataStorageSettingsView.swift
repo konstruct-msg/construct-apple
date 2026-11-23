@@ -35,6 +35,8 @@ struct DataStorageSettingsView: View {
     // MARK: - View state
 
     @State private var cacheSize: Int64 = 0
+    /// The files notes hold: beside the cache, not in it.
+    @State private var notesSize: Int64 = 0
     @State private var isClearing = false
     @State private var showClearConfirm = false
     @State private var quotaSliderIndex: Double = 0
@@ -273,7 +275,18 @@ struct DataStorageSettingsView: View {
                     }
                     CTSectionFooter("storage_auto_clear_footer")
 
-                   
+                    // MARK: Notes
+                    if notesSize > 0 {
+                        CTSettingsSectionHeader(title: NSLocalizedString("notes_title", comment: ""))
+                        CTSectionGroup {
+                            CTSettingsRow(
+                                label: NSLocalizedString("storage_notes", comment: ""),
+                                value: formatBytes(notesSize),
+                                icon: "note.text"
+                            )
+                        }
+                        CTSectionFooter("storage_notes_footer")
+                    }
                 }
                 .padding(.bottom, DataStorageSettingsLayout.screenBottomPadding)
             }
@@ -285,7 +298,7 @@ struct DataStorageSettingsView: View {
         .task {
             guard !hasLoadedInitialCacheState else { return }
             hasLoadedInitialCacheState = true
-            cacheSize = MediaManager.shared.diskCacheSize()
+            measure()
             quotaSliderIndex = Double(
                 quotaOptions.firstIndex(where: { $0.bytes == maxDiskCacheBytesRaw })
                     ?? (quotaOptions.count - 1)
@@ -309,8 +322,12 @@ struct DataStorageSettingsView: View {
     private func clearCache() async {
         isClearing = true
         MediaManager.shared.clearCache(includingDisk: true)
-        cacheSize = MediaManager.shared.diskCacheSize()
+        measure()
         isClearing = false
+    }
+
+    private func measure() {
+        (cacheSize, notesSize) = MediaManager.shared.diskUsage()
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

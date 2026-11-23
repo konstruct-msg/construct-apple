@@ -39,8 +39,8 @@ enum AccountWipeKeys {
         // (`FailedInitMessageStore`, removed with todo/252) — the account's.
         "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
-        // Notes not yet moved into the store (`NotesStore`).
-        NotesStore.storageKey,
+        // Notes not yet moved into the store (`LegacyNotes`).
+        LegacyNotes.storageKey,
 
         // Named without the `construct.` prefix, so the scan did not require them until todo/281;
         // on the stand of 2026-11-07 a wipe left `ct.device_link.fp.user.<account id>` behind.
@@ -429,6 +429,8 @@ enum AccountWipeKeys {
         // trial, a JSON key, a notification's `userInfo` key, resource and localization names.
         "KNST1:",
         "direct:",
+        // The id of a transcript row that draws a note (`NoteRow`).
+        "note:",
         "veil:",
         "konstruct://add",
         "construct-device-refusal",

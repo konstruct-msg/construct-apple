@@ -626,10 +626,23 @@
 "shared_profile" = "Profil partagé";
 
 // MARK: - Drafts
-"save_draft" = "Enregistrer le brouillon";
-"drafts" = "Brouillons";
-"drafts_empty_title" = "Aucun brouillon";
-"drafts_stored_locally" = "Les brouillons sont stockés localement sur cet appareil.";
+"notes_title" = "Notes";
+"notes_note" = "Note";
+"notes_new" = "Nouvelle note";
+"notes_pin" = "Épingler";
+"notes_unpin" = "Désépingler";
+"notes_pinned" = "Épinglée";
+"notes_send" = "Envoyer dans une discussion";
+"notes_from" = "%1$@, %2$@";
+"notes_empty_title" = "Aucune note";
+"notes_stay_here" = "Les notes restent sur cet appareil, chiffrées. Elles ne sont jamais envoyées.";
+"notes_delete_title" = "Supprimer cette note ?";
+"notes_save_message" = "Enregistrer dans les notes";
+"notes_saved" = "Enregistré dans les notes";
+"notes_saved_without_files" = "Enregistré dans les notes, mais certains fichiers n’ont pas pu être téléchargés";
+"notes_not_saved" = "La note n’a pas été enregistrée";
+"storage_notes" = "Fichiers des notes";
+"storage_notes_footer" = "La limite et la durée ci-dessus ne s’y appliquent pas. Supprimez une note pour libérer ses fichiers.";
 
 // MARK: - QR Code
 "code_expired" = "Code expiré";

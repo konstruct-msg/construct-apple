@@ -136,7 +136,7 @@ final class MessageDisplayCache: @unchecked Sendable {
         if let cached = cache.object(forKey: messageId as NSString) {
             return cached.data
         }
-        guard let record = try? store.message(messageId) else { return Data() }
+        guard let record = Self.record(messageId, store: store) else { return Data() }
         hold(record)
         return record.body
     }
@@ -146,9 +146,15 @@ final class MessageDisplayCache: @unchecked Sendable {
         if let cached = cache.object(forKey: field.key(messageId) as NSString) {
             return Self.unmark(cached.data)
         }
-        guard let record = try? store.message(messageId) else { return nil }
+        guard let record = Self.record(messageId, store: store) else { return nil }
         hold(record)
         return field == .transcript ? record.transcript : record.replyQuote
+    }
+
+    /// The row a screen shows: a message, or a note drawn as one (`NoteRow`).
+    private static func record(_ rowId: String, store: any MessageStore) -> MessageRecord? {
+        guard let noteId = NoteRow.noteId(rowId) else { return try? store.message(rowId) }
+        return (try? LocalRepositories.notes.note(noteId)).flatMap { $0 }.map { MessageRecord(note: $0) }
     }
 
     /// What a transcript read already decrypted, so the rows it lists open without a second read.
