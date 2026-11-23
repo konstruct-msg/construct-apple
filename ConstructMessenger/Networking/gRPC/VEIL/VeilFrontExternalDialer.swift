@@ -78,11 +78,25 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
     /// .ready in well under a second; this ceiling ensures a stalled/censored
     /// handshake fails over (at start, to the rustls coordinator; per connection,
     /// by dropping just that connection) instead of hanging.
-    private static let handshakeTimeout: TimeInterval = 8
+    static let handshakeTimeout: TimeInterval = 8
+
+    /// How long a handshake may stay silent before a second connection is dialed beside it, to the
+    /// same front with the same hello. Measured over the field exports of 2026-10-29 … 11-23
+    /// (todo 328): 188 of 192 native handshakes were ready within 3 s, and after a silent 8 s the
+    /// next native connection to the same front was ready at once in most cases — so a second one
+    /// is dialed, not the front's native path written off in favour of rustls, whose hello is the
+    /// one that stands out.
+    static let silenceBeforeSecondDial: TimeInterval = 3
+
+    /// What is left of `handshakeTimeout` when attempt `index` starts: both end together, and a
+    /// front that answers nobody still falls over to rustls after 8 s, not 11.
+    static func timeout(forAttempt index: Int) -> TimeInterval {
+        index == 0 ? handshakeTimeout : handshakeTimeout - silenceBeforeSecondDial
+    }
 
     /// A handshaken, pin-verified native connection plus the exporter Rust binds
     /// AUTH to for it.
-    private struct Prepared {
+    private struct Prepared: Sendable {
         let conn: NWConnection
         let exporter: Data
     }
@@ -337,10 +351,27 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
 
     // MARK: - TLS dial (fresh native NWConnection, handshaken, pin-verified)
 
-    /// Opens one native NWConnection, waits for the pinned TLS 1.3 handshake, and
-    /// derives the exporter. Bounded by `handshakeTimeout`. Returns a `Prepared`
+    /// Dials the front natively: one connection, and a second beside it if the first stays silent
+    /// (`silenceBeforeSecondDial`). Bounded by `handshakeTimeout` in all. Returns a `Prepared`
     /// ready to ferry, or throws.
     private func dialAndValidate() async throws -> Prepared {
+        try await HedgedAttempt.first(
+            after: .seconds(Self.silenceBeforeSecondDial),
+            discard: { $0.conn.cancel() }
+        ) { [self] index in
+            let started = Date()
+            let prepared = try await dialOnce(timeout: Self.timeout(forAttempt: index))
+            if index > 0 {
+                let ms = Int(Date().timeIntervalSince(started) * 1000)
+                Log.info("VEIL native-TLS: second dial ready in \(ms)ms, the first was silent", category: "VEIL")
+            }
+            return prepared
+        }
+    }
+
+    /// Opens one native NWConnection, waits for the pinned TLS 1.3 handshake, and
+    /// derives the exporter. Cancelling the task cancels the connection.
+    private func dialOnce(timeout: TimeInterval) async throws -> Prepared {
         // Per-connection serial queue for the verify block, handshake handler, and
         // NWConnection callbacks. It must NOT be `acceptQueue`, which is parked in a
         // blocking accept() — a verify block dispatched there would never run and the
@@ -350,49 +381,54 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
         let dialStarted = Date()
 
         do {
-            let exporter = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
-                // NWConnection's handshake wait is otherwise unbounded: a stalled or
-                // censored handshake would never emit .ready or .failed. Arm a one-shot
-                // timeout on the same serial queue as the state handler so the two can't
-                // race a double-resume — whichever fires first clears the handler and
-                // cancels the timer.
-                let timeout = DispatchWorkItem {
-                    conn.stateUpdateHandler = nil
-                    // todo 320: after a network change this waited the whole 8 s while rustls to
-                    // the same front took 0.4 s. Which path the connection was on says whether it
-                    // waited on the one that had just gone.
-                    Log.info("VEIL native-TLS: handshake timed out on path \(Self.describe(conn.currentPath))", category: "VEIL")
-                    conn.cancel()
-                    cont.resume(throwing: DialError.handshakeFailed("timeout after \(Self.handshakeTimeout)s"))
-                }
-                connQueue.asyncAfter(deadline: .now() + Self.handshakeTimeout, execute: timeout)
-                conn.stateUpdateHandler = { [weak self] state in
-                    switch state {
-                    case .ready:
-                        timeout.cancel()
+            let exporter = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
+                    // NWConnection's handshake wait is otherwise unbounded: a stalled or
+                    // censored handshake would never emit .ready or .failed. Arm a one-shot
+                    // timeout on the same serial queue as the state handler so the two can't
+                    // race a double-resume — whichever fires first clears the handler and
+                    // cancels the timer.
+                    let deadline = DispatchWorkItem {
                         conn.stateUpdateHandler = nil
-                        guard let self, let data = self.deriveExporter(conn) else {
-                            cont.resume(throwing: DialError.invalidExporter); return
-                        }
-                        cont.resume(returning: data)
-                    case .failed(let error):
-                        timeout.cancel()
-                        conn.stateUpdateHandler = nil
-                        cont.resume(throwing: DialError.handshakeFailed("\(error)"))
-                    case .cancelled:
-                        timeout.cancel()
-                        conn.stateUpdateHandler = nil
-                        cont.resume(throwing: DialError.handshakeFailed("cancelled"))
-                    case .waiting(let error):
-                        // Network.framework waits for a better path here, and the handshake
-                        // timer keeps running. Logged only, for now (todo 320, measure first).
-                        let ms = Int(Date().timeIntervalSince(dialStarted) * 1000)
-                        Log.info("VEIL native-TLS: handshake waiting after \(ms)ms: \(error) path \(Self.describe(conn.currentPath))", category: "VEIL")
-                    default:
-                        break
+                        // todo 320: after a network change this waited the whole 8 s while rustls to
+                        // the same front took 0.4 s. Which path the connection was on says whether it
+                        // waited on the one that had just gone.
+                        Log.info("VEIL native-TLS: handshake timed out on path \(Self.describe(conn.currentPath))", category: "VEIL")
+                        conn.cancel()
+                        cont.resume(throwing: DialError.handshakeFailed("timeout after \(timeout)s"))
                     }
+                    connQueue.asyncAfter(deadline: .now() + timeout, execute: deadline)
+                    conn.stateUpdateHandler = { [weak self] state in
+                        switch state {
+                        case .ready:
+                            deadline.cancel()
+                            conn.stateUpdateHandler = nil
+                            guard let self, let data = self.deriveExporter(conn) else {
+                                cont.resume(throwing: DialError.invalidExporter); return
+                            }
+                            cont.resume(returning: data)
+                        case .failed(let error):
+                            deadline.cancel()
+                            conn.stateUpdateHandler = nil
+                            cont.resume(throwing: DialError.handshakeFailed("\(error)"))
+                        case .cancelled:
+                            deadline.cancel()
+                            conn.stateUpdateHandler = nil
+                            cont.resume(throwing: DialError.handshakeFailed("cancelled"))
+                        case .waiting(let error):
+                            // Network.framework waits for a better path here, and the handshake
+                            // timer keeps running. Logged only, for now (todo 320, measure first).
+                            let ms = Int(Date().timeIntervalSince(dialStarted) * 1000)
+                            Log.info("VEIL native-TLS: handshake waiting after \(ms)ms: \(error) path \(Self.describe(conn.currentPath))", category: "VEIL")
+                        default:
+                            break
+                        }
+                    }
+                    conn.start(queue: connQueue)
                 }
-                conn.start(queue: connQueue)
+            } onCancel: {
+                // Started or not, a cancelled NWConnection reports `.cancelled` once it has a queue.
+                conn.cancel()
             }
             guard exporter.count == 32 else { conn.cancel(); throw DialError.invalidExporter }
             return Prepared(conn: conn, exporter: exporter)

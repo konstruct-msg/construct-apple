@@ -15,18 +15,19 @@ final class ServerTrustClientTests: XCTestCase {
 
     private let delegationsKey = "construct.server.trust_delegations"
     private let bundleKey = VeilCertFetcher.cachedBundleSigningKeyKey
+    private let acceptedKey = VeilCertFetcher.lastAcceptedKey
     private var saved: [String: Any] = [:]
 
     override func setUp() {
         super.setUp()
-        for key in [delegationsKey, bundleKey, VeilCertFetcher.cachedSignedAtKey] {
+        for key in [delegationsKey, bundleKey, acceptedKey, VeilCertFetcher.cachedSignedAtKey] {
             saved[key] = UserDefaults.standard.object(forKey: key)
         }
     }
 
     override func tearDown() {
         for (key, value) in saved { UserDefaults.standard.set(value, forKey: key) }
-        for key in [delegationsKey, bundleKey, VeilCertFetcher.cachedSignedAtKey] where saved[key] == nil {
+        for key in [delegationsKey, bundleKey, acceptedKey, VeilCertFetcher.cachedSignedAtKey] where saved[key] == nil {
             UserDefaults.standard.removeObject(forKey: key)
         }
         super.tearDown()
@@ -37,6 +38,21 @@ final class ServerTrustClientTests: XCTestCase {
         r.signedManifest = manifest
         r.delegations = delegations
         return r
+    }
+
+    /// A manifest with no relay list is a refresh like any other: the next routine one is answered
+    /// from the cache. Mutation: count it only with relays.
+    func testAnAcceptedManifestWithoutRelaysCountsAsFresh() {
+        UserDefaults.standard.removeObject(forKey: acceptedKey)
+        _ = VeilCertFetcher.settle(VeilCertFetcher.AcceptedManifest(relays: nil))
+        XCTAssertGreaterThan(UserDefaults.standard.double(forKey: acceptedKey), 0)
+    }
+
+    /// A refused one does not: the next routine refresh asks again. Mutation: count it.
+    func testARefusedManifestIsNotCountedAsFresh() {
+        UserDefaults.standard.set(1_000.0, forKey: acceptedKey)
+        _ = VeilCertFetcher.settle(nil)
+        XCTAssertEqual(UserDefaults.standard.double(forKey: acceptedKey), 1_000)
     }
 
     func testServedDelegationsReplaceTheCache() {
