@@ -184,7 +184,7 @@ actor VeilCertFetcher {
     /// When the last fetch was accepted (HTTPS, or `ServerTrustService` under `on`) — kept across
     /// launches, or every launch of the phone app would be a fetch — and when an urgent one last
     /// went out in this process.
-    private static let lastAcceptedKey = "construct.manifest_last_accepted"
+    static let lastAcceptedKey = "construct.manifest_last_accepted"
     private var lastAccepted: Date? {
         let t = UserDefaults.standard.double(forKey: Self.lastAcceptedKey)
         return t > 0 ? Date(timeIntervalSince1970: t) : nil
@@ -245,16 +245,16 @@ actor VeilCertFetcher {
         case .cache:
             return Self.cachedRelayInfosSync()
         case .serverTrust:
-            guard let relays = await ServerTrustClient.refresh() else { return Self.cachedRelayInfosSync() }
-            noteAccepted()
-            return relays
+            return Self.settle(await ServerTrustClient.refresh())
         case .https(let sources):
-            if let relays = await fetchVerifiedRelayConfig(from: sources) {
-                return relays
-            }
+            return Self.settle(await fetchVerifiedManifest(from: sources))
         }
-        Log.debug("Manifest fetch failed — using cache", category: "VEIL")
-        return Self.cachedRelayInfosSync()
+    }
+
+    /// A manifest that was verified, fresh and stored.
+    struct AcceptedManifest: Sendable {
+        /// nil when it names no relays: the fronts come another way and the list held stays.
+        let relays: [RelayInfo]?
     }
 
     /// Where the signed manifest may be fetched from in `mode`. Empty under `on`.
@@ -263,11 +263,11 @@ actor VeilCertFetcher {
         return [URL(string: "https://\(ServerConfig.inviteHost)/.well-known/construct-server")!]
     }
 
-    /// Races all provided URLs; returns the first verified result, nil if all fail.
-    private func fetchVerifiedRelayConfig(from urls: [URL]) async -> [RelayInfo]? {
+    /// Races all provided URLs; returns the first accepted manifest, nil if none was.
+    private func fetchVerifiedManifest(from urls: [URL]) async -> AcceptedManifest? {
         let session = Self.makeSession()
         defer { session.finishTasksAndInvalidate() }
-        return await withTaskGroup(of: [RelayInfo]?.self) { group in
+        return await withTaskGroup(of: AcceptedManifest?.self) { group in
             for url in urls {
                 group.addTask { [self] in
                     do {
@@ -278,9 +278,7 @@ actor VeilCertFetcher {
                             Log.debug("\(url.host ?? "") returned non-200", category: "ICE")
                             return nil
                         }
-                        let relays = try self.acceptManifest(data, source: url.host ?? "?")
-                        await self.noteAccepted()
-                        return relays
+                        return try self.acceptManifest(data, source: url.host ?? "?")
                     } catch {
                         Log.debug("\(url.host ?? "") fetch error: \(error)", category: "VEIL")
                         return nil
@@ -290,23 +288,33 @@ actor VeilCertFetcher {
 
             // Return first non-nil result; cancel remaining tasks
             for await result in group {
-                if let relays = result {
+                if let accepted = result {
                     group.cancelAll()
-                    return relays
+                    return accepted
                 }
             }
             return nil
         }
     }
 
-    private func noteAccepted() {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastAcceptedKey)
+    /// What a refresh leaves: only an accepted manifest counts as a fresh one, and every accepted
+    /// one does. Until 2026-11-23 a manifest refused for its signature or age counted too, so a
+    /// routine refresh did not ask again for hours; and one with no relay list — what the server
+    /// sends — did not count over `ServerTrustService`, so under VEIL on every routine refresh was
+    /// an RPC, and over HTTPS it was logged as a failure (todo 315, 328).
+    static func settle(_ accepted: AcceptedManifest?) -> [RelayInfo]? {
+        guard let accepted else {
+            Log.debug("Manifest not refreshed — using cache", category: "VEIL")
+            return cachedRelayInfosSync()
+        }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastAcceptedKey)
+        return accepted.relays ?? cachedRelayInfosSync()
     }
 
     /// Verify, freshness-check and persist one signed manifest, whatever carried it — the HTTPS
-    /// fetch or `ServerTrustService` through the tunnel. Returns the relay list, or nil when the
-    /// manifest is refused or carries none (the bundle key is cached either way).
-    nonisolated func acceptManifest(_ data: Data, source: String) throws -> [RelayInfo]? {
+    /// fetch or `ServerTrustService` through the tunnel. nil when it is refused: nothing of it is
+    /// kept.
+    nonisolated func acceptManifest(_ data: Data, source: String) throws -> AcceptedManifest? {
         guard try verifySignature(data) else {
             Log.error("\(source) signature invalid — ignoring", category: "ICE")
             return nil
@@ -351,7 +359,7 @@ actor VeilCertFetcher {
         }
         guard let relays = parsed.veil?.relays, !relays.isEmpty else {
             Log.info("Manifest via \(source) verified — no relay list (bundle key cached)", category: "VEIL")
-            return nil
+            return AcceptedManifest(relays: nil)
         }
 
         // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
@@ -372,7 +380,7 @@ actor VeilCertFetcher {
 
         let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
         Log.info("Relay config via \(source): \(relays.count) relay(s)\(deprecatedNote)", category: "VEIL")
-        return relays
+        return AcceptedManifest(relays: relays)
     }
 
     /// Synchronous read of cached relay infos directly from UserDefaults.

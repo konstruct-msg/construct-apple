@@ -19,7 +19,7 @@ enum ServerTrustClient {
     /// Ask the server and store what verifies. Under `on` with no tunnel up the channel refuses
     /// (`VeilTunnelNotUp`) and nothing is asked; the cache stands.
     @discardableResult
-    static func refresh() async -> [RelayInfo]? {
+    static func refresh() async -> VeilCertFetcher.AcceptedManifest? {
         let response: Shared_Proto_Services_V1_GetServerTrustResponse
         do {
             response = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.serverTrust) { grpcClient in
@@ -36,7 +36,7 @@ enum ServerTrustClient {
     /// What a response changes, apart from the network. An empty field leaves the cache alone:
     /// the server has nothing to say about it, which is not the same as "forget it".
     @discardableResult
-    static func apply(_ response: Shared_Proto_Services_V1_GetServerTrustResponse) -> [RelayInfo]? {
+    static func apply(_ response: Shared_Proto_Services_V1_GetServerTrustResponse) -> VeilCertFetcher.AcceptedManifest? {
         ServerKeyManager.storeServerDelegations(response.delegations)
         guard !response.signedManifest.isEmpty else { return nil }
         do {
