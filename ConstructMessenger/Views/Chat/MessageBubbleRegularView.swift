@@ -36,6 +36,7 @@ struct MessageBubbleRegularView: View {
     let onJumpToReply: ((TranscriptRow) -> Void)?
     let onReact: ((TranscriptRow, String) -> Void)?
     let onForward: ((TranscriptRow) -> Void)?
+    let onSaveToNotes: ((TranscriptRow) -> Void)?
 
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
@@ -318,6 +319,13 @@ struct MessageBubbleRegularView: View {
                         if let onForward, profileData == nil, ForwardItem.isForwardable(message) {
                             Button { onForward(message) } label: {
                                 Label("forward", systemImage: "arrowshape.turn.up.right")
+                            }
+                        }
+
+                        // The same content, kept on this device (todo 279).
+                        if let onSaveToNotes, profileData == nil, ForwardItem.isForwardable(message) {
+                            Button { onSaveToNotes(message) } label: {
+                                Label("notes_save_message", systemImage: "note.text.badge.plus")
                             }
                         }
 

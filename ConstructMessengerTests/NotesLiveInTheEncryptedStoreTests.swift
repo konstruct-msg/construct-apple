@@ -27,12 +27,13 @@ final class NotesLiveInTheEncryptedStoreTests: XCTestCase {
     }
 
     private func plainList(_ texts: [String]) throws -> Data {
-        try JSONEncoder().encode(texts.map { NoteItem(id: UUID(), text: $0, createdAt: Date(timeIntervalSince1970: 1_700_000_000)) })
+        try JSONEncoder().encode(texts.map { LegacyNotes.Item(id: UUID(), text: $0, createdAt: Date(timeIntervalSince1970: 1_700_000_000)) })
     }
 
     // MARK: - On disk
 
-    /// The promise itself. Mutation: keep the list in `UserDefaults` — this reddens.
+    /// The promise itself: neither the words nor the search index of them. Mutation: keep the list
+    /// in `UserDefaults` — this reddens.
     func testANoteIsNotReadableInTheStoreFileOrInDefaults() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("notes-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -40,43 +41,76 @@ final class NotesLiveInTheEncryptedStoreTests: XCTestCase {
         let path = dir.appendingPathComponent("construct.db").path
         let session = try LocalStoreSession.open(at: URL(fileURLWithPath: path), key: SymmetricKey(size: .bits256)).get()
 
-        _ = try NotesStore.add("Unmistakable-Note", in: LocalStoreKeyValueStore(session: session))
+        let notes = LocalStoreNotesStore(session: session)
+        try notes.insert(Note(text: "Unmistakable-Note"))
 
         var bytes = try Data(contentsOf: URL(fileURLWithPath: path))
         if let wal = try? Data(contentsOf: URL(fileURLWithPath: path + "-wal")) { bytes.append(wal) }
         XCTAssertNil(bytes.range(of: Data("Unmistakable".utf8)))
-        XCTAssertEqual(try NotesStore.all(in: LocalStoreKeyValueStore(session: session)).map(\.text), ["Unmistakable-Note"])
+        XCTAssertEqual(try notes.notes(after: nil, limit: 5).map(\.plainText), ["Unmistakable-Note"])
     }
 
-    // MARK: - The list
+    // MARK: - Out of the list in kv
 
-    func testNotesComeBackNewestFirstAndDeleteOneByOne() throws {
-        _ = try NotesStore.add("first", in: keyValue)
-        let two = try NotesStore.add("second", in: keyValue)
-        XCTAssertEqual(two.map(\.text), ["second", "first"])
-        XCTAssertEqual(try NotesStore.all(in: keyValue), two)
+    private var notes: LocalStoreNotesStore { LocalStoreNotesStore(session: session) }
 
-        let one = try NotesStore.delete([two[0].id], in: keyValue)
+    /// Text, date, order and id, and the list is gone. Again, nothing is added twice — a crash
+    /// between the last note and the list's end. Mutations: a fresh id; keep the list.
+    func testTheListBecomesNotesOnce() throws {
+        let list = try plainList(["newest", "oldest"])
+        try keyValue.put(LegacyNotes.storageKey, list)
 
-        XCTAssertEqual(one.map(\.text), ["first"])
-        XCTAssertEqual(try NotesStore.all(in: keyValue), one)
+        try LegacyNotes.moveIntoNotes(from: keyValue, into: notes)
+
+        XCTAssertNil(try keyValue.get(LegacyNotes.storageKey))
+        let moved = try notes.notes(after: nil, limit: 5)
+        XCTAssertEqual(Set(moved.map(\.plainText)), ["newest", "oldest"])
+        XCTAssertEqual(Set(moved.map(\.createdAt)), [Date(timeIntervalSince1970: 1_700_000_000)])
+
+        try keyValue.put(LegacyNotes.storageKey, list)
+        try LegacyNotes.moveIntoNotes(from: keyValue, into: notes)
+        XCTAssertEqual(try notes.notes(after: nil, limit: 5), moved)
     }
 
-    /// Nothing is written over a list that could not be read. The cost of getting this wrong is
-    /// every note the person has.
-    func testAFailedReadWritesNothing() throws {
-        let store = RefusingKeyValue(refusesGet: true)
-
-        XCTAssertThrowsError(try NotesStore.add("new", in: store))
-        XCTAssertThrowsError(try NotesStore.delete([UUID()], in: store))
-
-        XCTAssertEqual(store.puts, 0)
+    /// The list goes only once every note is in. Mutation: remove it first.
+    func testTheListStaysWhenANoteIsRefused() throws {
+        struct Refusing: NotesStore {
+            let inner: LocalStoreNotesStore
+            func notes(after: Note?, limit: Int) throws -> [Note] { [] }
+            func search(_ query: String, limit: Int) throws -> [Note] { [] }
+            func note(_ id: String) throws -> Note? { nil }
+            func heldMediaIds() throws -> Set<String> { [] }
+            func changes() -> AsyncStream<Set<String>> { AsyncStream { $0.finish() } }
+            func insert(_ note: Note) throws -> Bool { throw NoNotesStore.Unavailable() }
+            func edit(_ id: String, body: Data, editedAt: Date) throws -> [String]? { nil }
+            func setPinned(_ id: String, _ pinned: Bool) throws -> Bool { false }
+            func delete(_ ids: Set<String>) throws -> [String] { [] }
+        }
+        try keyValue.put(LegacyNotes.storageKey, try plainList(["only copy"]))
+        XCTAssertThrowsError(try LegacyNotes.moveIntoNotes(from: keyValue, into: Refusing(inner: notes)))
+        XCTAssertNotNil(try keyValue.get(LegacyNotes.storageKey))
     }
 
-    func testBytesThatDoNotDecodeReadAsNoList() throws {
-        try keyValue.put(NotesStore.storageKey, Data("not json".utf8))
+    /// An install not yet on the store has nowhere to move them to: the list stays.
+    func testWithNoNotesStoreTheListStays() throws {
+        try keyValue.put(LegacyNotes.storageKey, try plainList(["only copy"]))
+        try LegacyNotes.moveIntoNotes(from: keyValue, into: NoNotesStore())
+        XCTAssertNotNil(try keyValue.get(LegacyNotes.storageKey))
+    }
 
-        XCTAssertEqual(try NotesStore.all(in: keyValue), [])
+    func testBytesThatDoNotDecodeAreLeft() throws {
+        try keyValue.put(LegacyNotes.storageKey, Data("not json".utf8))
+        try LegacyNotes.moveIntoNotes(from: keyValue, into: notes)
+        XCTAssertEqual(try keyValue.get(LegacyNotes.storageKey), Data("not json".utf8))
+        XCTAssertEqual(try notes.notes(after: nil, limit: 5), [])
+    }
+
+    /// Remove `LegacyNotes`, its tests and the lines in `ConstructMessengerApp` after this day.
+    func testTheMoveIsNotPastItsLastDay() throws {
+        let format = DateFormatter()
+        format.dateFormat = "yyyy-MM-dd"
+        format.locale = Locale(identifier: "en_US_POSIX")
+        XCTAssertLessThanOrEqual(Date(), try XCTUnwrap(format.date(from: LegacyNotes.lastDay)))
     }
 
     // MARK: - Out of UserDefaults
@@ -85,76 +119,76 @@ final class NotesLiveInTheEncryptedStoreTests: XCTestCase {
     /// is gone.
     func testAPlainListMovesIntoTheStoreWhole() throws {
         let plain = try plainList(["newest", "oldest"])
-        defaults.set(plain, forKey: NotesStore.storageKey)
+        defaults.set(plain, forKey: LegacyNotes.storageKey)
 
-        try NotesStore.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { true })
+        try LegacyNotes.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { true })
 
-        XCTAssertEqual(try keyValue.get(NotesStore.storageKey), plain)
-        XCTAssertEqual(try NotesStore.all(in: keyValue).map(\.text), ["newest", "oldest"])
-        XCTAssertNil(defaults.object(forKey: NotesStore.storageKey))
+        XCTAssertEqual(try keyValue.get(LegacyNotes.storageKey), plain)
+        XCTAssertNil(defaults.object(forKey: LegacyNotes.storageKey))
     }
 
     /// A crash between the two writes of a move leaves both. The store's list wins, and the plain
     /// copy still goes.
     func testAListAlreadyInTheStoreIsNotOverwritten() throws {
-        _ = try NotesStore.add("written after the move", in: keyValue)
-        defaults.set(try plainList(["left behind"]), forKey: NotesStore.storageKey)
+        let newer = try plainList(["written after the move"])
+        try keyValue.put(LegacyNotes.storageKey, newer)
+        defaults.set(try plainList(["left behind"]), forKey: LegacyNotes.storageKey)
 
-        try NotesStore.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { true })
+        try LegacyNotes.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { true })
 
-        XCTAssertEqual(try NotesStore.all(in: keyValue).map(\.text), ["written after the move"])
-        XCTAssertNil(defaults.object(forKey: NotesStore.storageKey))
+        XCTAssertEqual(try keyValue.get(LegacyNotes.storageKey), newer)
+        XCTAssertNil(defaults.object(forKey: LegacyNotes.storageKey))
     }
 
     /// The store would not take it: the only copy stays where it is for the next launch.
     func testARefusedMoveKeepsThePlainCopy() throws {
         let plain = try plainList(["only copy"])
-        defaults.set(plain, forKey: NotesStore.storageKey)
+        defaults.set(plain, forKey: LegacyNotes.storageKey)
 
-        XCTAssertThrowsError(try NotesStore.moveOutOfDefaults(into: RefusingKeyValue(refusesPut: true), defaults: defaults, hasAccount: { true }))
+        XCTAssertThrowsError(try LegacyNotes.moveOutOfDefaults(into: RefusingKeyValue(refusesPut: true), defaults: defaults, hasAccount: { true }))
 
-        XCTAssertEqual(defaults.data(forKey: NotesStore.storageKey), plain)
+        XCTAssertEqual(defaults.data(forKey: LegacyNotes.storageKey), plain)
     }
 
     /// An install not yet on the store: `keyValue` is these same defaults, and this list is the
     /// only copy.
     func testAnInstallNotYetOnTheStoreKeepsItsList() throws {
         let plain = try plainList(["only copy"])
-        defaults.set(plain, forKey: NotesStore.storageKey)
+        defaults.set(plain, forKey: LegacyNotes.storageKey)
 
-        try NotesStore.moveOutOfDefaults(into: DefaultsKeyValueStore(defaults: defaults), defaults: defaults, hasAccount: { true })
+        try LegacyNotes.moveOutOfDefaults(into: DefaultsKeyValueStore(defaults: defaults), defaults: defaults, hasAccount: { true })
 
-        XCTAssertEqual(defaults.data(forKey: NotesStore.storageKey), plain)
+        XCTAssertEqual(defaults.data(forKey: LegacyNotes.storageKey), plain)
     }
 
     /// Seen on the stand: a wipe on an older build left a note, and the next account was shown it.
     /// With no account the list belongs to nobody and goes.
     func testWithNoAccountAPlainListGoesAndDoesNotMove() throws {
-        defaults.set(try plainList(["the previous owner's note"]), forKey: NotesStore.storageKey)
+        defaults.set(try plainList(["the previous owner's note"]), forKey: LegacyNotes.storageKey)
 
-        try NotesStore.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { false })
+        try LegacyNotes.moveOutOfDefaults(into: keyValue, defaults: defaults, hasAccount: { false })
 
-        XCTAssertNil(defaults.object(forKey: NotesStore.storageKey))
-        XCTAssertEqual(try NotesStore.all(in: keyValue), [])
+        XCTAssertNil(defaults.object(forKey: LegacyNotes.storageKey))
+        XCTAssertNil(try keyValue.get(LegacyNotes.storageKey))
     }
 
     /// A locked device answers "no account" and cannot open the store. The store's refusal has to
     /// come first, or a background launch before the first unlock deletes every note.
     func testALockedDeviceDeletesNothing() throws {
         let plain = try plainList(["only copy"])
-        defaults.set(plain, forKey: NotesStore.storageKey)
+        defaults.set(plain, forKey: LegacyNotes.storageKey)
 
         XCTAssertThrowsError(
-            try NotesStore.moveOutOfDefaults(into: RefusingKeyValue(refusesGet: true), defaults: defaults, hasAccount: { false })
+            try LegacyNotes.moveOutOfDefaults(into: RefusingKeyValue(refusesGet: true), defaults: defaults, hasAccount: { false })
         )
 
-        XCTAssertEqual(defaults.data(forKey: NotesStore.storageKey), plain)
+        XCTAssertEqual(defaults.data(forKey: LegacyNotes.storageKey), plain)
     }
 
     func testNothingToMoveWritesNothing() throws {
         let store = RefusingKeyValue()
 
-        try NotesStore.moveOutOfDefaults(into: store, defaults: defaults, hasAccount: { true })
+        try LegacyNotes.moveOutOfDefaults(into: store, defaults: defaults, hasAccount: { true })
 
         XCTAssertEqual(store.puts, 0)
     }
@@ -164,11 +198,11 @@ final class NotesLiveInTheEncryptedStoreTests: XCTestCase {
     /// The defect as it stood: a device that wipes before this list ever moved. Mutation: take the
     /// key out of `AccountWipeKeys.wiped` — this reddens.
     func testAWipeRemovesAPlainListThatNeverMoved() throws {
-        defaults.set(try plainList(["the previous owner's note"]), forKey: NotesStore.storageKey)
+        defaults.set(try plainList(["the previous owner's note"]), forKey: LegacyNotes.storageKey)
 
         AccountWipeKeys.wipe(defaults)
 
-        XCTAssertNil(defaults.object(forKey: NotesStore.storageKey))
+        XCTAssertNil(defaults.object(forKey: LegacyNotes.storageKey))
     }
 
     /// Notes in the store go with the store's files.
@@ -179,13 +213,13 @@ final class NotesLiveInTheEncryptedStoreTests: XCTestCase {
         let path = dir.appendingPathComponent("construct.db").path
         let key = SymmetricKey(size: .bits256)
         let session = try LocalStoreSession.open(at: URL(fileURLWithPath: path), key: key).get()
-        _ = try NotesStore.add("gone", in: LocalStoreKeyValueStore(session: session))
+        try LocalStoreNotesStore(session: session).insert(Note(text: "gone"))
 
         try session.wipe()
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: path))
         let next = try LocalStoreSession.open(at: URL(fileURLWithPath: path), key: key).get()
-        XCTAssertEqual(try NotesStore.all(in: LocalStoreKeyValueStore(session: next)), [])
+        XCTAssertEqual(try LocalStoreNotesStore(session: next).notes(after: nil, limit: 5), [])
     }
 }
 

@@ -808,6 +808,11 @@ void uniffi_construct_core_fn_method_localstore_delete_issued_invites(uint64_t p
 void uniffi_construct_core_fn_method_localstore_delete_message(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_DELETE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_DELETE_NOTES
+RustBuffer uniffi_construct_core_fn_method_localstore_delete_notes(uint64_t ptr, RustBuffer ids, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_DELETE_PENDING_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_DELETE_PENDING_CHUNKS
 void uniffi_construct_core_fn_method_localstore_delete_pending_chunks(uint64_t ptr, RustBuffer sender_id, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -831,6 +836,11 @@ int8_t uniffi_construct_core_fn_method_localstore_drop_pending_avatar(uint64_t p
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EDIT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EDIT_MESSAGE
 int8_t uniffi_construct_core_fn_method_localstore_edit_message(uint64_t ptr, RustBuffer id, RustBuffer body, RustBuffer search_text, int64_t edited_at, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EDIT_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EDIT_NOTE
+RustBuffer uniffi_construct_core_fn_method_localstore_edit_note(uint64_t ptr, RustBuffer id, RustBuffer body, RustBuffer search_text, RustBuffer media, int64_t edited_at, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ENTRIES_WITH_PREFIX
@@ -908,6 +918,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_insert_message(uint64_t pt
 RustBuffer uniffi_construct_core_fn_method_localstore_insert_messages(uint64_t ptr, RustBuffer messages, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INSERT_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INSERT_NOTE
+RustBuffer uniffi_construct_core_fn_method_localstore_insert_note(uint64_t ptr, RustBuffer note, RustBuffer search_text, RustBuffer media, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IS_PROCESSED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IS_PROCESSED
 int8_t uniffi_construct_core_fn_method_localstore_is_processed(uint64_t ptr, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -956,6 +971,21 @@ RustBuffer uniffi_construct_core_fn_method_localstore_messages_before(uint64_t p
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_FROM
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_FROM
 RustBuffer uniffi_construct_core_fn_method_localstore_messages_from(uint64_t ptr, RustBuffer chat_id, RustBuffer from_order_key, RustBuffer from_id, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTE
+RustBuffer uniffi_construct_core_fn_method_localstore_note(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTES
+RustBuffer uniffi_construct_core_fn_method_localstore_notes(uint64_t ptr, RustBuffer after, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTES_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_NOTES_MEDIA
+RustBuffer uniffi_construct_core_fn_method_localstore_notes_media(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_OWN_MESSAGES_IN_STATUS
@@ -1063,6 +1093,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_retain_peer_devices(uint64
 RustBuffer uniffi_construct_core_fn_method_localstore_search(uint64_t ptr, RustBuffer query, uint32_t limit, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SEARCH_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SEARCH_NOTES
+RustBuffer uniffi_construct_core_fn_method_localstore_search_notes(uint64_t ptr, RustBuffer query, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_ACCOUNT_ADDRESS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_ACCOUNT_ADDRESS
 int8_t uniffi_construct_core_fn_method_localstore_set_account_address(uint64_t ptr, RustBuffer id, RustBuffer address, RustCallStatus *_Nonnull out_status
@@ -1131,6 +1166,11 @@ int8_t uniffi_construct_core_fn_method_localstore_set_message_body(uint64_t ptr,
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_MESSAGE_MEDIA
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_MESSAGE_MEDIA
 int8_t uniffi_construct_core_fn_method_localstore_set_message_media(uint64_t ptr, RustBuffer message_id, RustBuffer entries, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_NOTE_PINNED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_NOTE_PINNED
+int8_t uniffi_construct_core_fn_method_localstore_set_note_pinned(uint64_t ptr, RustBuffer id, int8_t pinned, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_OBSERVER
@@ -4104,6 +4144,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_delete_message(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_DELETE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_DELETE_NOTES
+uint16_t uniffi_construct_core_checksum_method_localstore_delete_notes(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_DELETE_PENDING_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_DELETE_PENDING_CHUNKS
 uint16_t uniffi_construct_core_checksum_method_localstore_delete_pending_chunks(void
@@ -4131,6 +4177,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_drop_pending_avatar(vo
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EDIT_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EDIT_MESSAGE
 uint16_t uniffi_construct_core_checksum_method_localstore_edit_message(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EDIT_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EDIT_NOTE
+uint16_t uniffi_construct_core_checksum_method_localstore_edit_note(void
     
 );
 #endif
@@ -4224,6 +4276,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_insert_messages(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INSERT_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INSERT_NOTE
+uint16_t uniffi_construct_core_checksum_method_localstore_insert_note(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IS_PROCESSED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IS_PROCESSED
 uint16_t uniffi_construct_core_checksum_method_localstore_is_processed(void
@@ -4281,6 +4339,24 @@ uint16_t uniffi_construct_core_checksum_method_localstore_messages_before(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_FROM
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_FROM
 uint16_t uniffi_construct_core_checksum_method_localstore_messages_from(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTE
+uint16_t uniffi_construct_core_checksum_method_localstore_note(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTES
+uint16_t uniffi_construct_core_checksum_method_localstore_notes(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTES_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_NOTES_MEDIA
+uint16_t uniffi_construct_core_checksum_method_localstore_notes_media(void
     
 );
 #endif
@@ -4410,6 +4486,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_search(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SEARCH_NOTES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SEARCH_NOTES
+uint16_t uniffi_construct_core_checksum_method_localstore_search_notes(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_ACCOUNT_ADDRESS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_ACCOUNT_ADDRESS
 uint16_t uniffi_construct_core_checksum_method_localstore_set_account_address(void
@@ -4491,6 +4573,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_set_message_body(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_MESSAGE_MEDIA
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_MESSAGE_MEDIA
 uint16_t uniffi_construct_core_checksum_method_localstore_set_message_media(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_NOTE_PINNED
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_NOTE_PINNED
+uint16_t uniffi_construct_core_checksum_method_localstore_set_note_pinned(void
     
 );
 #endif

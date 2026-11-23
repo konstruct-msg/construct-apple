@@ -42,7 +42,8 @@ final class LocalStoreImportTests: XCTestCase {
             calls: CoreDataCallStore(container: container),
             pendingChunks: FilePendingChunkStore(root: chunkRoot),
             keyValue: DefaultsKeyValueStore(defaults: defaults),
-            issuedInvites: DefaultsIssuedInviteStore(defaults: defaults)
+            issuedInvites: DefaultsIssuedInviteStore(defaults: defaults),
+            notes: NoNotesStore()
         )
         session = LocalStoreSession.inMemoryForTesting()
         destination = .localStore(session)

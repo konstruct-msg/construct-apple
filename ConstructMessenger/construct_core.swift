@@ -2154,6 +2154,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func deleteMessage(id: String) throws 
     
+    /**
+     * In one transaction; the media ids no note holds any more.
+     */
+    func deleteNotes(ids: [String]) throws  -> [String]
+    
     func deletePendingChunks(senderId: String, messageId: String) throws 
     
     func deleteReaction(targetMessageId: String, reactorUserId: String) throws 
@@ -2166,6 +2171,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func dropPendingAvatar(id: String, expectedRef: Data) throws  -> Bool
     
     func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
+    
+    /**
+     * What a note says and holds now; its creation, pin and source stay. The media ids no note
+     * holds any more — the copies the client may delete — or null when there is no such note.
+     */
+    func editNote(id: String, body: Data, searchText: String?, media: [LocalMediaEntry], editedAt: Int64) throws  -> [String]?
     
     /**
      * Every entry whose key starts with `prefix`, by key; no pattern characters.
@@ -2226,6 +2237,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func insertMessages(messages: [LocalMessageInsert]) throws  -> [String]
     
+    /**
+     * A new note, what it says (null for nothing to find) and the files it holds. `AlreadyPresent`
+     * changes nothing.
+     */
+    func insertNote(note: LocalNote, searchText: String?, media: [LocalMediaEntry]) throws  -> LocalInsert
+    
     func isProcessed(messageId: String) throws  -> Bool
     
     /**
@@ -2265,6 +2282,18 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * Up to `limit` messages from (`from_order_key`, `from_id`), that one included, oldest first.
      */
     func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32) throws  -> [LocalMessage]
+    
+    func note(id: String) throws  -> LocalNote?
+    
+    /**
+     * A page: pinned first, each part newest first. `after` is the last note of the previous page.
+     */
+    func notes(after: LocalNote?, limit: UInt32) throws  -> [LocalNote]
+    
+    /**
+     * Every file notes hold: what a cache limit leaves alone, and the space notes take.
+     */
+    func notesMedia() throws  -> [LocalNoteMedia]
     
     /**
      * Ours in `status`, every chat, transcript order.
@@ -2354,6 +2383,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func search(query: String, limit: UInt32) throws  -> [LocalSearchHit]
     
+    /**
+     * In the list's order; fewer than three characters find nothing.
+     */
+    func searchNotes(query: String, limit: UInt32) throws  -> [LocalNote]
+    
     func setAccountAddress(id: String, address: Data?) throws  -> Bool
     
     /**
@@ -2410,6 +2444,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * `insert_message` / `set_message_body`, and for each id `unindexed_media_messages` lists.
      */
     func setMessageMedia(messageId: String, entries: [LocalMediaEntry]) throws  -> Bool
+    
+    /**
+     * False when there is no such note.
+     */
+    func setNotePinned(id: String, pinned: Bool) throws  -> Bool
     
     func setObserver(observer: LocalStoreObserver?) 
     
@@ -2830,6 +2869,18 @@ open func deleteMessage(id: String)throws   {try rustCallWithError(FfiConverterT
 }
 }
     
+    /**
+     * In one transaction; the media ids no note holds any more.
+     */
+open func deleteNotes(ids: [String])throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_notes(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(ids),$0
+    )
+})
+}
+    
 open func deletePendingChunks(senderId: String, messageId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_delete_pending_chunks(
             self.uniffiCloneHandle(),
@@ -2877,6 +2928,23 @@ open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int
         FfiConverterString.lower(id),
         FfiConverterData.lower(body),
         FfiConverterOptionString.lower(searchText),
+        FfiConverterInt64.lower(editedAt),$0
+    )
+})
+}
+    
+    /**
+     * What a note says and holds now; its creation, pin and source stay. The media ids no note
+     * holds any more — the copies the client may delete — or null when there is no such note.
+     */
+open func editNote(id: String, body: Data, searchText: String?, media: [LocalMediaEntry], editedAt: Int64)throws  -> [String]?  {
+    return try  FfiConverterOptionSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_edit_note(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(body),
+        FfiConverterOptionString.lower(searchText),
+        FfiConverterSequenceTypeLocalMediaEntry.lower(media),
         FfiConverterInt64.lower(editedAt),$0
     )
 })
@@ -3046,6 +3114,21 @@ open func insertMessages(messages: [LocalMessageInsert])throws  -> [String]  {
 })
 }
     
+    /**
+     * A new note, what it says (null for nothing to find) and the files it holds. `AlreadyPresent`
+     * changes nothing.
+     */
+open func insertNote(note: LocalNote, searchText: String?, media: [LocalMediaEntry])throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_note(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalNote_lower(note),
+        FfiConverterOptionString.lower(searchText),
+        FfiConverterSequenceTypeLocalMediaEntry.lower(media),$0
+    )
+})
+}
+    
 open func isProcessed(messageId: String)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_is_processed(
@@ -3159,6 +3242,39 @@ open func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, lim
         FfiConverterString.lower(fromOrderKey),
         FfiConverterString.lower(fromId),
         FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func note(id: String)throws  -> LocalNote?  {
+    return try  FfiConverterOptionTypeLocalNote.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_note(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * A page: pinned first, each part newest first. `after` is the last note of the previous page.
+     */
+open func notes(after: LocalNote?, limit: UInt32)throws  -> [LocalNote]  {
+    return try  FfiConverterSequenceTypeLocalNote.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_notes(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionTypeLocalNote.lower(after),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Every file notes hold: what a cache limit leaves alone, and the space notes take.
+     */
+open func notesMedia()throws  -> [LocalNoteMedia]  {
+    return try  FfiConverterSequenceTypeLocalNoteMedia.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_notes_media(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -3400,6 +3516,19 @@ open func search(query: String, limit: UInt32)throws  -> [LocalSearchHit]  {
 })
 }
     
+    /**
+     * In the list's order; fewer than three characters find nothing.
+     */
+open func searchNotes(query: String, limit: UInt32)throws  -> [LocalNote]  {
+    return try  FfiConverterSequenceTypeLocalNote.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_search_notes(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
 open func setAccountAddress(id: String, address: Data?)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_set_account_address(
@@ -3570,6 +3699,19 @@ open func setMessageMedia(messageId: String, entries: [LocalMediaEntry])throws  
             self.uniffiCloneHandle(),
         FfiConverterString.lower(messageId),
         FfiConverterSequenceTypeLocalMediaEntry.lower(entries),$0
+    )
+})
+}
+    
+    /**
+     * False when there is no such note.
+     */
+open func setNotePinned(id: String, pinned: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_note_pinned(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(pinned),$0
     )
 })
 }
@@ -9368,6 +9510,160 @@ public func FfiConverterTypeLocalMessageInsert_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeLocalMessageInsert_lower(_ value: LocalMessageInsert) -> RustBuffer {
     return FfiConverterTypeLocalMessageInsert.lower(value)
+}
+
+
+/**
+ * Something kept for oneself, on this device only (todo 279). Times are milliseconds since the epoch.
+ */
+public struct LocalNote: Equatable, Hashable {
+    public var id: String
+    /**
+     * A message body (CTM1): text, or what a saved message held.
+     */
+    public var body: Data
+    public var createdAt: Int64
+    public var editedAt: Int64?
+    public var isPinned: Bool
+    /**
+     * Whose message it was saved from, as they were called then, and when it was sent.
+     */
+    public var sourceName: String?
+    public var sourceAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, 
+        /**
+         * A message body (CTM1): text, or what a saved message held.
+         */body: Data, createdAt: Int64, editedAt: Int64?, isPinned: Bool, 
+        /**
+         * Whose message it was saved from, as they were called then, and when it was sent.
+         */sourceName: String?, sourceAt: Int64?) {
+        self.id = id
+        self.body = body
+        self.createdAt = createdAt
+        self.editedAt = editedAt
+        self.isPinned = isPinned
+        self.sourceName = sourceName
+        self.sourceAt = sourceAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalNote: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalNote: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalNote {
+        return
+            try LocalNote(
+                id: FfiConverterString.read(from: &buf), 
+                body: FfiConverterData.read(from: &buf), 
+                createdAt: FfiConverterInt64.read(from: &buf), 
+                editedAt: FfiConverterOptionInt64.read(from: &buf), 
+                isPinned: FfiConverterBool.read(from: &buf), 
+                sourceName: FfiConverterOptionString.read(from: &buf), 
+                sourceAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalNote, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterData.write(value.body, into: &buf)
+        FfiConverterInt64.write(value.createdAt, into: &buf)
+        FfiConverterOptionInt64.write(value.editedAt, into: &buf)
+        FfiConverterBool.write(value.isPinned, into: &buf)
+        FfiConverterOptionString.write(value.sourceName, into: &buf)
+        FfiConverterOptionInt64.write(value.sourceAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalNote_lift(_ buf: RustBuffer) throws -> LocalNote {
+    return try FfiConverterTypeLocalNote.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalNote_lower(_ value: LocalNote) -> RustBuffer {
+    return FfiConverterTypeLocalNote.lower(value)
+}
+
+
+/**
+ * A file a note holds.
+ */
+public struct LocalNoteMedia: Equatable, Hashable {
+    public var noteId: String
+    public var item: UInt32
+    public var mediaId: String
+    public var kind: LocalMediaKind
+    public var byteSize: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(noteId: String, item: UInt32, mediaId: String, kind: LocalMediaKind, byteSize: Int64) {
+        self.noteId = noteId
+        self.item = item
+        self.mediaId = mediaId
+        self.kind = kind
+        self.byteSize = byteSize
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalNoteMedia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalNoteMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalNoteMedia {
+        return
+            try LocalNoteMedia(
+                noteId: FfiConverterString.read(from: &buf), 
+                item: FfiConverterUInt32.read(from: &buf), 
+                mediaId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterTypeLocalMediaKind.read(from: &buf), 
+                byteSize: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalNoteMedia, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.noteId, into: &buf)
+        FfiConverterUInt32.write(value.item, into: &buf)
+        FfiConverterString.write(value.mediaId, into: &buf)
+        FfiConverterTypeLocalMediaKind.write(value.kind, into: &buf)
+        FfiConverterInt64.write(value.byteSize, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalNoteMedia_lift(_ buf: RustBuffer) throws -> LocalNoteMedia {
+    return try FfiConverterTypeLocalNoteMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalNoteMedia_lower(_ value: LocalNoteMedia) -> RustBuffer {
+    return FfiConverterTypeLocalNoteMedia.lower(value)
 }
 
 
@@ -16333,6 +16629,7 @@ public enum LocalStoreTable: Equatable, Hashable {
     case peerDevices
     case ownProfile
     case issuedInvites
+    case notes
 
 
 
@@ -16367,6 +16664,8 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         case 7: return .ownProfile
         
         case 8: return .issuedInvites
+        
+        case 9: return .notes
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -16406,6 +16705,10 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         
         case .issuedInvites:
             writeInt(&buf, Int32(8))
+        
+        
+        case .notes:
+            writeInt(&buf, Int32(9))
         
         }
     }
@@ -18690,6 +18993,30 @@ fileprivate struct FfiConverterOptionTypeLocalMessage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLocalNote: FfiConverterRustBuffer {
+    typealias SwiftType = LocalNote?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalNote.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalNote.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeLocalOwnProfile: FfiConverterRustBuffer {
     typealias SwiftType = LocalOwnProfile?
 
@@ -19613,6 +19940,56 @@ fileprivate struct FfiConverterSequenceTypeLocalMessageInsert: FfiConverterRustB
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLocalMessageInsert.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalNote: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalNote]
+
+    public static func write(_ value: [LocalNote], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalNote.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalNote] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalNote]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalNote.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalNoteMedia: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalNoteMedia]
+
+    public static func write(_ value: [LocalNoteMedia], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalNoteMedia.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalNoteMedia] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalNoteMedia]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalNoteMedia.read(from: &buf))
         }
         return seq
     }
@@ -22023,6 +22400,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_delete_message() != 53751) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_delete_notes() != 28854) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_delete_pending_chunks() != 19253) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22036,6 +22416,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_edit_note() != 53458) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_entries_with_prefix() != 686) {
@@ -22083,6 +22466,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_insert_messages() != 25547) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_insert_note() != 14032) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_is_processed() != 48882) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22111,6 +22497,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_messages_from() != 53099) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_note() != 23835) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_notes() != 61779) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_notes_media() != 51717) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_own_messages_in_status() != 26389) {
@@ -22176,6 +22571,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_search() != 46550) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_search_notes() != 62302) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_account_address() != 23284) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22216,6 +22614,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_message_media() != 49275) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_note_pinned() != 15328) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {

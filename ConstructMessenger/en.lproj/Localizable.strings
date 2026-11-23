@@ -681,10 +681,23 @@
 "shared_profile" = "Shared profile";
 
 // MARK: - Drafts
-"save_draft" = "Save draft";
-"drafts" = "Drafts";
-"drafts_empty_title" = "No drafts";
-"drafts_stored_locally" = "Drafts are stored locally on this device.";
+"notes_title" = "Notes";
+"notes_note" = "Note";
+"notes_new" = "New note";
+"notes_pin" = "Pin";
+"notes_unpin" = "Unpin";
+"notes_pinned" = "Pinned";
+"notes_send" = "Send to a chat";
+"notes_from" = "%1$@, %2$@";
+"notes_empty_title" = "No notes";
+"notes_stay_here" = "Notes stay on this device, encrypted. They are never sent.";
+"notes_delete_title" = "Delete this note?";
+"notes_save_message" = "Save to notes";
+"notes_saved" = "Saved to notes";
+"notes_saved_without_files" = "Saved to notes, but not every file could be downloaded";
+"notes_not_saved" = "The note was not saved";
+"storage_notes" = "Files in notes";
+"storage_notes_footer" = "Kept whatever the limit and the age above say. Delete a note to free its files.";
 
 // MARK: - QR Code
 "code_expired" = "Code expired";

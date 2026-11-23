@@ -36,6 +36,21 @@ extension ChatView {
         }
     }
 
+    // MARK: - Notes
+
+    func saveToNotes(_ row: TranscriptRow) {
+        Task {
+            do {
+                let outcome = try await NoteSaver.save(row, sourceName: peerName)
+                let key = outcome == .saved ? "notes_saved" : "notes_saved_without_files"
+                ErrorRouter.shared.report(.notice(message: UserText(key).resolved, actionTitle: nil))
+            } catch {
+                Log.error("Notes: a message was not saved — \(error)", category: "Notes")
+                ErrorRouter.shared.report(.notice(message: UserText("notes_not_saved").resolved, actionTitle: nil))
+            }
+        }
+    }
+
     func sendForwardedHere() async {
         let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
         guard !items.isEmpty else { return }

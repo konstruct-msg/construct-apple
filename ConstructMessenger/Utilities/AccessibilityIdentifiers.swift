@@ -147,6 +147,17 @@ enum A11y {
         static let deliveryReceiptsToggle = "settings.deliveryReceipts"
     }
 
+    /// Settings → Notes.
+    enum Notes {
+        static let open = "settings.notes"
+        static let new = "notes.new"
+        static let editor = "notes.editor"
+        static let save = "notes.save"
+        static let edit = "notes.edit"
+        static let actions = "notes.actions"
+        static func row(_ id: String) -> String { "notes.row.\(id)" }
+    }
+
     /// Linking a second device to this account.
     enum Devices {
         /// Opens the scanner. The camera-free route is the scanner's own paste button.

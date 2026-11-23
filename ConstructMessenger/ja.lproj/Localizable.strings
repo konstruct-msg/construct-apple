@@ -597,10 +597,23 @@
 "shared_profile" = "共有プロフィール";
 
 // MARK: - Drafts
-"save_draft" = "下書きを保存";
-"drafts" = "下書き";
-"drafts_empty_title" = "下書きはありません";
-"drafts_stored_locally" = "下書きはこのデバイスにローカルに保存されます。";
+"notes_title" = "メモ";
+"notes_note" = "メモ";
+"notes_new" = "新規メモ";
+"notes_pin" = "ピン留め";
+"notes_unpin" = "ピン留めを解除";
+"notes_pinned" = "ピン留め済み";
+"notes_send" = "チャットに送る";
+"notes_from" = "%1$@、%2$@";
+"notes_empty_title" = "メモはありません";
+"notes_stay_here" = "メモはこのデバイスに暗号化されて保存され、送信されることはありません。";
+"notes_delete_title" = "このメモを削除しますか？";
+"notes_save_message" = "メモに保存";
+"notes_saved" = "メモに保存しました";
+"notes_saved_without_files" = "メモに保存しましたが、一部のファイルをダウンロードできませんでした";
+"notes_not_saved" = "メモを保存できませんでした";
+"storage_notes" = "メモのファイル";
+"storage_notes_footer" = "上の上限と保存期間は適用されません。空き容量を増やすにはメモを削除してください。";
 
 // MARK: - QR Code
 "code_expired" = "コードの期限が切れました";

@@ -681,10 +681,23 @@
 "shared_profile" = "Կիսված պրոֆիլ";
 
 // MARK: - Drafts
-"save_draft" = "Պահպանել սևագիրը";
-"drafts" = "Սևագրեր";
-"drafts_empty_title" = "Սևագրեր չկան";
-"drafts_stored_locally" = "Սևագրերը պահվում են տեղում՝ այս սարքում։";
+"notes_title" = "Նշումներ";
+"notes_note" = "Նշում";
+"notes_new" = "Նոր նշում";
+"notes_pin" = "Ամրացնել";
+"notes_unpin" = "Ապամրացնել";
+"notes_pinned" = "Ամրացված է";
+"notes_send" = "Ուղարկել զրույց";
+"notes_from" = "%1$@, %2$@";
+"notes_empty_title" = "Նշումներ չկան";
+"notes_stay_here" = "Նշումները պահվում են այս սարքում՝ գաղտնագրված, և երբեք չեն ուղարկվում։";
+"notes_delete_title" = "Ջնջե՞լ այս նշումը";
+"notes_save_message" = "Պահել նշումներում";
+"notes_saved" = "Պահվեց նշումներում";
+"notes_saved_without_files" = "Պահվեց նշումներում, բայց ոչ բոլոր ֆայլերը հաջողվեց ներբեռնել";
+"notes_not_saved" = "Նշումը չպահվեց";
+"storage_notes" = "Նշումների ֆայլեր";
+"storage_notes_footer" = "Վերևի սահմանն ու ժամկետը դրանց վրա չեն տարածվում։ Տեղ ազատելու համար ջնջեք նշումը։";
 
 // MARK: - QR Code
 "code_expired" = "Կոդը ժամկետանց է";

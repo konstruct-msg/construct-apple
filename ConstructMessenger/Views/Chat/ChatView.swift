@@ -19,7 +19,7 @@ struct ChatView: View {
     @State private var lazyViewModel: LazyChatViewModel
     var viewModel: ChatViewModel { lazyViewModel.value }
     var peerId: String { viewModel.conversation.peerId }
-    private var peerName: String {
+    var peerName: String {
         ContactsLive.shared.contact(peerId)?.resolvedDisplayName ?? DisplayNameGenerator.generate(from: peerId)
     }
     /// Whoever owns the scroll position on this path. Chosen once, in `init`.

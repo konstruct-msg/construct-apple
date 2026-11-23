@@ -682,10 +682,23 @@
 "shared_profile" = "Профиль отправлен";
 
 // MARK: - Drafts
-"save_draft" = "Сохранить черновик";
-"drafts" = "Черновики";
-"drafts_empty_title" = "Черновиков нет";
-"drafts_stored_locally" = "Черновики хранятся локально на этом устройстве.";
+"notes_title" = "Заметки";
+"notes_note" = "Заметка";
+"notes_new" = "Новая заметка";
+"notes_pin" = "Закрепить";
+"notes_unpin" = "Открепить";
+"notes_pinned" = "Закреплена";
+"notes_send" = "Отправить в чат";
+"notes_from" = "%1$@, %2$@";
+"notes_empty_title" = "Заметок нет";
+"notes_stay_here" = "Заметки хранятся на этом устройстве в зашифрованном виде и никуда не отправляются.";
+"notes_delete_title" = "Удалить заметку?";
+"notes_save_message" = "Сохранить в заметки";
+"notes_saved" = "Сохранено в заметки";
+"notes_saved_without_files" = "Сохранено в заметки, но скачать удалось не все файлы";
+"notes_not_saved" = "Заметка не сохранена";
+"storage_notes" = "Файлы в заметках";
+"storage_notes_footer" = "Лимит и срок хранения выше на них не действуют. Чтобы освободить место, удалите заметку.";
 
 // MARK: - QR Code
 "code_expired" = "Код устарел";

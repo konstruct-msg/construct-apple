@@ -32,6 +32,8 @@ struct MessageBubble: View {
     let onReact: ((TranscriptRow, String) -> Void)?
     /// "Forward" — the host asks where to (`ForwardPickerView`).
     let onForward: ((TranscriptRow) -> Void)?
+    /// "Save to notes" (`NoteSaver`).
+    let onSaveToNotes: ((TranscriptRow) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
 
@@ -51,7 +53,8 @@ struct MessageBubble: View {
         onReplyWithQuote: ((TranscriptRow, String) -> Void)? = nil,
         onJumpToReply: ((TranscriptRow) -> Void)? = nil,
         onReact: ((TranscriptRow, String) -> Void)? = nil,
-        onForward: ((TranscriptRow) -> Void)? = nil
+        onForward: ((TranscriptRow) -> Void)? = nil,
+        onSaveToNotes: ((TranscriptRow) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -69,5 +72,6 @@ struct MessageBubble: View {
         self.onJumpToReply = onJumpToReply
         self.onReact = onReact
         self.onForward = onForward
+        self.onSaveToNotes = onSaveToNotes
     }
 }
