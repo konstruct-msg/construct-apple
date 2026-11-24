@@ -110,52 +110,44 @@ build_target() {
   # падало потом на «libconstruct_core.a не найден», то есть в другом месте и с
   # другим смыслом.
   #
-  # stdout — JSON-сообщения cargo: из них merge_veil берёт путь к архиву VEIL этой
-  # самой сборки (см. ниже). Диагностика и строки Compiling/Finished идут в stderr.
-  local log json
+  # `cargo rustc --crate-type staticlib`, а не `cargo build`: крейт ядра — rlib, staticlib и
+  # cdylib сразу, и с тремя типами cargo молча не передаёт LTO из профиля (todo 341). Поэтому
+  # ниже проверяется, что флаг дошёл до rustc: `touch` выше гарантирует, что крейт
+  # пересобирается и его команда есть в выводе `-v`.
+  local log
   log="$(mktemp)"
-  json="$CORE_PATH/target/$arch/$BUILD_DIR/.konstruct-cargo-artifacts.json"
-  mkdir -p "$(dirname "$json")"
-  if ! env $deploy_env cargo build --lib --target "$arch" --features "$FEATURES" $CARGO_FLAGS \
-        --message-format=json-render-diagnostics > "$json" 2> "$log"; then
+  if ! env $deploy_env cargo rustc --lib --crate-type staticlib --target "$arch" \
+        --features "$FEATURES" $CARGO_FLAGS -v > "$log" 2>&1; then
     grep -E "^error|^error\[" -A 12 "$log" | head -40
     rm -f "$log"
-    fail "cargo build провалился для $arch — см. вывод выше"
+    fail "cargo rustc провалился для $arch — см. вывод выше"
   fi
   grep -E "^warning\[|Compiling construct|Finished" "$log" || true
+  if [ "$BUILD_DIR" = "release" ] \
+     && ! grep -q -e '--crate-name construct_core .*-C lto=thin' "$log"; then
+    rm -f "$log"
+    fail "$arch собран без LTO: в команде rustc нет -C lto=thin"
+  fi
   rm -f "$log"
   ok "Собрано: $arch"
 }
 
-# ── Функция: мёрдж VEIL-символов ─────────────────────────────────────────────
-merge_veil() {
+# ── Функция: копирование архива ядра ─────────────────────────────────────────
+# VEIL внутри: `lib.rs` ядра реэкспортирует C-символы construct-veil для всех платформ. До
+# 2026-11-24 для Apple этого не было, и сюда вклеивался отдельный архив construct-veil. Ядро
+# старше этого изменения даст архив без VEIL — он не должен уйти в приложение молча.
+install_core() {
   local arch="$1"
   local dest="$2"
   local core_lib="$CORE_PATH/target/$arch/$BUILD_DIR/libconstruct_core.a"
 
   [ -f "$core_lib" ] || fail "libconstruct_core.a не найден: $core_lib"
-
-  # Архив VEIL — тот, что cargo собрал в этот раз: путь из его сообщения
-  # compiler-artifact (build_target). Ядро не ссылается на construct-veil, поэтому
-  # rustc не кладёт его в staticlib ядра, и C-символы VEIL приходят только отсюда.
-  #
-  # До 2026-11-16 здесь искался самый новый libconstruct_veil*.a в target/…/deps/.
-  # С cargo 1.100 архив лежит в target/…/build/construct-veil/<hash>/out/, а в
-  # deps/ остался старый: сборка xcframework от 16.11 вклеила VEIL от 12.11.
-  # В клоне без старого deps/ `xargs ls -t` без входа печатал текущий каталог, и
-  # скрипт молча выходил с кодом 1.
-  local json="$CORE_PATH/target/$arch/$BUILD_DIR/.konstruct-cargo-artifacts.json"
-  [ -f "$json" ] || fail "нет сообщений cargo для $arch ($json) — сначала build_target"
-  local veil_lib
-  veil_lib=$(grep '"reason":"compiler-artifact"' "$json" \
-             | grep -o '"[^"]*/libconstruct_veil-[^"/]*\.a"' | tr -d '"' | sort -u || true)
-  [ -n "$veil_lib" ] || fail "cargo не сообщил архив VEIL для $arch — без него VEIL-прокси не будет"
-  [ "$(printf '%s\n' "$veil_lib" | wc -l | tr -d ' ')" = "1" ] \
-    || fail "cargo сообщил больше одного архива VEIL для $arch: $veil_lib"
-  [ -f "$veil_lib" ] || fail "архив VEIL из сообщения cargo не найден: $veil_lib"
-
-  libtool -static -o "$dest" "$core_lib" "$veil_lib"
-  info "Смёрджено с VEIL: $(basename "$veil_lib")"
+  local sym
+  for sym in _veil_start _veil_stop _veil_front_ferry_fd; do
+    LC_ALL=C grep -qa "$sym" "$core_lib" \
+      || fail "$arch: в архиве ядра нет символа $sym — ядро старше реэкспорта VEIL для Apple"
+  done
+  cp "$core_lib" "$dest"
 
   local size
   size=$(du -sh "$dest" | cut -f1)
@@ -190,28 +182,28 @@ if $BUILD_SIM; then
   build_target "x86_64-apple-ios"
 fi
 
-# ── Мёрдж + копирование ───────────────────────────────────────────────────────
-hdr "Мёрдж VEIL и копирование"
+# ── Копирование ───────────────────────────────────────────────────────
+hdr "Копирование"
 
-$BUILD_IOS && merge_veil "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
+$BUILD_IOS && install_core "aarch64-apple-ios"        "$PROJECT_ROOT/libconstruct_core.a"
 if $BUILD_DIST; then
   # Universal fat binary: arm64 + x86_64 (for DMG / distribution)
   TMPDIR_DIST="/tmp/construct_mac_dist"
   mkdir -p "$TMPDIR_DIST"
-  merge_veil "aarch64-apple-darwin"  "$TMPDIR_DIST/libconstruct_core_arm64.a"
-  merge_veil "x86_64-apple-darwin"   "$TMPDIR_DIST/libconstruct_core_x86_64.a"
+  install_core "aarch64-apple-darwin"  "$TMPDIR_DIST/libconstruct_core_arm64.a"
+  install_core "x86_64-apple-darwin"   "$TMPDIR_DIST/libconstruct_core_x86_64.a"
   lipo -create "$TMPDIR_DIST/libconstruct_core_arm64.a" "$TMPDIR_DIST/libconstruct_core_x86_64.a" \
        -output "$PROJECT_ROOT/libconstruct_core_mac.a"
   ok "Universal macOS fat binary (arm64 + x86_64) → libconstruct_core_mac.a"
 elif $BUILD_MAC; then
-  merge_veil "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
+  install_core "aarch64-apple-darwin"  "$PROJECT_ROOT/libconstruct_core_mac.a"
 fi
 if $BUILD_SIM; then
   # Fat simulator binary: arm64 (Apple Silicon sim) + x86_64 (Intel sim)
   TMPDIR_SIM="/tmp/construct_sim"
   mkdir -p "$TMPDIR_SIM"
-  merge_veil "aarch64-apple-ios-sim" "$TMPDIR_SIM/libconstruct_core_arm64.a"
-  merge_veil "x86_64-apple-ios"      "$TMPDIR_SIM/libconstruct_core_x86_64.a"
+  install_core "aarch64-apple-ios-sim" "$TMPDIR_SIM/libconstruct_core_arm64.a"
+  install_core "x86_64-apple-ios"      "$TMPDIR_SIM/libconstruct_core_x86_64.a"
   lipo -create "$TMPDIR_SIM/libconstruct_core_arm64.a" "$TMPDIR_SIM/libconstruct_core_x86_64.a" \
        -output "$PROJECT_ROOT/libconstruct_core_sim.a"
   ok "Universal simulator fat binary (arm64 + x86_64) → libconstruct_core_sim.a"
