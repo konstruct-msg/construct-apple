@@ -256,8 +256,7 @@ class AuthViewModel {
         // Only touches userId — does NOT re-save tokens or overwrite session expiry.
         func recoverUserIdFromToken() -> String? {
             guard let token = AuthSessionManager.shared.sessionToken,
-                  let uid = TokenUtils.extractUserId(from: token),
-                  !uid.isEmpty else { return nil }
+                  let uid = sessionTokenClaims(token: token)?.userId else { return nil }
             AuthSessionManager.shared.updateUserId(uid)
             Log.info("[Auth] userId recovered from the token's sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
             return uid

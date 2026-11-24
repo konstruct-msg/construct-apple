@@ -62,7 +62,7 @@ struct AuthInterceptor: ClientInterceptor {
                 request.metadata.addString(userId, forKey: "x-user-id")
             } else {
                 // Rare recovery path: userId missing from cache, extract from the token's `sub` claim.
-                if let recovered = TokenUtils.extractUserId(from: token) {
+                if let recovered = sessionTokenClaims(token: token)?.userId {
                     await MainActor.run { AuthSessionManager.shared.updateUserId(recovered) }
                     request.metadata.addString(recovered, forKey: "x-user-id")
                 } else {

@@ -1440,6 +1440,8 @@
 "device_link_error_invalid_qr" = "Սա Konstruct-ի սարքի կոդ չէ։";
 "device_link_error_rejected" = "Ձեր մյուս սարքը մերժեց հարցումը։";
 "device_link_error_expired" = "Հարցման ժամկետը լրացել է։ Ցույց տվեք նոր կոդ։";
+"device_link_error_sign_in_refused" = "Ձեր մյուս սարքը թույլատրեց այս սարքը, բայց մուտքը մերժվեց։ Ստուգեք այս սարքի ամսաթիվն ու ժամը և ցույց տվեք նոր կոդ։";
+"device_link_error_let_in_unreachable" = "Ձեր մյուս սարքը թույլատրեց այս սարքը, բայց սերվերը հասանելի չէ։ Ստուգեք կապը և ցույց տվեք նոր կոդ։";
 "device_link_error_token" = "Այս կոդի ժամկետը լրացել է։ Սկանավորեք նորը։";
 "device_link_error_already_linked" = "Այս սարքն արդեն կապված է։";
 "voice_playback_speed" = "Նվագարկման արագություն";

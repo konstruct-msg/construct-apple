@@ -1451,6 +1451,8 @@
 "device_link_error_invalid_qr" = "Это не код устройства Konstruct.";
 "device_link_error_rejected" = "Другое ваше устройство отклонило запрос.";
 "device_link_error_expired" = "Срок запроса истёк. Покажите новый код.";
+"device_link_error_sign_in_refused" = "Другое ваше устройство впустило это, но войти не удалось. Проверьте дату и время на этом устройстве и покажите новый код.";
+"device_link_error_let_in_unreachable" = "Другое ваше устройство впустило это, но сервер недоступен. Проверьте подключение и покажите новый код.";
 "device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";
 "device_link_error_already_linked" = "Это устройство уже привязано.";
 "voice_playback_speed" = "Скорость воспроизведения";

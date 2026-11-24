@@ -1440,6 +1440,8 @@
 "device_link_error_invalid_qr" = "これはKonstructのデバイスコードではありません。";
 "device_link_error_rejected" = "もう一方のデバイスがリクエストを拒否しました。";
 "device_link_error_expired" = "リクエストの有効期限が切れました。新しいコードを表示してください。";
+"device_link_error_sign_in_refused" = "もう一方のデバイスは承認しましたが、サインインが拒否されました。このデバイスの日付と時刻を確認し、新しいコードを表示してください。";
+"device_link_error_let_in_unreachable" = "もう一方のデバイスは承認しましたが、サーバーに接続できません。接続を確認し、新しいコードを表示してください。";
 "device_link_error_token" = "このコードは期限切れです。新しいコードをスキャンしてください。";
 "device_link_error_already_linked" = "このデバイスはすでにリンクされています。";
 "voice_playback_speed" = "再生速度";

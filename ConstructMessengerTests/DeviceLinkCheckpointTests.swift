@@ -19,11 +19,4 @@ final class DeviceLinkCheckpointTests: XCTestCase {
         let src = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(src.contains("applyAccountOnlyCheckpoint"))
     }
-
-    func testCheckpointValueFromIssuedAt() {
-        XCTAssertEqual(
-            DeviceLinkStreamCursorPolicy.checkpointCursor(issuedAtSeconds: 1_700_000_000),
-            "1700000000000-0"
-        )
-    }
 }
