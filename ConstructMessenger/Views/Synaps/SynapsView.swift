@@ -596,7 +596,6 @@ struct SynapsView: View {
                 let contactInfo = try await LinkParser.parseContactLink(url)
                 await MainActor.run {
                     showingQRScanner = false
-                    if contactInfo.userId == AuthSessionManager.shared.currentUserId { return }
                     if let chat = chatsViewModel.startChat(
                         redeeming: contactInfo
                     ) {

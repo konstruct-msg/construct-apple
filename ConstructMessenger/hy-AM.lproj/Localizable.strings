@@ -416,6 +416,7 @@
 "invite_error_unsupported_link" = "Սա աջակցվող Konstruct հրավերի հղում չէ։";
 "invite_error_expired" = "Այս հրավերը ժամկետանց է։ Խնդրեք նորը։";
 "invite_error_already_used" = "Այս հրավերն արդեն օգտագործվել է։ Խնդրեք նորը։";
+"invite_error_own" = "Սա ձեր սեփական հրավերն է։";
 "invite_error_legacy_unsupported" = "Այս հղման ձևաչափն այլևս չի աջակցվում։ Խնդրեք նոր QR կամ հղում։";
 "invite_error_malformed" = "Անսարք հրավերի տվյալներ";
 "invite_redeem_safety_message" = "Կոնտակտն ավելացվել է հրավերից։ Նրանց անունը կերևա, երբ նրանք կիսվեն դրանով։";
@@ -1431,7 +1432,7 @@
 "validation_unsupported_type" = ".%@ տեսակի ֆայլերը հնարավոր չէ ուղարկել։";
 "validation_total_too_large" = "Հաղորդագրությունը չափազանց մեծ է՝ %1$@, առավելագույնը՝ %2$@։";
 "validation_empty" = "Հաղորդագրությունը դատարկ է։";
-"validation_self_send" = "Ինքներդ ձեզ համար նշումները՝ Սևագրերում։";
+"validation_self_send" = "Ինքներդ ձեզ համար գրեք Կարգավորումների «Նշումներ» բաժնում։";
 "invite_error_invalid" = "Այս հրավերը վավեր չէ։ Խնդրեք նորը։";
 "invite_error_verification_failed" = "Չհաջողվեց ստուգել այս հրավերը։ Ստուգեք կապը և փորձեք նորից։";
 "backup_error_wrong_password" = "Սխալ գաղտնաբառ, կամ պահուստը վնասված է։";

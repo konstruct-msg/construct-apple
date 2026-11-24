@@ -376,6 +376,7 @@
 "invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Konstruct.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
+"invite_error_own" = "Это ваше собственное приглашение.";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
 "invite_error_malformed" = "Повреждённые данные приглашения";
 "invite_redeem_safety_message" = "Контакт добавлен по приглашению. Имя появится, когда собеседник им поделится.";
@@ -1442,7 +1443,7 @@
 "validation_unsupported_type" = "Файлы типа .%@ отправить нельзя.";
 "validation_total_too_large" = "Сообщение слишком большое: %1$@, можно не больше %2$@.";
 "validation_empty" = "Сообщение пустое.";
-"validation_self_send" = "Заметки для себя — в Черновиках.";
+"validation_self_send" = "Записи для себя — в «Заметках» в Настройках.";
 "invite_error_invalid" = "Приглашение недействительно. Попросите новое.";
 "invite_error_verification_failed" = "Не удалось проверить приглашение. Проверьте соединение и попробуйте снова.";
 "backup_error_wrong_password" = "Неверный пароль или копия повреждена.";

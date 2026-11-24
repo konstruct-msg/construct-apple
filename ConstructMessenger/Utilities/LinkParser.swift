@@ -18,6 +18,8 @@ enum ContactLinkError: Error, LocalizedError, UserFacingError {
     case verificationFailed(Error)
     /// This device does not know the account's address yet (`RecoveryGateView`).
     case recoveryKeyRequired
+    /// The person's own invite, opened on their own account.
+    case ownInvite
 
     /// The reason in `inviteInvalid` and the error in `verificationFailed` are for the log: one
     /// is sometimes the server's wording, the other a system error's.
@@ -30,6 +32,7 @@ enum ContactLinkError: Error, LocalizedError, UserFacingError {
         case .inviteAlreadyUsed:   return UserText("invite_error_already_used")
         case .verificationFailed:  return UserText("invite_error_verification_failed")
         case .recoveryKeyRequired: return UserText("invite_error_recovery_key_required")
+        case .ownInvite:           return UserText("invite_error_own")
         }
     }
 
@@ -86,7 +89,7 @@ struct LinkParser {
 
     // MARK: - Dynamic Invite Parsing
 
-    private static func parseDynamicInvite(_ url: URL) async throws -> ContactInfo {
+    static func parseDynamicInvite(_ url: URL) async throws -> ContactInfo {
         Log.info("Parsing Dynamic Invite URL", category: "LinkParser")
 
         // 1. Decode invite from URL
@@ -98,6 +101,13 @@ struct LinkParser {
             throw ContactLinkError.inviteInvalid(
                 NSLocalizedString("invite_error_malformed", comment: "")
             )
+        }
+
+        // Before the server sees it: an accept burns the invite, and it stays good for the person
+        // it is for.
+        guard await !MainActor.run(body: { SessionAddressing.isOurOwnAccount(invite.uuid) }) else {
+            Log.info("Our own invite, not redeemed", category: "LinkParser")
+            throw ContactLinkError.ownInvite
         }
 
         // 2. Client-side signature verify is the trust root (F3).
