@@ -487,7 +487,7 @@ final class AuthServiceClient: Sendable {
 
     /// Called by the phone when it scans the TUI's "link-to-me" QR and the user confirms.
     /// Sends `ApproveJoinRequest` to the server; the server issues tokens and stores them
-    /// keyed by `pendingId` for the TUI to poll via `checkDeviceLinkStatus`.
+    /// keyed by `pendingId`; the new device polls `isJoinApproved`.
     func approveDeviceJoinRequest(
         pendingId: String,
         newDeviceId: String,
@@ -506,10 +506,10 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    /// Called by the new device (TUI) to poll for credentials approved by the phone.
-    /// Returns `nil` while still pending; returns `ConfirmLinkResult` when approved.
-    /// Throws on network errors; caller should continue polling on transient failures.
-    func checkDeviceLinkStatus(pendingId: String) async throws -> ConfirmLinkResult? {
+    /// Called by the new device while its QR is shown: has a device of the account let it in?
+    /// Its tokens come from `signInAsJoinedDevice`. Throws on network errors; the caller keeps
+    /// polling on transient failures.
+    func isJoinApproved(pendingId: String) async throws -> Bool {
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
             let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
 
@@ -520,23 +520,32 @@ final class AuthServiceClient: Sendable {
 
             switch response.status {
             case .approved:
-                guard response.hasTokens else { return nil }
-                let t = response.tokens
-                return ConfirmLinkResult(
-                    userId: t.userID,
-                    accessToken: t.accessToken,
-                    refreshToken: t.refreshToken,
-                    expiresAt: t.expiresAt,
-                    veilBridgeCert: t.hasVeilBridgeCert ? t.veilBridgeCert : nil
-                )
+                return true
             case .rejected:
                 throw DeviceLinkError.rejected
             case .expired:
                 throw DeviceLinkError.expired
             default:
-                return nil // .pending
+                return false // .pending
             }
         }
+    }
+
+    /// `AuthenticateDevice` under the key this device asked to join with. Saves nothing.
+    func signInAsJoinedDevice(deviceId: String) async throws -> ConfirmLinkResult {
+        let timestamp = Int64(Date().timeIntervalSince1970)
+        let response = try await authenticateDevice(
+            deviceId: deviceId,
+            timestamp: timestamp,
+            signature: try CryptoManager.shared.signWithDeviceKey(Data("\(deviceId)\(timestamp)".utf8))
+        )
+        return ConfirmLinkResult(
+            userId: response.userId,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken,
+            expiresAt: response.expiresAt ?? timestamp,
+            veilBridgeCert: response.veilBridgeCert
+        )
     }
 
     func getSenderCertificate() async throws -> Shared_Proto_Services_V1_GetSenderCertificateResponse {

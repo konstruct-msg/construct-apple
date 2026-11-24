@@ -249,11 +249,15 @@ final class DeviceLinkViewModel {
         pollingTask = Task { [weak self] in
             guard let self else { return }
             let deadline = Date().addingTimeInterval(10 * 60) // 10 min
+            let join = JoinApproval(
+                isApproved: { try await AuthServiceClient.shared.isJoinApproved(pendingId: pendingId) },
+                signIn: { try await AuthServiceClient.shared.signInAsJoinedDevice(deviceId: pendingId) }
+            )
             while Date() < deadline, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
                 do {
-                    if let result = try await AuthServiceClient.shared.checkDeviceLinkStatus(pendingId: pendingId) {
+                    if let result = try await join.poll() {
                         let deviceId = self.joinDeviceId ?? pendingId
                         // The keys are already in the key record `generateRegistrationBundle` saved.
                         KeychainManager.shared.saveDeviceID(deviceId)
@@ -278,9 +282,14 @@ final class DeviceLinkViewModel {
                     self.isWaitingForApproval = false
                     self.errorMessage = DeviceLinkError.expired.errorDescription
                     break
+                } catch let error as JoinApproval.SignInRefused {
+                    Log.error("Join approved, sign-in refused: \(error.underlying)", category: "DeviceLink")
+                    self.isWaitingForApproval = false
+                    self.errorMessage = self.localizedError(error.underlying)
+                    break
                 } catch {
                     // Transient network error — keep polling
-                    Log.debug("checkDeviceLinkStatus polling: \(error)", category: "DeviceLink")
+                    Log.debug("join request polling: \(error)", category: "DeviceLink")
                 }
             }
             if self.linkOutcome == nil {
