@@ -1440,6 +1440,8 @@
 "device_link_error_invalid_qr" = "This isn’t a Konstruct device code.";
 "device_link_error_rejected" = "Your other device declined the request.";
 "device_link_error_expired" = "The request has expired. Show a new code.";
+"device_link_error_sign_in_refused" = "Your other device let this one in, but sign-in was refused. Check this device's date and time, then show a new code.";
+"device_link_error_let_in_unreachable" = "Your other device let this one in, but the server can't be reached. Check the connection, then show a new code.";
 "device_link_error_token" = "This code has expired. Scan a new one.";
 "device_link_error_already_linked" = "This device is already linked.";
 "voice_playback_speed" = "Playback speed";

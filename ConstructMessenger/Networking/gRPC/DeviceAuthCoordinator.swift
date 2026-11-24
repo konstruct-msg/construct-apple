@@ -112,13 +112,10 @@ actor DeviceAuthCoordinator {
         var directBefore = false
         do {
             let timestamp = Int64(Date().timeIntervalSince1970)
-            let message = "\(deviceId)\(timestamp)"
-            guard let messageData = message.data(using: .utf8) else {
-                return .failed(message: "encodingFailed", overDirectTLS: false, refusal: .unspecified)
-            }
-
             // The core signs — with the orchestrator, or the key record before one exists.
-            let signatureData = try CryptoManager.shared.signWithDeviceKey(messageData)
+            let signatureData = try CryptoManager.shared.signWithDeviceKey(
+                deviceSignInMessage(deviceId: deviceId, timestamp: timestamp)
+            )
 
             // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.
             directBefore = GRPCChannelManager.shared.veilProxyPort() == nil

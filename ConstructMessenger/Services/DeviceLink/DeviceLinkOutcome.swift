@@ -36,23 +36,9 @@ enum DeviceLinkPhase: Equatable {
 
 /// Cursor policy for account-only links when history transfer is intentionally skipped.
 enum DeviceLinkStreamCursorPolicy {
-    static func checkpointCursor(accessToken: String) -> String? {
-        guard let issuedAtSeconds = TokenUtils.extractIssuedAt(from: accessToken) else {
-            return nil
-        }
-        return checkpointCursor(issuedAtSeconds: issuedAtSeconds)
-    }
-
-    static func checkpointCursor(issuedAtSeconds: Int64) -> String? {
-        guard issuedAtSeconds > 0, issuedAtSeconds <= Int64.max / 1000 else {
-            return nil
-        }
-        return "\(issuedAtSeconds * 1000)-0"
-    }
-
     @MainActor
     static func applyAccountOnlyCheckpoint(accessToken: String) {
-        guard let cursor = checkpointCursor(accessToken: accessToken) else {
+        guard let cursor = deviceLinkStartCursor(accessToken: accessToken) else {
             Log.error(
                 "Account-only device link could not derive stream checkpoint from token iat; next stream may request full backlog",
                 category: "DeviceLink"

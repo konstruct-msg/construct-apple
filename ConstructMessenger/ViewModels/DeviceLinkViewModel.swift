@@ -46,9 +46,13 @@ final class DeviceLinkViewModel {
     /// Flow B: pending_device_id the phone just approved (for auto history-sync pairing).
     private(set) var approvedJoinPendingId: String? = nil
 
+    /// What the new device's QR says.
     struct PendingApprovalInfo {
+        let deviceId: String
+        let identityPublic: Data
+        /// Nil: a client older than device certificates.
+        let fingerprint: Data?
         let deviceName: String
-        let scannedURL: String
     }
 
     private var pollingTask: Task<Void, Never>? = nil
@@ -64,17 +68,16 @@ final class DeviceLinkViewModel {
 
         do {
             let result = try await AuthServiceClient.shared.initiateDeviceLink()
-            var url = "konstruct://link?token=\(result.token)"
+            var fingerprint: Data?
             if let identity = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
                let hybrid = CryptoManager.shared.hybridIdentityPublicKey(),
                !hybrid.isEmpty {
-                let fp = historyQrFingerprint(identityPublic: identity, hybridPublic: hybrid)
-                url += "&fp=" + Self.hex(fp)
+                fingerprint = historyQrFingerprint(identityPublic: identity, hybridPublic: hybrid)
             }
             // The secret the new device proves its keys under, so this device can vouch for them
             // (device certificates). It is in the QR and nowhere else — never sent to the server.
             let linkSecret = newDeviceLinkSecret()
-            url += "&s=" + Self.hex(linkSecret)
+            let url = try deviceLinkOfferQr(token: result.token, fingerprint: fingerprint, secret: linkSecret)
             DeviceCertificateIssuer.shared.awaitLink(token: result.token, secret: linkSecret)
             qrContent = url
             tokenExpiresAt = Date(timeIntervalSince1970: TimeInterval(result.expiresAt))
@@ -104,21 +107,20 @@ final class DeviceLinkViewModel {
 
     // MARK: - Device B: Scan and confirm
 
-    /// Updated scanAndLink — dispatches based on URL scheme.
+    /// A scanned code: the account's device offering to link us, or a new device asking to join.
     func scanAndLink(scannedURL: String) async {
-        if scannedURL.hasPrefix("konstruct://link-to-me") {
-            // Parse join request and surface a confirmation dialog in the view.
-            guard let name = Self.joinRequestName(from: scannedURL) else {
-                errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
-                return
+        switch readDeviceLinkQr(text: scannedURL) {
+        case .joinRequest(let deviceId, let identityPublic, let fingerprint, let name, _):
+            // Surface a confirmation dialog in the view.
+            pendingApproval = PendingApprovalInfo(
+                deviceId: deviceId, identityPublic: identityPublic, fingerprint: fingerprint, deviceName: name
+            )
+        case .offer(let token, let fingerprint, let secret):
+            if let fingerprint {
+                DeviceLinkPendingPin.store(fingerprint, forToken: token)
             }
-            pendingApproval = PendingApprovalInfo(deviceName: name, scannedURL: scannedURL)
-        } else if let token = extractToken(from: scannedURL), !token.isEmpty {
-            if let fp = Self.extractFp(from: scannedURL) {
-                DeviceLinkPendingPin.store(fp, forToken: token)
-            }
-            await confirmLink(token: token, linkSecret: Self.extractHex32("s", from: scannedURL))
-        } else {
+            await confirmLink(token: token, linkSecret: secret)
+        case nil:
             errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
         }
     }
@@ -185,7 +187,7 @@ final class DeviceLinkViewModel {
     }
 
     /// Generates a one-time key pair and encodes a "join request" QR.
-    /// The phone scans this and calls `approveJoinRequest(from:)` to approve.
+    /// The phone scans this and calls `approveJoinRequest` to approve.
     func generateJoinRequestQR(isAuthenticated: Bool) async {
         guard Self.joinRequestMayStart(isAuthenticated: isAuthenticated) else {
             Log.error("generateJoinRequestQR refused: this device is already signed in", category: "DeviceLink")
@@ -204,15 +206,14 @@ final class DeviceLinkViewModel {
             // The phone vouches for exactly the keys this fingerprint names, the hybrid key
             // included — so the key exists, and is saved, before the QR does.
             let linkIdentity = try CryptoManager.shared.prepareLinkIdentity(linkSecret: nil)
-            let fp = historyQrFingerprint(
-                identityPublic: linkIdentity.identityPublic,
-                hybridPublic: linkIdentity.hybridPublic
-            )
             let name = DeviceInfo.deviceName
             let platform = platformString()
-            let pubkeyB64 = bundle.identityPublic.base64EncodedString()
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(Self.queryValue(pubkeyB64))"
-                + "&fp=\(Self.hex(fp))&name=\(Self.queryValue(name))&platform=\(platform)"
+            let url = try deviceJoinRequestQr(
+                identityPublic: linkIdentity.identityPublic,
+                hybridPublic: linkIdentity.hybridPublic,
+                name: name,
+                platform: platform
+            )
 
             try await AuthServiceClient.shared.submitJoinRequest(
                 deviceId: deviceId,
@@ -248,52 +249,31 @@ final class DeviceLinkViewModel {
         pollingTask?.cancel()
         pollingTask = Task { [weak self] in
             guard let self else { return }
-            let deadline = Date().addingTimeInterval(10 * 60) // 10 min
-            let join = JoinApproval(
-                isApproved: { try await AuthServiceClient.shared.isJoinApproved(pendingId: pendingId) },
+            let join = DeviceJoin(
+                status: { try await AuthServiceClient.shared.joinRequestStatus(pendingId: pendingId) },
                 signIn: { try await AuthServiceClient.shared.signInAsJoinedDevice(deviceId: pendingId) }
             )
-            while Date() < deadline, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { break }
-                do {
-                    if let result = try await join.poll() {
-                        let deviceId = self.joinDeviceId ?? pendingId
-                        // The keys are already in the key record `generateRegistrationBundle` saved.
-                        KeychainManager.shared.saveDeviceID(deviceId)
-                        self.isWaitingForApproval = false
-                        await self.finishLink(
-                            result: result,
-                            deviceId: deviceId,
-                            role: .linkedNewDevice,
-                            pendingDeviceId: pendingId
-                        )
-                        // Flow B: we showed the QR, so nothing pins the offering device on this
-                        // side. Recorded so the history verifier can tell it from a Flow A QR
-                        // without `fp`, which refuses.
-                        DeviceLinkPendingPin.markBundleOnly(userId: result.userId)
-                        break
-                    }
-                } catch DeviceLinkError.rejected {
-                    self.isWaitingForApproval = false
-                    self.errorMessage = DeviceLinkError.rejected.errorDescription
-                    break
-                } catch DeviceLinkError.expired {
-                    self.isWaitingForApproval = false
-                    self.errorMessage = DeviceLinkError.expired.errorDescription
-                    break
-                } catch let error as JoinApproval.SignInRefused {
-                    Log.error("Join approved, sign-in refused: \(error.underlying)", category: "DeviceLink")
-                    self.isWaitingForApproval = false
-                    self.errorMessage = self.localizedError(error.underlying)
-                    break
-                } catch {
-                    // Transient network error — keep polling
-                    Log.debug("join request polling: \(error)", category: "DeviceLink")
-                }
-            }
-            if self.linkOutcome == nil {
-                self.isWaitingForApproval = false
+            // Cancelled: whoever cancelled has cleared the screen.
+            guard let outcome = try? await join.run() else { return }
+            self.isWaitingForApproval = false
+            switch outcome {
+            case .signedIn(let result):
+                let deviceId = self.joinDeviceId ?? pendingId
+                // The keys are already in the key record `generateRegistrationBundle` saved.
+                KeychainManager.shared.saveDeviceID(deviceId)
+                await self.finishLink(
+                    result: result,
+                    deviceId: deviceId,
+                    role: .linkedNewDevice,
+                    pendingDeviceId: pendingId
+                )
+                // Flow B: we showed the QR, so nothing pins the offering device on this
+                // side. Recorded so the history verifier can tell it from a Flow A QR
+                // without `fp`, which refuses.
+                DeviceLinkPendingPin.markBundleOnly(userId: result.userId)
+            case .ended(let end):
+                Log.error("join request ended: \(end)", category: "DeviceLink")
+                self.errorMessage = DeviceLinkError(end).errorDescription
             }
         }
     }
@@ -301,40 +281,23 @@ final class DeviceLinkViewModel {
     // MARK: - Phone: Approve a new device's join request
 
     /// Called by the phone when it scans the Desktop's "link-to-me" QR and the user confirms.
-    func approveJoinRequest(from scannedURL: String) async {
-        guard let components = URLComponents(string: scannedURL),
-              let pendingId  = components.queryItems?.first(where: { $0.name == "id" })?.value,
-              let pubkey     = components.queryItems?.first(where: { $0.name == "pubkey" })?.value,
-              let name       = Self.joinRequestName(from: scannedURL),
-              let platform   = components.queryItems?.first(where: { $0.name == "platform" })?.value
-        else {
-            errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
-            return
-        }
+    func approveJoinRequest(_ request: PendingApprovalInfo) async {
+        let pendingId = request.deviceId
         isLinking = true
         errorMessage = nil
         defer { isLinking = false }
         do {
-            try await AuthServiceClient.shared.approveDeviceJoinRequest(
-                pendingId: pendingId,
-                newDeviceId: pendingId,
-                newDevicePublicKey: pubkey,
-                newDeviceName: name,
-                newDevicePlatform: platform
-            )
+            try await AuthServiceClient.shared.approveDeviceJoinRequest(pendingId: pendingId)
             approvedJoinPendingId = pendingId
             // A device joined our set: the cached own-device list is now one short.
             MultiDeviceSendCoordinator.shared.invalidateOwnDeviceCache()
             // Flow B: the QR is the one out-of-band channel; the history sender checks the
             // new device's bundle identity against it (`qr_pin_mismatch`), not the directory alone.
-            // base64 here is the QR text boundary, not application logic.
-            if let identity = Data(base64Encoded: pubkey.removingPercentEncoding ?? pubkey) {
-                DeviceLinkPendingPin.storePeerIdentity(identity, forDeviceId: pendingId)
-            }
+            DeviceLinkPendingPin.storePeerIdentity(request.identityPublic, forDeviceId: pendingId)
             // The QR's `fp` names the new device's keys, its hybrid key included; the core signs
             // them only if the directory serves exactly those. A QR without it (a client older than
             // device certificates) leaves the device unvouched.
-            if let fp = Self.extractFp(from: scannedURL) {
+            if let fp = request.fingerprint {
                 DeviceCertificateIssuer.shared.vouch(deviceId: pendingId, evidence: .qrFingerprint(fp))
             } else {
                 Log.info("device_cert device=\(pendingId.prefix(8))… QR names no fingerprint — not vouched", category: "DeviceLink")
@@ -347,7 +310,7 @@ final class DeviceLinkViewModel {
                     pendingDeviceId: pendingId
                 )
             }
-            Log.info("Approved join request for '\(name)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
+            Log.info("Approved join request for '\(request.deviceName)' (id=\(pendingId.prefix(8))…)", category: "DeviceLink")
         } catch {
             errorMessage = localizedError(error)
             Log.error("approveJoinRequest failed: \(error)", category: "DeviceLink")
@@ -413,63 +376,6 @@ final class DeviceLinkViewModel {
         }
     }
 
-    private func extractToken(from url: String) -> String? {
-        guard let components = URLComponents(string: url),
-              let item = components.queryItems?.first(where: { $0.name == "token" }) else {
-            return nil
-        }
-        return item.value
-    }
-
-    /// 64 hex chars → 32-byte fingerprint. Flow A: the offering device's pin — missing is allowed
-    /// (old QR); history handshake then logs `qr_pin_absent` and refuses history, not the link.
-    /// Flow B: the new device's keys, which the phone vouches for.
-    /// RFC 3986 unreserved characters, ASCII only, for a value inside the link QR's query.
-    /// `.urlQueryAllowed` leaves `&`, `=` and `+` as they are, so a device named "Mac & iPad" cut
-    /// the query short; `.alphanumerics` is Unicode, so it would leave a Cyrillic name unescaped.
-    private static let queryValueAllowed = CharacterSet(
-        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-    )
-
-    static func queryValue(_ value: String) -> String {
-        value.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? value
-    }
-
-    /// The device name in a join-request QR. `queryItems` has already decoded it once; decoding
-    /// again turned a name with `%` in it into nil, and the QR read as invalid.
-    static func joinRequestName(from url: String) -> String? {
-        URLComponents(string: url)?.queryItems?.first(where: { $0.name == "name" })?.value
-    }
-
-    static func extractFp(from url: String) -> Data? {
-        extractHex32("fp", from: url)
-    }
-
-    /// A 32-byte value carried in the QR as 64 hex characters (`fp`, `s`); nil when absent or
-    /// malformed. Hex here is the QR text boundary, not application logic.
-    static func extractHex32(_ name: String, from url: String) -> Data? {
-        guard let components = URLComponents(string: url),
-              let value = components.queryItems?.first(where: { $0.name == name })?.value,
-              value.count == 64
-        else { return nil }
-        var data = Data()
-        data.reserveCapacity(32)
-        var idx = value.startIndex
-        while idx < value.endIndex {
-            let next = value.index(idx, offsetBy: 2)
-            guard next <= value.endIndex, let byte = UInt8(value[idx..<next], radix: 16) else {
-                return nil
-            }
-            data.append(byte)
-            idx = next
-        }
-        return data.count == 32 ? data : nil
-    }
-
-    static func hex(_ data: Data) -> String {
-        data.map { String(format: "%02x", $0) }.joined()
-    }
-
     private func localizedError(_ error: Error) -> String {
         if let grpcError = error as? RPCError {
             switch grpcError.code {
@@ -490,6 +396,8 @@ enum DeviceLinkError: LocalizedError, UserFacingError {
     case invalidQRCode
     case rejected
     case expired
+    case signInRefused
+    case letInUnreachable
 
     var userText: UserText {
         switch self {
@@ -497,6 +405,8 @@ enum DeviceLinkError: LocalizedError, UserFacingError {
         case .invalidQRCode:       return UserText("device_link_error_invalid_qr")
         case .rejected:            return UserText("device_link_error_rejected")
         case .expired:             return UserText("device_link_error_expired")
+        case .signInRefused:       return UserText("device_link_error_sign_in_refused")
+        case .letInUnreachable:    return UserText("device_link_error_let_in_unreachable")
         }
     }
 

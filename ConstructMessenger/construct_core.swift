@@ -1395,6 +1395,197 @@ public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) 
 
 
 /**
+ * The new device's wait in Flow B, one rule for every client (construct-rules `device_join`;
+ * decisions/a-joining-device-signs-in-with-its-own-key.md): when to ask, when to sign in, how it
+ * ends. The platform makes the two calls and shows the end. Not kept: a restarted client shows a
+ * new code.
+ */
+public protocol DeviceJoinWaitProtocol: AnyObject, Sendable {
+    
+    /**
+     * What to do now. Asked again after every step.
+     */
+    func next(nowMs: Int64)  -> DeviceJoinStep
+    
+    /**
+     * The sign-in gave no tokens.
+     */
+    func onSignInFailed(failure: SendFailureKind, nowMs: Int64) 
+    
+    /**
+     * The server's answer: the number of `CheckJoinRequestStatusResponse.Status`.
+     */
+    func onStatus(status: Int32, nowMs: Int64) 
+    
+    /**
+     * The server gave no answer about the request.
+     */
+    func onStatusFailed(nowMs: Int64) 
+    
+}
+/**
+ * The new device's wait in Flow B, one rule for every client (construct-rules `device_join`;
+ * decisions/a-joining-device-signs-in-with-its-own-key.md): when to ask, when to sign in, how it
+ * ends. The platform makes the two calls and shows the end. Not kept: a restarted client shows a
+ * new code.
+ */
+open class DeviceJoinWait: DeviceJoinWaitProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_devicejoinwait(self.handle, $0) }
+    }
+    /**
+     * The request was submitted and its code is on the screen.
+     */
+public convenience init(nowMs: Int64) {
+    let handle =
+        try! rustCall() {
+    uniffi_construct_core_fn_constructor_devicejoinwait_new(
+        FfiConverterInt64.lower(nowMs),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_devicejoinwait(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * What to do now. Asked again after every step.
+     */
+open func next(nowMs: Int64) -> DeviceJoinStep  {
+    return try!  FfiConverterTypeDeviceJoinStep_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_devicejoinwait_next(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+    
+    /**
+     * The sign-in gave no tokens.
+     */
+open func onSignInFailed(failure: SendFailureKind, nowMs: Int64)  {try! rustCall() {
+    uniffi_construct_core_fn_method_devicejoinwait_on_sign_in_failed(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeSendFailureKind_lower(failure),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+}
+}
+    
+    /**
+     * The server's answer: the number of `CheckJoinRequestStatusResponse.Status`.
+     */
+open func onStatus(status: Int32, nowMs: Int64)  {try! rustCall() {
+    uniffi_construct_core_fn_method_devicejoinwait_on_status(
+            self.uniffiCloneHandle(),
+        FfiConverterInt32.lower(status),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+}
+}
+    
+    /**
+     * The server gave no answer about the request.
+     */
+open func onStatusFailed(nowMs: Int64)  {try! rustCall() {
+    uniffi_construct_core_fn_method_devicejoinwait_on_status_failed(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceJoinWait: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = DeviceJoinWait
+
+    public static func lift(_ handle: UInt64) throws -> DeviceJoinWait {
+        return DeviceJoinWait(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: DeviceJoinWait) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceJoinWait {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: DeviceJoinWait, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinWait_lift(_ handle: UInt64) throws -> DeviceJoinWait {
+    return try FfiConverterTypeDeviceJoinWait.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinWait_lower(_ value: DeviceJoinWait) -> UInt64 {
+    return FfiConverterTypeDeviceJoinWait.lower(value)
+}
+
+
+
+
+
+
+/**
  * The owed copies a client keeps: five attempts, 30 s doubling to an hour, a day's life.
  * Persist `to_bytes` after every change.
  */
@@ -11590,6 +11781,67 @@ public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) 
 }
 
 
+/**
+ * What a client reads in its own access token; each null when the token does not carry it.
+ */
+public struct SessionTokenClaims: Equatable, Hashable {
+    public var userId: String?
+    /**
+     * Unix seconds.
+     */
+    public var issuedAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(userId: String?, 
+        /**
+         * Unix seconds.
+         */issuedAt: Int64?) {
+        self.userId = userId
+        self.issuedAt = issuedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SessionTokenClaims: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionTokenClaims: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionTokenClaims {
+        return
+            try SessionTokenClaims(
+                userId: FfiConverterOptionString.read(from: &buf), 
+                issuedAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SessionTokenClaims, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.userId, into: &buf)
+        FfiConverterOptionInt64.write(value.issuedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionTokenClaims_lift(_ buf: RustBuffer) throws -> SessionTokenClaims {
+    return try FfiConverterTypeSessionTokenClaims.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionTokenClaims_lower(_ value: SessionTokenClaims) -> RustBuffer {
+    return FfiConverterTypeSessionTokenClaims.lower(value)
+}
+
+
 public struct ShareDraft: Equatable, Hashable {
     public var id: String
     public var text: String
@@ -14958,6 +15210,198 @@ public func FfiConverterTypeDeviceCertError_lower(_ value: DeviceCertError) -> R
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * How the wait ended without the device signed in.
+ */
+
+public enum DeviceJoinEnd: Equatable, Hashable {
+    
+    /**
+     * A device of the account turned the request down.
+     */
+    case rejected
+    /**
+     * Nobody let this device in before the request ran out: show a new code.
+     */
+    case expired
+    /**
+     * Let in, then refused in a way that would repeat: a clock out by minutes, a wrong key.
+     */
+    case signInRefused
+    /**
+     * Let in, and the server could not be reached to sign in. The account lists the device.
+     */
+    case letInUnreachable
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceJoinEnd: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceJoinEnd: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceJoinEnd
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceJoinEnd {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .rejected
+        
+        case 2: return .expired
+        
+        case 3: return .signInRefused
+        
+        case 4: return .letInUnreachable
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceJoinEnd, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .rejected:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .expired:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .signInRefused:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .letInUnreachable:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinEnd_lift(_ buf: RustBuffer) throws -> DeviceJoinEnd {
+    return try FfiConverterTypeDeviceJoinEnd.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinEnd_lower(_ value: DeviceJoinEnd) -> RustBuffer {
+    return FfiConverterTypeDeviceJoinEnd.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a device waiting to be let in does now.
+ */
+
+public enum DeviceJoinStep: Equatable, Hashable {
+    
+    /**
+     * Nothing for this long; then ask `next` again.
+     */
+    case wait(ms: Int64
+    )
+    /**
+     * `CheckJoinRequestStatus`; then `on_status` or `on_status_failed`.
+     */
+    case ask
+    /**
+     * `AuthenticateDevice` under the key it asked to join with; then `on_sign_in_failed`, or the
+     * device is in and this object is done with.
+     */
+    case signIn
+    case ended(end: DeviceJoinEnd
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceJoinStep: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceJoinStep: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceJoinStep
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceJoinStep {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .wait(ms: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        case 2: return .ask
+        
+        case 3: return .signIn
+        
+        case 4: return .ended(end: try FfiConverterTypeDeviceJoinEnd.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceJoinStep, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .wait(ms):
+            writeInt(&buf, Int32(1))
+            FfiConverterInt64.write(ms, into: &buf)
+            
+        
+        case .ask:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .signIn:
+            writeInt(&buf, Int32(3))
+        
+        
+        case let .ended(end):
+            writeInt(&buf, Int32(4))
+            FfiConverterTypeDeviceJoinEnd.write(end, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinStep_lift(_ buf: RustBuffer) throws -> DeviceJoinStep {
+    return try FfiConverterTypeDeviceJoinStep.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceJoinStep_lower(_ value: DeviceJoinStep) -> RustBuffer {
+    return FfiConverterTypeDeviceJoinStep.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * What the link QR showed about the new device.
  */
 
@@ -15033,6 +15477,94 @@ public func FfiConverterTypeDeviceLinkEvidence_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeDeviceLinkEvidence_lower(_ value: DeviceLinkEvidence) -> RustBuffer {
     return FfiConverterTypeDeviceLinkEvidence.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A device-link QR code. A fingerprint or secret of any other shape than 32 bytes reads as null.
+ */
+
+public enum DeviceLinkQr: Equatable, Hashable {
+    
+    /**
+     * Flow A, shown by a device of the account. `secret` null: an older code — the device links,
+     * unvouched.
+     */
+    case offer(token: String, fingerprint: Data?, secret: Data?
+    )
+    /**
+     * Flow B, shown by the new device; `device_id` is the one of `identity_public`.
+     * `fingerprint` null: it is let in, unvouched.
+     */
+    case joinRequest(deviceId: String, identityPublic: Data, fingerprint: Data?, name: String, platform: String
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceLinkQr: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkQr: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkQr
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkQr {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .offer(token: try FfiConverterString.read(from: &buf), fingerprint: try FfiConverterOptionData.read(from: &buf), secret: try FfiConverterOptionData.read(from: &buf)
+        )
+        
+        case 2: return .joinRequest(deviceId: try FfiConverterString.read(from: &buf), identityPublic: try FfiConverterData.read(from: &buf), fingerprint: try FfiConverterOptionData.read(from: &buf), name: try FfiConverterString.read(from: &buf), platform: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceLinkQr, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .offer(token,fingerprint,secret):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(token, into: &buf)
+            FfiConverterOptionData.write(fingerprint, into: &buf)
+            FfiConverterOptionData.write(secret, into: &buf)
+            
+        
+        case let .joinRequest(deviceId,identityPublic,fingerprint,name,platform):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(deviceId, into: &buf)
+            FfiConverterData.write(identityPublic, into: &buf)
+            FfiConverterOptionData.write(fingerprint, into: &buf)
+            FfiConverterString.write(name, into: &buf)
+            FfiConverterString.write(platform, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkQr_lift(_ buf: RustBuffer) throws -> DeviceLinkQr {
+    return try FfiConverterTypeDeviceLinkQr.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkQr_lower(_ value: DeviceLinkQr) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkQr.lower(value)
 }
 
 
@@ -19185,6 +19717,30 @@ fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeSessionTokenClaims: FfiConverterRustBuffer {
+    typealias SwiftType = SessionTokenClaims?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSessionTokenClaims.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSessionTokenClaims.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeStreamCursorBlocker: FfiConverterRustBuffer {
     typealias SwiftType = StreamCursorBlocker?
 
@@ -19321,6 +19877,30 @@ fileprivate struct FfiConverterOptionTypeCallStreamStep: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeCallStreamStep.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeDeviceLinkQr: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkQr?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeDeviceLinkQr.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeDeviceLinkQr.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -20704,6 +21284,44 @@ public func deriveRecoveryKeypair(seed: Data)throws  -> RecoveryKeypair  {
 })
 }
 /**
+ * The Flow B code of the device that holds these keys: its id and fingerprint follow from them.
+ * InvalidKeyData unless `identity_public` is 32 bytes.
+ */
+public func deviceJoinRequestQr(identityPublic: Data, hybridPublic: Data, name: String, platform: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_device_join_request_qr(
+        FfiConverterData.lower(identityPublic),
+        FfiConverterData.lower(hybridPublic),
+        FfiConverterString.lower(name),
+        FfiConverterString.lower(platform),$0
+    )
+})
+}
+/**
+ * The Flow A code. `fingerprint`: `history_qr_fingerprint` of this device, null before it holds
+ * a hybrid key; `secret`: `new_device_link_secret`. InvalidKeyData unless each is 32 bytes.
+ */
+public func deviceLinkOfferQr(token: String, fingerprint: Data?, secret: Data)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_device_link_offer_qr(
+        FfiConverterString.lower(token),
+        FfiConverterOptionData.lower(fingerprint),
+        FfiConverterData.lower(secret),$0
+    )
+})
+}
+/**
+ * Where a newly linked device's stream starts: the moment its token was issued; null when the
+ * token does not say.
+ */
+public func deviceLinkStartCursor(accessToken: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_device_link_start_cursor(
+        FfiConverterString.lower(accessToken),$0
+    )
+})
+}
+/**
  * Why the server refused this device: from the gRPC status code and the first value of the
  * `construct-device-refusal` trailer. Only UNAUTHENTICATED (16) carries one; never the text.
  */
@@ -20735,6 +21353,18 @@ public func deviceSetShouldAsk(named: [String], alreadyAsked: [String]?) -> Bool
     uniffi_construct_core_fn_func_device_set_should_ask(
         FfiConverterSequenceString.lower(named),
         FfiConverterOptionSequenceString.lower(alreadyAsked),$0
+    )
+})
+}
+/**
+ * What a device signs to sign in (`AuthenticateDevice`), for `sign_with_device_key`: its id and
+ * the Unix time in seconds it sends with it.
+ */
+public func deviceSignInMessage(deviceId: String, timestamp: Int64) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_device_sign_in_message(
+        FfiConverterString.lower(deviceId),
+        FfiConverterInt64.lower(timestamp),$0
     )
 })
 }
@@ -21453,6 +22083,16 @@ public func readBoundaryIsLater(a: ReadBoundary, b: ReadBoundary) -> Bool  {
 })
 }
 /**
+ * The link code in a scanned or opened text; null when it is not one.
+ */
+public func readDeviceLinkQr(text: String) -> DeviceLinkQr?  {
+    return try!  FfiConverterOptionTypeDeviceLinkQr.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_read_device_link_qr(
+        FfiConverterString.lower(text),$0
+    )
+})
+}
+/**
  * Of the `unread` newest of `incoming` (oldest first), how many are past `boundary`: by the
  * position of the boundary's message when it is there, by time when it is not. Only lowers.
  */
@@ -21580,6 +22220,17 @@ public func sealedVerifySenderCert(userId: String, domain: String, identityKey: 
         FfiConverterInt64.lower(expiresAt),
         FfiConverterData.lower(signature),
         FfiConverterData.lower(serverVerifyingKey),$0
+    )
+})
+}
+/**
+ * The claims a client reads in its own access token (PASETO v4.public, signature not checked);
+ * null when it is not one.
+ */
+public func sessionTokenClaims(token: String) -> SessionTokenClaims?  {
+    return try!  FfiConverterOptionTypeSessionTokenClaims.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_session_token_claims(
+        FfiConverterString.lower(token),$0
     )
 })
 }
@@ -21848,6 +22499,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 51363) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_device_join_request_qr() != 27188) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_device_link_offer_qr() != 35098) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_device_link_start_cursor() != 14520) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_device_refusal_of() != 19311) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21855,6 +22515,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_device_set_should_ask() != 28437) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_device_sign_in_message() != 2027) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_fanout_retry_base_backoff_ms() != 25894) {
@@ -22067,6 +22730,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_read_boundary_is_later() != 63601) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_read_device_link_qr() != 11830) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_read_unread_left() != 1806) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22095,6 +22761,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 64198) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_session_token_claims() != 18331) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_share_draft_decode() != 28972) {
@@ -22260,6 +22929,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 43516) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_devicejoinwait_next() != 34803) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_devicejoinwait_on_sign_in_failed() != 39510) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_devicejoinwait_on_status() != 39048) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_devicejoinwait_on_status_failed() != 53461) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_fanoutretrystate_all() != 58673) {
@@ -23019,6 +23700,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_callmachine_new() != 57398) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_devicejoinwait_new() != 49988) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_fanoutretrystate_from_bytes() != 2145) {

@@ -88,7 +88,7 @@ struct DeviceLinkScanView: View {
             Button(LocalizedStringKey("device_link_approve")) {
                 guard let info = vm.pendingApproval else { return }
                 vm.pendingApproval = nil
-                Task { await vm.approveJoinRequest(from: info.scannedURL) }
+                Task { await vm.approveJoinRequest(info) }
             }
             Button(LocalizedStringKey("cancel"), role: .cancel) {
                 vm.pendingApproval = nil

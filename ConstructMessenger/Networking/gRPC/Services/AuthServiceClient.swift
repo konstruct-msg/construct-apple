@@ -485,16 +485,9 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    /// Called by the phone when it scans the TUI's "link-to-me" QR and the user confirms.
-    /// Sends `ApproveJoinRequest` to the server; the server issues tokens and stores them
-    /// keyed by `pendingId`; the new device polls `isJoinApproved`.
-    func approveDeviceJoinRequest(
-        pendingId: String,
-        newDeviceId: String,
-        newDevicePublicKey: String,
-        newDeviceName: String,
-        newDevicePlatform: String
-    ) async throws {
+    /// Called by the phone when it scanned a new device's "link-to-me" QR and the user confirmed.
+    /// The new device polls `joinRequestStatus` and signs in with its own key.
+    func approveDeviceJoinRequest(pendingId: String) async throws {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.authenticateDevice) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
@@ -506,28 +499,17 @@ final class AuthServiceClient: Sendable {
         }
     }
 
-    /// Called by the new device while its QR is shown: has a device of the account let it in?
-    /// Its tokens come from `signInAsJoinedDevice`. Throws on network errors; the caller keeps
-    /// polling on transient failures.
-    func isJoinApproved(pendingId: String) async throws -> Bool {
-        return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
+    /// Called by the new device while its QR is shown: the number of the request's status, for the
+    /// core's `DeviceJoinWait`. The tokens come from `signInAsJoinedDevice`.
+    func joinRequestStatus(pendingId: String) async throws -> Int32 {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
             let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_CheckJoinRequestStatusRequest()
             request.pendingDeviceID = pendingId
 
             let response = try await linkClient.checkJoinRequestStatus(request: .init(message: request))
-
-            switch response.status {
-            case .approved:
-                return true
-            case .rejected:
-                throw DeviceLinkError.rejected
-            case .expired:
-                throw DeviceLinkError.expired
-            default:
-                return false // .pending
-            }
+            return Int32(response.status.rawValue)
         }
     }
 
@@ -537,7 +519,7 @@ final class AuthServiceClient: Sendable {
         let response = try await authenticateDevice(
             deviceId: deviceId,
             timestamp: timestamp,
-            signature: try CryptoManager.shared.signWithDeviceKey(Data("\(deviceId)\(timestamp)".utf8))
+            signature: try CryptoManager.shared.signWithDeviceKey(deviceSignInMessage(deviceId: deviceId, timestamp: timestamp))
         )
         return ConfirmLinkResult(
             userId: response.userId,

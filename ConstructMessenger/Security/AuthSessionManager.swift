@@ -114,9 +114,9 @@ class AuthSessionManager {
         return Date().addingTimeInterval(bufferTime) < expires
     }
 
-    /// PASETO v4.public only — a legacy RS256 JWT is not accepted since 2026-10-24 (`TokenUtils`).
+    /// PASETO v4.public only — a legacy RS256 JWT is not accepted since 2026-10-24.
     nonisolated static func isAcceptedCachedToken(_ token: String) -> Bool {
-        TokenUtils.format(of: token) == .paseto
+        sessionTokenClaims(token: token) != nil
     }
 
     // Load token from keychain on init or when needed
@@ -128,7 +128,7 @@ class AuthSessionManager {
         if let token = sessionToken {
             // Anything else is cleared, and the invalidation re-authenticates the device with its key.
             guard Self.isAcceptedCachedToken(token) else {
-                Log.error("Unsupported token format in cached token: \(TokenUtils.format(of: token)). Clearing session.", category: "SessionManager")
+                Log.error("Cached token is not v4.public. Clearing session.", category: "SessionManager")
                 clearSession()
                 isSessionInvalidated = true
                 return

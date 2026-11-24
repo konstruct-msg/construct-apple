@@ -31,16 +31,6 @@ final class DeviceLinkPendingPinTests: XCTestCase {
         XCTAssertNil(DeviceLinkPendingPin.load(forUserId: userId))
     }
 
-    func testExtractFpFromLinkURL() {
-        let fp = String(repeating: "ab", count: 32)
-        let url = "konstruct://link?token=tok&fp=\(fp)"
-        let data = DeviceLinkViewModel.extractFp(from: url)
-        XCTAssertEqual(data?.count, 32)
-        XCTAssertEqual(data?.first, 0xAB)
-        XCTAssertNil(DeviceLinkViewModel.extractFp(from: "konstruct://link?token=tok"))
-        XCTAssertNil(DeviceLinkViewModel.extractFp(from: "konstruct://link?token=tok&fp=zz"))
-    }
-
     func testTransferSourcesDoNotCallGetSigningKeyBytes() throws {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -42,6 +42,7 @@ final class AppErrorTests: XCTestCase {
             BackupEncryptionError.keyDerivationFailed, BackupEncryptionError.dataCorrupted,
             DeviceLinkError.keyGenerationFailed, DeviceLinkError.invalidQRCode,
             DeviceLinkError.rejected, DeviceLinkError.expired,
+            DeviceLinkError.signInRefused, DeviceLinkError.letInUnreachable,
             NearbyTransferError.authenticationFailed, NearbyTransferError.connectionClosed,
             VeilConfigImporter.ImportError.malformed, VeilConfigImporter.ImportError.badSignature,
             VeilConfigImporter.ImportError.expired, VeilConfigImporter.ImportError.unknownRelay,
