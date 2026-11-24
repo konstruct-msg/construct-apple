@@ -34,7 +34,7 @@ final class AppErrorTests: XCTestCase {
             ContactLinkError.invalidURL, ContactLinkError.invalidPrefix, ContactLinkError.inviteExpired,
             ContactLinkError.inviteInvalid(secret), ContactLinkError.inviteAlreadyUsed,
             ContactLinkError.verificationFailed(NSError(domain: secret, code: 1)),
-            ContactLinkError.recoveryKeyRequired,
+            ContactLinkError.recoveryKeyRequired, ContactLinkError.ownInvite,
             BackupError.invalidMnemonic, BackupError.fileNotFound(secret), BackupError.invalidFile,
             BackupError.decryptionFailed, BackupError.userIdMismatch, BackupError.unsupportedVersion,
             BackupEncryptionError.invalidPassword, BackupEncryptionError.encryptionFailed,
@@ -113,6 +113,7 @@ final class AppErrorTests: XCTestCase {
         XCTAssertEqual(text(NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))), "error_no_space")
         XCTAssertEqual(text(CocoaError(.fileWriteOutOfSpace)), "error_no_space")
         XCTAssertEqual(text(ContactLinkError.inviteExpired), "invite_error_expired")
+        XCTAssertEqual(text(ContactLinkError.ownInvite), "invite_error_own")
         XCTAssertEqual(text(NSError(domain: "anything", code: 7)), "error_generic")
     }
 

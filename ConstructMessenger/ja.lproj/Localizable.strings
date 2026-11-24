@@ -1228,6 +1228,7 @@
 "invite_error_unsupported_link" = "Konstructの招待リンクではありません。";
 "invite_error_expired" = "この招待は期限切れです。新しいものをもらってください。";
 "invite_error_already_used" = "この招待は使用済みです。新しいものをもらってください。";
+"invite_error_own" = "これは自分の招待です。";
 "invite_error_legacy_unsupported" = "このリンク形式はサポートされなくなりました。新しい招待QRかリンクをもらってください。";
 "invite_error_malformed" = "招待データが壊れています";
 "invite_redeem_safety_message" = "招待から連絡先を追加しました。名前は相手が共有すると表示されます。";
@@ -1431,7 +1432,7 @@
 "validation_unsupported_type" = ".%@ 形式のファイルは送信できません。";
 "validation_total_too_large" = "メッセージが大きすぎます: %1$@(上限 %2$@)。";
 "validation_empty" = "メッセージが空です。";
-"validation_self_send" = "自分へのメモは下書きに保存してください。";
+"validation_self_send" = "自分へのメモは設定の「メモ」に保存してください。";
 "invite_error_invalid" = "この招待は無効です。新しいものをもらってください。";
 "invite_error_verification_failed" = "この招待を確認できませんでした。接続を確認して、もう一度お試しください。";
 "backup_error_wrong_password" = "パスワードが違うか、バックアップが破損しています。";

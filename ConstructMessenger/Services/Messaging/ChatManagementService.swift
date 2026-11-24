@@ -25,7 +25,7 @@ class ChatManagementService {
         accountAddress: Data? = nil
     ) -> ChatRecord? {
         if user.id == AuthSessionManager.shared.currentUserId {
-            Log.info("Self-chat detected — use Drafts instead", category: "ChatManagementService")
+            Log.info("Self-chat detected — use Notes instead", category: "ChatManagementService")
             return nil
         }
         

@@ -416,6 +416,7 @@
 "invite_error_unsupported_link" = "This is not a supported Konstruct invite link.";
 "invite_error_expired" = "This invite has expired. Ask for a new one.";
 "invite_error_already_used" = "This invite was already used. Ask for a new one.";
+"invite_error_own" = "This is your own invite.";
 "invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
 "invite_error_malformed" = "Malformed invite data";
 "invite_redeem_safety_message" = "Contact added from an invite. Their name appears once they share it.";
@@ -1431,7 +1432,7 @@
 "validation_unsupported_type" = "Files of type .%@ can’t be sent.";
 "validation_total_too_large" = "The message is too large: %1$@, at most %2$@.";
 "validation_empty" = "The message is empty.";
-"validation_self_send" = "Notes to yourself go in Drafts.";
+"validation_self_send" = "To write to yourself, use Notes in Settings.";
 "invite_error_invalid" = "This invite isn’t valid. Ask for a new one.";
 "invite_error_verification_failed" = "Couldn’t verify this invite. Check the connection and try again.";
 "backup_error_wrong_password" = "Wrong password, or the backup is damaged.";

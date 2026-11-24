@@ -26,7 +26,6 @@ struct ChatsListView: View {
     @State private var navigationPath = NavigationPath()
     /// The chat in the split view's detail, at regular width.
     @State private var selectedChatId: String?
-    @State private var showingDrafts = false
     @State private var searchQuery = ""
 
     var body: some View {
@@ -386,11 +385,6 @@ struct ChatsListView: View {
     }
 
     private func addContact(contactInfo: ContactInfo) {
-        let userId = contactInfo.userId
-        if userId == AuthSessionManager.shared.currentUserId {
-            showingDrafts = true
-            return
-        }
         if let chat = chatsViewModel.startChat(
             redeeming: contactInfo
         ) {
