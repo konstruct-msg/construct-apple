@@ -89,6 +89,10 @@ if $DO_CLEAN; then
   ok "Кеш очищен"
 fi
 
+# Нижняя граница macOS у приложения. Без неё код на C (SQLCipher, ring) собирается под версию
+# SDK: 2026-11-25 Intel-срез вышел с объектами «macOS 27.0», а линкер об этом только предупреждает.
+MACOS_MIN="15.0"
+
 # ── Функция: сборка одного таргета ───────────────────────────────────────────
 build_target() {
   local arch="$1"
@@ -99,7 +103,7 @@ build_target() {
   case "$arch" in
     aarch64-apple-ios)          deploy_env="IPHONEOS_DEPLOYMENT_TARGET=18.0" ;;
     aarch64-apple-ios-sim|x86_64-apple-ios) deploy_env="IPHONEOS_DEPLOYMENT_TARGET=18.0" ;;
-    aarch64-apple-darwin)       deploy_env="MACOSX_DEPLOYMENT_TARGET=15.0" ;;
+    aarch64-apple-darwin|x86_64-apple-darwin) deploy_env="MACOSX_DEPLOYMENT_TARGET=$MACOS_MIN" ;;
   esac
   # Вывод в файл, а не в конвейер с grep. Раньше здесь стояло
   #   cargo build … | grep -E "^error|…" || true
@@ -147,6 +151,15 @@ install_core() {
     LC_ALL=C grep -qa "$sym" "$core_lib" \
       || fail "$arch: в архиве ядра нет символа $sym — ядро старше реэкспорта VEIL для Apple"
   done
+  case "$arch" in
+    *-apple-darwin)
+      local newer
+      newer="$(otool -l "$core_lib" 2>/dev/null \
+        | awk -v max="$MACOS_MIN" '/LC_BUILD_VERSION/{b=1} b&&/minos/{b=0; if ($2+0 > max+0) print $2}' \
+        | sort -u | tr '\n' ' ')"
+      [ -z "$newer" ] || fail "$arch: в архиве ядра объекты для macOS новее $MACOS_MIN: $newer"
+      ;;
+  esac
   cp "$core_lib" "$dest"
 
   local size
