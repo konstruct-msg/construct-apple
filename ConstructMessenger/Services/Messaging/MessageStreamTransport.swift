@@ -63,8 +63,12 @@ final class GRPCStreamTransport: StreamTransport {
         // Experimental engine-QUIC (construct-transport Rust stack). Direct path only,
         // gated by FeatureFlags.engineQuicExperimental. `acquireEngineQuicChannel()` returns
         // nil when the flag is off or the pinned gateway cert is missing → fall through to H2.
-        if !useH2Fallback, GRPCChannelManager.shared.veilProxyPort() == nil,
-           let eq = GRPCChannelManager.shared.acquireEngineQuicChannel() {
+        if GRPCChannelManager.shared.veilProxyPort() != nil {
+            // The stream goes through the tunnel from here on. The QUIC connection it left is a
+            // direct one nobody uses: under Auto it went on pinging the server beside the tunnel,
+            // and choosing `on` later did not close it (2026-11-25).
+            GRPCChannelManager.shared.invalidateEngineQuicConnection()
+        } else if !useH2Fallback, let eq = GRPCChannelManager.shared.acquireEngineQuicChannel() {
             let client = Shared_Proto_Services_V1_MessagingService.Client(wrapping: eq)
             try await runStream(client: client, request: request, events: events,
                                 metricsLabel: metricsLabel, label: "QUIC", onAccepted: onAccepted)
