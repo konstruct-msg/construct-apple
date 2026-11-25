@@ -2428,6 +2428,11 @@ RustBuffer uniffi_construct_core_fn_func_intake_window(uint64_t current, RustCal
 int8_t uniffi_construct_core_fn_func_is_generated_name(RustBuffer name, RustBuffer user_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JUDGE_FRONT_PIN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JUDGE_FRONT_PIN
+RustBuffer uniffi_construct_core_fn_func_judge_front_pin(RustBuffer anchor, RustBuffer held, RustBuffer offered, int8_t vouched, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 RustBuffer uniffi_construct_core_fn_func_knst_encode_chunks(RustBuffer payload, uint8_t content_type, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -2569,6 +2574,22 @@ int8_t uniffi_construct_core_fn_func_refusal_erases_device(RustBuffer refusal, i
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 RustBuffer uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(RustBuffer keys, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_DEFAULT_CONFIG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_DEFAULT_CONFIG
+RustBuffer uniffi_construct_core_fn_func_route_default_config(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_INITIAL
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_INITIAL
+RustBuffer uniffi_construct_core_fn_func_route_initial(RustBuffer mode, int8_t reachable, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_STEP
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_ROUTE_STEP
+RustBuffer uniffi_construct_core_fn_func_route_step(RustBuffer state, RustBuffer event, RustBuffer mode, RustBuffer config, int64_t now_ms, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_MEDIA
@@ -3441,6 +3462,12 @@ uint16_t uniffi_construct_core_checksum_func_is_generated_name(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JUDGE_FRONT_PIN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JUDGE_FRONT_PIN
+uint16_t uniffi_construct_core_checksum_func_judge_front_pin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 uint16_t uniffi_construct_core_checksum_func_knst_encode_chunks(void
@@ -3606,6 +3633,24 @@ uint16_t uniffi_construct_core_checksum_func_refusal_erases_device(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 uint16_t uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_DEFAULT_CONFIG
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_DEFAULT_CONFIG
+uint16_t uniffi_construct_core_checksum_func_route_default_config(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_INITIAL
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_INITIAL
+uint16_t uniffi_construct_core_checksum_func_route_initial(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_STEP
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_ROUTE_STEP
+uint16_t uniffi_construct_core_checksum_func_route_step(void
     
 );
 #endif
