@@ -989,6 +989,8 @@ struct CTButtonStyle: ButtonStyle {
             .background(background)
             .clipShape(CTShape.control())
             .overlay(CTShape.control().stroke(stroke, lineWidth: role == .secondary ? 1 : 0.5))
+            // A clear fill takes no taps: without this a secondary button answers on its words only.
+            .contentShape(CTShape.control())
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 
@@ -1021,6 +1023,9 @@ struct CTButtonStyle: ButtonStyle {
 
 struct CTButton: View {
     let label: String
+    /// An SF Symbol before the label, for an action the symbol names on its own (the QR of an
+    /// invite).
+    var systemImage: String?
     var role: CTButtonRole = .primary
     var isEnabled: Bool = true
     /// Work under way: a spinner beside the label, and the button holds still.
@@ -1029,12 +1034,14 @@ struct CTButton: View {
 
     init(
         label: String,
+        systemImage: String? = nil,
         role: CTButtonRole = .primary,
         isEnabled: Bool = true,
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) {
         self.label = label
+        self.systemImage = systemImage
         self.role = role
         self.isEnabled = isEnabled
         self.isLoading = isLoading
@@ -1050,6 +1057,11 @@ struct CTButton: View {
         Button(action: action) {
             HStack(spacing: CTLayout.inlinePad) {
                 if isLoading { ProgressView().tint(Color.CT.textDim) }
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(CTIcon.font(CTIcon.row, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
                 Text(label)
             }
         }

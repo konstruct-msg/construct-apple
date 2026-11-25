@@ -209,25 +209,21 @@ struct SettingsView: View {
         }
     }
 
-    /// One row, opening one sheet.
+    /// A button, not a row: it does something — opens the invite's QR and link — and a row with a
+    /// chevron promises a screen to go into (vault todo 347). Secondary: an action beside the
+    /// settings, not the step forward.
     ///
-    /// This was a [QR][COPY LINK] pair plus a caption linking to a third screen for
-    /// inviting several people. All three did the same thing — mint a v4 one-time invite —
-    /// and the split forced the user to decide which shape they wanted before seeing
-    /// either. `ContactQRCodeView` now shows both and states the rule that made the third
-    /// screen unnecessary.
+    /// One button, opening one sheet. This was a [QR][COPY LINK] pair plus a caption linking to a
+    /// third screen for inviting several people. All three did the same thing — mint a v4 one-time
+    /// invite — and the split forced the user to decide which shape they wanted before seeing
+    /// either. `ContactQRCodeView` now shows both and states the rule that made the third screen
+    /// unnecessary.
     private var shareSection: some View {
-        CTSectionGroup {
-            Button { showingQRCode = true } label: {
-                CTSettingsRow(
-                    label: NSLocalizedString("invite", comment: ""),
-                    icon: "qrcode",
-                    disclosure: true
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Settings.invite)
+        CTButton(label: NSLocalizedString("invite", comment: ""), systemImage: "qrcode", role: .secondary) {
+            showingQRCode = true
         }
+        .accessibilityIdentifier(A11y.Settings.invite)
+        .padding(.horizontal, CTLayout.edgePad)
     }
 
     private var mainSettingsSection: some View {
