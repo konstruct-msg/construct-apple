@@ -662,6 +662,11 @@ final class MessageStreamManager {
     func resume(onMessageReceived: @escaping (ChatMessage) -> Void) {
         guard isPaused else { return }
         isPaused = false
+        // `pause` closed the channels; one held now was opened for a silent push while the app
+        // was in the background, and iOS may have suspended it since. A socket killed that way
+        // tells nobody: the first call on it waits out its 15 s timeout (todo 315).
+        GRPCChannelManager.shared.invalidatePersistentClient()
+        GRPCChannelManager.shared.invalidateSealedPersistentClient()
         ConnectionStatusManager.shared.markStreamResumed()
         Log.info("MessageStream resuming", category: "MessageStream")
         connect(contactUserIds: subscriptionUserIds, onMessageReceived: onMessageReceived)
