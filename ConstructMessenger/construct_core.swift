@@ -7881,6 +7881,63 @@ public func FfiConverterTypeFirstFlightOpened_lower(_ value: FirstFlightOpened) 
 
 
 /**
+ * The pin kept for a front this device learned. `disputed`: a dial to it met another key, and
+ * none since met this one; kept for the life of the process. A disputed front is dialled last, is
+ * not a usable one, and is not deleted.
+ */
+public struct FrontHeldPin: Equatable, Hashable {
+    public var spki: String
+    public var disputed: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(spki: String, disputed: Bool) {
+        self.spki = spki
+        self.disputed = disputed
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension FrontHeldPin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFrontHeldPin: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FrontHeldPin {
+        return
+            try FrontHeldPin(
+                spki: FfiConverterString.read(from: &buf), 
+                disputed: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FrontHeldPin, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.spki, into: &buf)
+        FfiConverterBool.write(value.disputed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFrontHeldPin_lift(_ buf: RustBuffer) throws -> FrontHeldPin {
+    return try FfiConverterTypeFrontHeldPin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFrontHeldPin_lower(_ value: FrontHeldPin) -> RustBuffer {
+    return FfiConverterTypeFrontHeldPin.lower(value)
+}
+
+
+/**
  * What a chat record asks of the receiver's chat with `peer_id`: that it exist, pinned if `pin`
  * (never unpinned), its unread count cleared.
  */
@@ -11503,6 +11560,181 @@ public func FfiConverterTypeRotatedSpkBundle_lift(_ buf: RustBuffer) throws -> R
 #endif
 public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) -> RustBuffer {
     return FfiConverterTypeRotatedSpkBundle.lower(value)
+}
+
+
+public struct RouteConfig: Equatable, Hashable {
+    public var directFailThreshold: UInt32
+    public var midSessionDeathWeight: UInt32
+    public var allowDirectToVeilEscalation: Bool
+    public var veilCooldownMs: Int64
+    public var veilSoftFailThreshold: UInt32
+    public var frontDialFailThreshold: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(directFailThreshold: UInt32, midSessionDeathWeight: UInt32, allowDirectToVeilEscalation: Bool, veilCooldownMs: Int64, veilSoftFailThreshold: UInt32, frontDialFailThreshold: UInt32) {
+        self.directFailThreshold = directFailThreshold
+        self.midSessionDeathWeight = midSessionDeathWeight
+        self.allowDirectToVeilEscalation = allowDirectToVeilEscalation
+        self.veilCooldownMs = veilCooldownMs
+        self.veilSoftFailThreshold = veilSoftFailThreshold
+        self.frontDialFailThreshold = frontDialFailThreshold
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RouteConfig: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteConfig {
+        return
+            try RouteConfig(
+                directFailThreshold: FfiConverterUInt32.read(from: &buf), 
+                midSessionDeathWeight: FfiConverterUInt32.read(from: &buf), 
+                allowDirectToVeilEscalation: FfiConverterBool.read(from: &buf), 
+                veilCooldownMs: FfiConverterInt64.read(from: &buf), 
+                veilSoftFailThreshold: FfiConverterUInt32.read(from: &buf), 
+                frontDialFailThreshold: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RouteConfig, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.directFailThreshold, into: &buf)
+        FfiConverterUInt32.write(value.midSessionDeathWeight, into: &buf)
+        FfiConverterBool.write(value.allowDirectToVeilEscalation, into: &buf)
+        FfiConverterInt64.write(value.veilCooldownMs, into: &buf)
+        FfiConverterUInt32.write(value.veilSoftFailThreshold, into: &buf)
+        FfiConverterUInt32.write(value.frontDialFailThreshold, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteConfig_lift(_ buf: RustBuffer) throws -> RouteConfig {
+    return try FfiConverterTypeRouteConfig.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteConfig_lower(_ value: RouteConfig) -> RustBuffer {
+    return FfiConverterTypeRouteConfig.lower(value)
+}
+
+
+public struct RouteOutcome: Equatable, Hashable {
+    public var state: RouteState
+    public var effects: [RouteEffect]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(state: RouteState, effects: [RouteEffect]) {
+        self.state = state
+        self.effects = effects
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RouteOutcome: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteOutcome: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteOutcome {
+        return
+            try RouteOutcome(
+                state: FfiConverterTypeRouteState.read(from: &buf), 
+                effects: FfiConverterSequenceTypeRouteEffect.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RouteOutcome, into buf: inout [UInt8]) {
+        FfiConverterTypeRouteState.write(value.state, into: &buf)
+        FfiConverterSequenceTypeRouteEffect.write(value.effects, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteOutcome_lift(_ buf: RustBuffer) throws -> RouteOutcome {
+    return try FfiConverterTypeRouteOutcome.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteOutcome_lower(_ value: RouteOutcome) -> RustBuffer {
+    return FfiConverterTypeRouteOutcome.lower(value)
+}
+
+
+/**
+ * Soft failures in a row through VEIL, per lane.
+ */
+public struct RouteSoftFails: Equatable, Hashable {
+    public var auth: UInt32
+    public var sealed: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(auth: UInt32, sealed: UInt32) {
+        self.auth = auth
+        self.sealed = sealed
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RouteSoftFails: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteSoftFails: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteSoftFails {
+        return
+            try RouteSoftFails(
+                auth: FfiConverterUInt32.read(from: &buf), 
+                sealed: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RouteSoftFails, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.auth, into: &buf)
+        FfiConverterUInt32.write(value.sealed, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteSoftFails_lift(_ buf: RustBuffer) throws -> RouteSoftFails {
+    return try FfiConverterTypeRouteSoftFails.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteSoftFails_lower(_ value: RouteSoftFails) -> RustBuffer {
+    return FfiConverterTypeRouteSoftFails.lower(value)
 }
 
 
@@ -15718,6 +15950,127 @@ public func FfiConverterTypeEnvelopeKind_lower(_ value: EnvelopeKind) -> RustBuf
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What an offered pin means for a front.
+ */
+
+public enum FrontPinVerdict: Equatable, Hashable {
+    
+    /**
+     * The pin held. A dispute stays until a dial meets it.
+     */
+    case same
+    /**
+     * Not known here: pin it.
+     */
+    case learn
+    /**
+     * Known and disputed, offered under a signed new key: pin the new one.
+     */
+    case repin
+    case malformed
+    /**
+     * A public anchor has this address under another key.
+     */
+    case differsFromAnchor
+    /**
+     * Known here under another key, which no dial has disputed.
+     */
+    case differsFromHeld
+    /**
+     * New coordinates with no live signature.
+     */
+    case unsigned
+
+
+
+}
+
+#if compiler(>=6)
+extension FrontPinVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFrontPinVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = FrontPinVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FrontPinVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .same
+        
+        case 2: return .learn
+        
+        case 3: return .repin
+        
+        case 4: return .malformed
+        
+        case 5: return .differsFromAnchor
+        
+        case 6: return .differsFromHeld
+        
+        case 7: return .unsigned
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FrontPinVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .same:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .learn:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .repin:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .malformed:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .differsFromAnchor:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .differsFromHeld:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .unsigned:
+            writeInt(&buf, Int32(7))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFrontPinVerdict_lift(_ buf: RustBuffer) throws -> FrontPinVerdict {
+    return try FfiConverterTypeFrontPinVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFrontPinVerdict_lower(_ value: FrontPinVerdict) -> RustBuffer {
+    return FfiConverterTypeFrontPinVerdict.lower(value)
+}
+
+
 
 /**
  * Why a transfer was refused. Each case's message is the spec's name for it (`record_order`,
@@ -18231,6 +18584,851 @@ public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) 
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum RouteEffect: Equatable, Hashable {
+    
+    case invalidateGrpcClient
+    /**
+     * Point gRPC at this local port, or away from the tunnel.
+     */
+    case setVeilPort(port: UInt16?
+    )
+    /**
+     * Start the proxy and answer with `ProxyStarted` or `ProxyStartFailed`.
+     */
+    case requestProxyStart
+    case requestProxyStop
+    /**
+     * The rotation that follows is this front's fault: count it before the next start.
+     */
+    case demoteRelay(relay: String
+    )
+    /**
+     * Post `CooldownElapsed` at this time.
+     */
+    case scheduleCooldownEnd(atMs: Int64
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteEffect: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteEffect: FfiConverterRustBuffer {
+    typealias SwiftType = RouteEffect
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteEffect {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .invalidateGrpcClient
+        
+        case 2: return .setVeilPort(port: try FfiConverterOptionUInt16.read(from: &buf)
+        )
+        
+        case 3: return .requestProxyStart
+        
+        case 4: return .requestProxyStop
+        
+        case 5: return .demoteRelay(relay: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .scheduleCooldownEnd(atMs: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteEffect, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .invalidateGrpcClient:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .setVeilPort(port):
+            writeInt(&buf, Int32(2))
+            FfiConverterOptionUInt16.write(port, into: &buf)
+            
+        
+        case .requestProxyStart:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .requestProxyStop:
+            writeInt(&buf, Int32(4))
+        
+        
+        case let .demoteRelay(relay):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(relay, into: &buf)
+            
+        
+        case let .scheduleCooldownEnd(atMs):
+            writeInt(&buf, Int32(6))
+            FfiConverterInt64.write(atMs, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteEffect_lift(_ buf: RustBuffer) throws -> RouteEffect {
+    return try FfiConverterTypeRouteEffect.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteEffect_lower(_ value: RouteEffect) -> RustBuffer {
+    return FfiConverterTypeRouteEffect.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum RouteEvent: Equatable, Hashable {
+    
+    case rpcSucceeded(via: RouteVia, lane: RouteLane
+    )
+    /**
+     * `foreground`: a call the person waits on.
+     */
+    case rpcFailed(failure: RouteRpcFailure, via: RouteVia, foreground: Bool, lane: RouteLane
+    )
+    case streamOpened(via: RouteVia
+    )
+    case streamFailed(failure: RouteStreamFailure, via: RouteVia
+    )
+    case networkPathChanged(reachable: Bool
+    )
+    /**
+     * The new mode is the `mode` argument.
+     */
+    case veilModeChanged
+    case veilConfigChanged
+    case backgroundWake
+    case proxyStarted(relay: String, port: UInt16, restarted: Bool
+    )
+    case proxyStartFailed
+    /**
+     * A new connection to this front came up: handshake and pin.
+     */
+    case frontDialed(relay: String
+    )
+    /**
+     * A new connection to this front did not come up. One per dial, whatever it tried inside; a
+     * dial the client stopped itself is not one.
+     */
+    case frontDialFailed(relay: String
+    )
+    case cooldownElapsed
+    case manualReset
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteEvent: FfiConverterRustBuffer {
+    typealias SwiftType = RouteEvent
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteEvent {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .rpcSucceeded(via: try FfiConverterTypeRouteVia.read(from: &buf), lane: try FfiConverterTypeRouteLane.read(from: &buf)
+        )
+        
+        case 2: return .rpcFailed(failure: try FfiConverterTypeRouteRpcFailure.read(from: &buf), via: try FfiConverterTypeRouteVia.read(from: &buf), foreground: try FfiConverterBool.read(from: &buf), lane: try FfiConverterTypeRouteLane.read(from: &buf)
+        )
+        
+        case 3: return .streamOpened(via: try FfiConverterTypeRouteVia.read(from: &buf)
+        )
+        
+        case 4: return .streamFailed(failure: try FfiConverterTypeRouteStreamFailure.read(from: &buf), via: try FfiConverterTypeRouteVia.read(from: &buf)
+        )
+        
+        case 5: return .networkPathChanged(reachable: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 6: return .veilModeChanged
+        
+        case 7: return .veilConfigChanged
+        
+        case 8: return .backgroundWake
+        
+        case 9: return .proxyStarted(relay: try FfiConverterString.read(from: &buf), port: try FfiConverterUInt16.read(from: &buf), restarted: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 10: return .proxyStartFailed
+        
+        case 11: return .frontDialed(relay: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .frontDialFailed(relay: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .cooldownElapsed
+        
+        case 14: return .manualReset
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteEvent, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .rpcSucceeded(via,lane):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeRouteVia.write(via, into: &buf)
+            FfiConverterTypeRouteLane.write(lane, into: &buf)
+            
+        
+        case let .rpcFailed(failure,via,foreground,lane):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeRouteRpcFailure.write(failure, into: &buf)
+            FfiConverterTypeRouteVia.write(via, into: &buf)
+            FfiConverterBool.write(foreground, into: &buf)
+            FfiConverterTypeRouteLane.write(lane, into: &buf)
+            
+        
+        case let .streamOpened(via):
+            writeInt(&buf, Int32(3))
+            FfiConverterTypeRouteVia.write(via, into: &buf)
+            
+        
+        case let .streamFailed(failure,via):
+            writeInt(&buf, Int32(4))
+            FfiConverterTypeRouteStreamFailure.write(failure, into: &buf)
+            FfiConverterTypeRouteVia.write(via, into: &buf)
+            
+        
+        case let .networkPathChanged(reachable):
+            writeInt(&buf, Int32(5))
+            FfiConverterBool.write(reachable, into: &buf)
+            
+        
+        case .veilModeChanged:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .veilConfigChanged:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .backgroundWake:
+            writeInt(&buf, Int32(8))
+        
+        
+        case let .proxyStarted(relay,port,restarted):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(relay, into: &buf)
+            FfiConverterUInt16.write(port, into: &buf)
+            FfiConverterBool.write(restarted, into: &buf)
+            
+        
+        case .proxyStartFailed:
+            writeInt(&buf, Int32(10))
+        
+        
+        case let .frontDialed(relay):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(relay, into: &buf)
+            
+        
+        case let .frontDialFailed(relay):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(relay, into: &buf)
+            
+        
+        case .cooldownElapsed:
+            writeInt(&buf, Int32(13))
+        
+        
+        case .manualReset:
+            writeInt(&buf, Int32(14))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteEvent_lift(_ buf: RustBuffer) throws -> RouteEvent {
+    return try FfiConverterTypeRouteEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteEvent_lower(_ value: RouteEvent) -> RustBuffer {
+    return FfiConverterTypeRouteEvent.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Which channel a call went on: signed in (also the stream's connection), or sealed (no identity,
+ * a connection of its own).
+ */
+
+public enum RouteLane: Equatable, Hashable {
+    
+    case auth
+    case sealed
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteLane: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteLane: FfiConverterRustBuffer {
+    typealias SwiftType = RouteLane
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteLane {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .auth
+        
+        case 2: return .sealed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteLane, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .auth:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .sealed:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteLane_lift(_ buf: RustBuffer) throws -> RouteLane {
+    return try FfiConverterTypeRouteLane.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteLane_lower(_ value: RouteLane) -> RustBuffer {
+    return FfiConverterTypeRouteLane.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The person's choice: never through a front, when the direct path fails, or only through one.
+ */
+
+public enum RouteMode: Equatable, Hashable {
+    
+    case off
+    case auto
+    case on
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteMode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteMode: FfiConverterRustBuffer {
+    typealias SwiftType = RouteMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .off
+        
+        case 2: return .auto
+        
+        case 3: return .on
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .off:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .auto:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .on:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteMode_lift(_ buf: RustBuffer) throws -> RouteMode {
+    return try FfiConverterTypeRouteMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteMode_lower(_ value: RouteMode) -> RustBuffer {
+    return FfiConverterTypeRouteMode.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum RouteRpcFailure: Equatable, Hashable {
+    
+    case transientCancellation
+    case authRejected
+    case applicationError
+    /**
+     * The edge answered with an HTTP status and no gRPC status: a service behind it restarts.
+     */
+    case serverNotReady
+    case tlsFingerprintBlocked
+    case tlsCertExpired
+    case webTunnelBlocked
+    /**
+     * Ours, not the front's.
+     */
+    case staleLocalProxy
+    case streamTimeout
+    case transportUnknown
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteRpcFailure: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteRpcFailure: FfiConverterRustBuffer {
+    typealias SwiftType = RouteRpcFailure
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteRpcFailure {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .transientCancellation
+        
+        case 2: return .authRejected
+        
+        case 3: return .applicationError
+        
+        case 4: return .serverNotReady
+        
+        case 5: return .tlsFingerprintBlocked
+        
+        case 6: return .tlsCertExpired
+        
+        case 7: return .webTunnelBlocked
+        
+        case 8: return .staleLocalProxy
+        
+        case 9: return .streamTimeout
+        
+        case 10: return .transportUnknown
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteRpcFailure, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .transientCancellation:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .authRejected:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .applicationError:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .serverNotReady:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .tlsFingerprintBlocked:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .tlsCertExpired:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .webTunnelBlocked:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .staleLocalProxy:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .streamTimeout:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .transportUnknown:
+            writeInt(&buf, Int32(10))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteRpcFailure_lift(_ buf: RustBuffer) throws -> RouteRpcFailure {
+    return try FfiConverterTypeRouteRpcFailure.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteRpcFailure_lower(_ value: RouteRpcFailure) -> RustBuffer {
+    return FfiConverterTypeRouteRpcFailure.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum RouteState: Equatable, Hashable {
+    
+    case offline
+    case direct(fails: UInt32
+    )
+    case veilProbing
+    case veilActive(relay: String, port: UInt16, sinceMs: Int64, softFails: RouteSoftFails, frontFails: UInt32
+    )
+    case veilCooldown(untilMs: Int64
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteState: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteState: FfiConverterRustBuffer {
+    typealias SwiftType = RouteState
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteState {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .offline
+        
+        case 2: return .direct(fails: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        case 3: return .veilProbing
+        
+        case 4: return .veilActive(relay: try FfiConverterString.read(from: &buf), port: try FfiConverterUInt16.read(from: &buf), sinceMs: try FfiConverterInt64.read(from: &buf), softFails: try FfiConverterTypeRouteSoftFails.read(from: &buf), frontFails: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        case 5: return .veilCooldown(untilMs: try FfiConverterInt64.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteState, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .offline:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .direct(fails):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt32.write(fails, into: &buf)
+            
+        
+        case .veilProbing:
+            writeInt(&buf, Int32(3))
+        
+        
+        case let .veilActive(relay,port,sinceMs,softFails,frontFails):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(relay, into: &buf)
+            FfiConverterUInt16.write(port, into: &buf)
+            FfiConverterInt64.write(sinceMs, into: &buf)
+            FfiConverterTypeRouteSoftFails.write(softFails, into: &buf)
+            FfiConverterUInt32.write(frontFails, into: &buf)
+            
+        
+        case let .veilCooldown(untilMs):
+            writeInt(&buf, Int32(5))
+            FfiConverterInt64.write(untilMs, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteState_lift(_ buf: RustBuffer) throws -> RouteState {
+    return try FfiConverterTypeRouteState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteState_lower(_ value: RouteState) -> RustBuffer {
+    return FfiConverterTypeRouteState.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum RouteStreamFailure: Equatable, Hashable {
+    
+    case openTimeout
+    case midSessionTimeout
+    case writeFailed
+    case closed
+    case transportUnknown
+    case midSessionClosed
+    case midSessionUnknown
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteStreamFailure: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteStreamFailure: FfiConverterRustBuffer {
+    typealias SwiftType = RouteStreamFailure
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteStreamFailure {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .openTimeout
+        
+        case 2: return .midSessionTimeout
+        
+        case 3: return .writeFailed
+        
+        case 4: return .closed
+        
+        case 5: return .transportUnknown
+        
+        case 6: return .midSessionClosed
+        
+        case 7: return .midSessionUnknown
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteStreamFailure, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .openTimeout:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .midSessionTimeout:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .writeFailed:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .closed:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .transportUnknown:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .midSessionClosed:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .midSessionUnknown:
+            writeInt(&buf, Int32(7))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteStreamFailure_lift(_ buf: RustBuffer) throws -> RouteStreamFailure {
+    return try FfiConverterTypeRouteStreamFailure.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteStreamFailure_lower(_ value: RouteStreamFailure) -> RustBuffer {
+    return FfiConverterTypeRouteStreamFailure.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Which path a call or a stream went on.
+ */
+
+public enum RouteVia: Equatable, Hashable {
+    
+    case direct
+    case veil
+
+
+
+}
+
+#if compiler(>=6)
+extension RouteVia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRouteVia: FfiConverterRustBuffer {
+    typealias SwiftType = RouteVia
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RouteVia {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .direct
+        
+        case 2: return .veil
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RouteVia, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .direct:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .veil:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteVia_lift(_ buf: RustBuffer) throws -> RouteVia {
+    return try FfiConverterTypeRouteVia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRouteVia_lower(_ value: RouteVia) -> RustBuffer {
+    return FfiConverterTypeRouteVia.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * A failed send, as a platform reports it to `after_send_failure`.
  */
@@ -18997,6 +20195,30 @@ public func FfiConverterCallbackInterfacePowProgressCallback_lower(_ v: PowProgr
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
+    typealias SwiftType = UInt16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionInt16: FfiConverterRustBuffer {
     typealias SwiftType = Int16?
 
@@ -19301,6 +20523,30 @@ fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeEnvelopeOpened.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeFrontHeldPin: FfiConverterRustBuffer {
+    typealias SwiftType = FrontHeldPin?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeFrontHeldPin.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeFrontHeldPin.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -20978,6 +22224,31 @@ fileprivate struct FfiConverterSequenceTypePeerDeviceVerdict: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeRouteEffect: FfiConverterRustBuffer {
+    typealias SwiftType = [RouteEffect]
+
+    public static func write(_ value: [RouteEffect], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRouteEffect.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RouteEffect] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RouteEffect]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRouteEffect.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [[String]]
 
@@ -21831,6 +23102,21 @@ public func isGeneratedName(name: String, userId: String) -> Bool  {
 })
 }
 /**
+ * What a pin offered for a front means. `anchor`: the pin a public anchor (the signed
+ * manifest, the binary) has for the address. `vouched`: the offered coordinates carry the
+ * relay-config key's signature and have not expired.
+ */
+public func judgeFrontPin(anchor: String?, held: FrontHeldPin?, offered: String, vouched: Bool) -> FrontPinVerdict  {
+    return try!  FfiConverterTypeFrontPinVerdict_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_judge_front_pin(
+        FfiConverterOptionString.lower(anchor),
+        FfiConverterOptionTypeFrontHeldPin.lower(held),
+        FfiConverterString.lower(offered),
+        FfiConverterBool.lower(vouched),$0
+    )
+})
+}
+/**
  * `payload` split into frames of at most 3770 bytes, each carrying the whole body's length;
  * an empty body is one frame. Null when it needs more than 256 frames, or `message_id` is not
  * a UUID.
@@ -22154,6 +23440,38 @@ public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationB
     return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(
         FfiConverterData.lower(keys),$0
+    )
+})
+}
+/**
+ * Which path the next call takes: one rule for every client. `route_step` is pure — the
+ * client keeps the state, applies the effects in order, and posts what it sees.
+ */
+public func routeDefaultConfig() -> RouteConfig  {
+    return try!  FfiConverterTypeRouteConfig_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_route_default_config($0
+    )
+})
+}
+/**
+ * Where a fresh process starts.
+ */
+public func routeInitial(mode: RouteMode, reachable: Bool) -> RouteState  {
+    return try!  FfiConverterTypeRouteState_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_route_initial(
+        FfiConverterTypeRouteMode_lower(mode),
+        FfiConverterBool.lower(reachable),$0
+    )
+})
+}
+public func routeStep(state: RouteState, event: RouteEvent, mode: RouteMode, config: RouteConfig, nowMs: Int64) -> RouteOutcome  {
+    return try!  FfiConverterTypeRouteOutcome_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_route_step(
+        FfiConverterTypeRouteState_lower(state),
+        FfiConverterTypeRouteEvent_lower(event),
+        FfiConverterTypeRouteMode_lower(mode),
+        FfiConverterTypeRouteConfig_lower(config),
+        FfiConverterInt64.lower(nowMs),$0
     )
 })
 }
@@ -22667,6 +23985,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_is_generated_name() != 37415) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_judge_front_pin() != 47825) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_knst_encode_chunks() != 7537) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22749,6 +24070,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_route_default_config() != 62957) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_route_initial() != 17170) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_route_step() != 31059) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_seal_media() != 21220) {
