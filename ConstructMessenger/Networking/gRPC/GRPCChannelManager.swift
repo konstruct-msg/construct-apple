@@ -626,6 +626,11 @@ final class GRPCChannelManager: Sendable {
         return client
     }
 
+    /// Whether a QUIC connection to the server is held.
+    var holdsEngineQuicConnection: Bool {
+        _eqConnLock.withLock { _eqConnBox is PersistentConnEngineQuic }
+    }
+
     /// Gracefully shuts down the engine-QUIC persistent connection.
     func invalidateEngineQuicConnection() {
         _eqConnLock.lock()

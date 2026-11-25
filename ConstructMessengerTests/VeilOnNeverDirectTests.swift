@@ -65,6 +65,38 @@ final class VeilOnNeverDirectTests: XCTestCase {
         XCTAssertThrowsError(try manager.acquireSealedPersistentClient()) { XCTAssertTrue($0 is VeilTunnelNotUp) }
     }
 
+    #if os(iOS)
+    /// The stream that moves into the tunnel takes the QUIC connection it left with it
+    /// (2026-11-25: under Auto it stayed up beside the tunnel, and `on` chosen later kept it).
+    func testAStreamOpenedThroughTheTunnelLeavesNoQuicConnection() async throws {
+        let manager = GRPCChannelManager.shared
+        try XCTSkipIf(manager.veilProxyPort() != nil, "a tunnel is up in this host; the case needs none")
+        UserDefaults.standard.set(VeilMode.auto.rawValue, forKey: VeilProxyStore.modeKey)
+        _ = try XCTUnwrap(manager.acquireEngineQuicChannel())
+        XCTAssertTrue(manager.holdsEngineQuicConnection)
+        manager.setDirectProxyPort(1)
+        defer {
+            manager.setDirectProxyPort(nil)
+            manager.invalidateEngineQuicConnection()
+        }
+        // Nothing listens on port 1: the open itself goes nowhere.
+        let (outbound, outboundCont) = AsyncStream<Shared_Proto_Services_V1_MessageStreamRequest>.makeStream()
+        let (_, events) = AsyncStream<StreamEvent>.makeStream()
+        let opening = Task {
+            try? await GRPCStreamTransport().open(
+                outbound: outbound, metricsLabel: "test", useH2Fallback: true,
+                onAccepted: { _ in }, events: events
+            )
+        }
+        for _ in 0..<100 where manager.holdsEngineQuicConnection {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertFalse(manager.holdsEngineQuicConnection)
+        outboundCont.finish()
+        opening.cancel()
+    }
+    #endif
+
     func testWithAutoAndNoTunnelTheDirectPathStillOpens() throws {
         UserDefaults.standard.set(VeilMode.auto.rawValue, forKey: VeilProxyStore.modeKey)
         let manager = GRPCChannelManager.shared
