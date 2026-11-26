@@ -363,6 +363,14 @@ struct UserProfileView: View {
                         destination: ChatMediaGalleryView(chatId: chatId)
                     )
                     .accessibilityIdentifier(A11y.Profile.chatMedia)
+                    if CallsFeature.isEnabled {
+                        ConstructNavRow(
+                            icon: "phone",
+                            title: "profile_calls",
+                            destination: CallHistoryView(peerUserId: userId)
+                        )
+                        .accessibilityIdentifier(A11y.Profile.calls)
+                    }
                 }
             }
         }

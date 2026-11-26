@@ -880,6 +880,7 @@
 "call_row_failed" = "Զանգը ձախողվեց";
 "call_row_incoming" = "Մուտքային զանգ";
 "call_row_outgoing" = "Ելքային զանգ";
+"profile_calls" = "Զանգեր";
 "call_failed" = "Ձախողված";
 "call_ended" = "Զանգն ավարտված է";
 "call_busy" = "Զբաղված";

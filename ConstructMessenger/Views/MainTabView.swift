@@ -94,9 +94,11 @@ struct MainTabView: View {
     /// One tab view at every width (wave 5.5c, owner 2026-10-08): a tab bar on the phone, the
     /// system sidebar on the iPad, which folds into a tab bar of its own. Every tab carries a
     /// title as well as a symbol — a vertical bar (iPhone Duo) and the sidebar show the title.
-    /// SwiftUI loads each tab's content lazily on first selection. Tab values match the legacy
-    /// indices: chats 0, synaps 1, calls 2 (when enabled), settings 3-or-2. A conversation hides
-    /// the tab bar itself (`ChatView`, `hidesTabBar()`).
+    /// SwiftUI loads each tab's content lazily on first selection. Tab values: chats 0, synaps 1,
+    /// notes 2, settings 3. Notes took the place of Recents on 2026-11-26 (owner): notes were a row
+    /// in Settings though they are not a setting, and calls now stand in their conversations
+    /// (`CallTranscript`); a contact's calls are in their card. A conversation hides the tab bar
+    /// itself (`ChatView`, `hidesTabBar()`).
     @ViewBuilder
     private var callContent: some View {
         @Bindable var vm = chatsViewModel
@@ -117,16 +119,17 @@ struct MainTabView: View {
                     .accessibilityIdentifier(A11y.Tab.synaps)
             }
 
-            if CallsFeature.isEnabled {
-                Tab(value: 2) {
-                    CallHistoryView()
-                } label: {
-                    Label(NSLocalizedString("calls_recents", comment: ""), systemImage: "phone")
-                        .accessibilityIdentifier(A11y.Tab.calls)
+            Tab(value: 2) {
+                NavigationStack {
+                    NotesView()
                 }
+                .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("notes_title", comment: ""), systemImage: "note.text")
+                    .accessibilityIdentifier(A11y.Tab.notes)
             }
 
-            Tab(value: settingsTab) {
+            Tab(value: 3) {
                 SettingsView()
                     .environment(chatsViewModel)
             } label: {
@@ -139,9 +142,6 @@ struct MainTabView: View {
         .toolbarBackground(.hidden, for: .tabBar)
         .ctBackground()
     }
-
-    /// Settings tab value — shifts to 3 when the calls tab is present, else 2.
-    private var settingsTab: Int { CallsFeature.isEnabled ? 3 : 2 }
 
     // MARK: - Call state helpers
 

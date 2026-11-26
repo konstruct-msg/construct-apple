@@ -784,6 +784,7 @@
 "call_row_failed" = "通話失敗";
 "call_row_incoming" = "着信";
 "call_row_outgoing" = "発信";
+"profile_calls" = "通話";
 "call_failed" = "失敗";
 "call_ended" = "通話終了";
 "call_busy" = "お話し中";
