@@ -40,7 +40,9 @@ struct ChatsListView: View {
             NavigationStack(path: $navigationPath) {
                 listColumn
                     .navigationDestination(for: String.self) { chatId in
-                        if let conversation = ChatsLive.shared.conversation(chatId) {
+                        if chatId == ChatsListEntry.notesId {
+                            NotesView()
+                        } else if let conversation = ChatsLive.shared.conversation(chatId) {
                             // Messenger convention: the bottom tab bar yields to the message
                             // input bar while inside a conversation — `ChatView` hides it.
                             ChatView(conversation: conversation, context: viewContext)
@@ -54,7 +56,11 @@ struct ChatsListView: View {
     /// one per chat so switching chats starts fresh.
     @ViewBuilder
     private var chatDetail: some View {
-        if let chatId = selectedChatId, let conversation = ChatsLive.shared.conversation(chatId) {
+        if selectedChatId == ChatsListEntry.notesId {
+            NavigationStack {
+                NotesView()
+            }
+        } else if let chatId = selectedChatId, let conversation = ChatsLive.shared.conversation(chatId) {
             NavigationStack {
                 ChatView(conversation: conversation, context: viewContext)
             }
@@ -177,8 +183,37 @@ struct ChatsListView: View {
         horizontalSizeClass == .regular && selectedChatId == chat.id
     }
 
+    private var isNotesOpenBeside: Bool {
+        horizontalSizeClass == .regular && selectedChatId == ChatsListEntry.notesId
+    }
+
+    /// The chats with the Notes row among them (`ChatsListEntry.merged`). While searching, the row
+    /// stays only when "Notes" answers the query; the notes' own words are searched in Notes.
+    private func listEntries(_ chats: [ChatRecord]) -> [ChatsListEntry] {
+        let entries = ChatsListEntry.merged(chats, newestNote: NotesLatest.shared.latest())
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty,
+              !NSLocalizedString("notes_title", comment: "").localizedCaseInsensitiveContains(query) else { return entries }
+        return entries.filter { if case .notes = $0 { return false } else { return true } }
+    }
+
+    private func notesRow(_ newest: Note?, isFirst: Bool) -> some View {
+        Button {
+            open(ChatsListEntry.notesId)
+        } label: {
+            NotesRowView(newest: newest, isSelected: isNotesOpenBeside)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(A11y.Chats.notes)
+        .accessibilityAddTraits(isNotesOpenBeside ? .isSelected : [])
+        .listRowBackground(isNotesOpenBeside ? Color.CT.bgMsg : Color.clear)
+        .listRowSeparatorTint(Color.CT.noise)
+        .listRowSeparator(isFirst ? .hidden : .automatic, edges: .top)
+    }
+
     private func chatList(chats renderedChats: [ChatRecord]) -> some View {
-        List {
+        let entries = listEntries(renderedChats)
+        return List {
             if recoveryViewModel.reminder != .none {
                 RecoveryReminderRow(
                     reminder: recoveryViewModel.reminder,
@@ -195,8 +230,11 @@ struct ChatsListView: View {
                     .listRowSeparator(.hidden)
             }
 
-            if !renderedChats.isEmpty {
-                ForEach(renderedChats) { chat in
+            ForEach(entries) { entry in
+                switch entry {
+                case .notes(let newest):
+                    notesRow(newest, isFirst: entry.id == entries.first?.id)
+                case .chat(let chat):
                     Button {
                         open(chat.id)
                     } label: {
@@ -211,7 +249,7 @@ struct ChatsListView: View {
                     .listRowSeparatorTint(Color.CT.noise)
                     // The first row's top hairline sat under a spacer row while the list scrolled
                     // under a floating header; with the system bar it would be the bar's edge.
-                    .listRowSeparator(chat.id == renderedChats.first?.id ? .hidden : .automatic, edges: .top)
+                    .listRowSeparator(chat.id == entries.first?.id ? .hidden : .automatic, edges: .top)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             if selectedChatId == chat.id { selectedChatId = nil }

@@ -44,7 +44,6 @@ enum A11y {
     enum Tab {
         static let chats    = "tab.chats"
         static let synaps   = "tab.synaps"
-        static let notes    = "tab.notes"
         static let settings = "tab.settings"
     }
 
@@ -52,6 +51,8 @@ enum A11y {
 
     enum Chats {
         static let list           = "chats.list"
+        /// The Notes row among the chats (`ChatsListEntry.notes`).
+        static let notes          = "chats.notes"
         static let search         = "chats.search"
         static let scanQR         = "chats.scanQR"
         static let connectionDot  = "chats.connectionDot"

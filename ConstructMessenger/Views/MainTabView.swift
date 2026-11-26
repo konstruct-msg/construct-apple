@@ -95,10 +95,10 @@ struct MainTabView: View {
     /// system sidebar on the iPad, which folds into a tab bar of its own. Every tab carries a
     /// title as well as a symbol — a vertical bar (iPhone Duo) and the sidebar show the title.
     /// SwiftUI loads each tab's content lazily on first selection. Tab values: chats 0, synaps 1,
-    /// notes 2, settings 3. Notes took the place of Recents on 2026-11-26 (owner): notes were a row
-    /// in Settings though they are not a setting, and calls now stand in their conversations
-    /// (`CallTranscript`); a contact's calls are in their card. A conversation hides the tab bar
-    /// itself (`ChatView`, `hidesTabBar()`).
+    /// settings 2. Recents went on 2026-11-26 (owner): calls stand in their conversations
+    /// (`CallTranscript`), a contact's calls are in their card. Notes are a row of the chat list
+    /// (`ChatsListEntry`) — a tab of their own was tried for a day. A conversation hides the tab
+    /// bar itself (`ChatView`, `hidesTabBar()`).
     @ViewBuilder
     private var callContent: some View {
         @Bindable var vm = chatsViewModel
@@ -120,16 +120,6 @@ struct MainTabView: View {
             }
 
             Tab(value: 2) {
-                NavigationStack {
-                    NotesView()
-                }
-                .environment(chatsViewModel)
-            } label: {
-                Label(NSLocalizedString("notes_title", comment: ""), systemImage: "note.text")
-                    .accessibilityIdentifier(A11y.Tab.notes)
-            }
-
-            Tab(value: 3) {
                 SettingsView()
                     .environment(chatsViewModel)
             } label: {
