@@ -12,7 +12,7 @@ import UIKit
 import AppKit
 #endif
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 
 final class MediaServiceClient: Sendable {

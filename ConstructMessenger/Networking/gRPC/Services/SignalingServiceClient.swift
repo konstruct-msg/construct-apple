@@ -8,7 +8,7 @@
 
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 /// Thin wrapper around `shared.proto.signaling.v1.SignalingService`.
 ///
