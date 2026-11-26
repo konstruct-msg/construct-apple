@@ -27,6 +27,7 @@ cd "$ROOT" || exit 1
 # name | needs (a command that must exist, or -) | command
 CHECKS=(
   "localization|-|./scripts/check_localization.sh"
+  "brand-name|python3|python3 -I scripts/check_brand_name.py self-test && python3 -I scripts/check_brand_name.py"
   "ui-tokens|-|./scripts/check_ui_tokens.sh"
   "appstore-metadata|-|./scripts/check_appstore_metadata.sh"
   "build-versions|-|./scripts/check_build_versions.sh"
