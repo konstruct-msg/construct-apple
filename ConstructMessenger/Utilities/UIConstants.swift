@@ -416,9 +416,16 @@ struct OutgoingBubbleShape: Shape {
 // MARK: - QR Code Constants
 
 struct QRCodeSize {
-    static func standard(in containerWidth: CGFloat) -> CGFloat {
-        min(containerWidth * 0.8, 350)
+    /// The side of a QR code that fits the width and, with its paper and a margin, the visible
+    /// height — so a camera can see all of it at once. iPhone in landscape is the case: 352 pt of
+    /// code in about 310 pt of screen, and no scroll position showed it whole.
+    static func standard(in containerWidth: CGFloat, visibleHeight: CGFloat = .infinity) -> CGFloat {
+        max(minimum, min(containerWidth * 0.8, maximum, visibleHeight - 2 * padding - 2 * heightMargin))
     }
+    static let maximum: CGFloat = 350
+    /// A floor, so a very short window still gets a code worth pointing a camera at. Not measured.
+    static let minimum: CGFloat = 160
+    static let heightMargin: CGFloat = 12
     static let padding: CGFloat = 20
     static let cornerRadius: CGFloat = 20
     static let shadowRadius: CGFloat = 10

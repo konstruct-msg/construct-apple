@@ -21,6 +21,8 @@ import CoreImage.CIFilterBuiltins
 
 struct ContactQRCodeView: View {
     @Environment(\.containerWidth) private var containerWidth
+    /// The scroll view's visible height: the QR must fit in it whole (`QRCodeSize.standard`).
+    @State private var visibleHeight: CGFloat = .infinity
     let userId: String
     let username: String
 
@@ -98,6 +100,10 @@ struct ContactQRCodeView: View {
                     footer
                 }
             }
+            // The area not under the title bar or the home indicator: content scrolls beneath both.
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.height - $0.safeAreaInsets.top - $0.safeAreaInsets.bottom
+            } action: { visibleHeight = $0 }
         }
         .screenTitle(NSLocalizedString("invite", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
@@ -125,7 +131,7 @@ struct ContactQRCodeView: View {
 
     @ViewBuilder
     private var qrBlock: some View {
-        let size = QRCodeSize.standard(in: containerWidth)
+        let size = QRCodeSize.standard(in: containerWidth, visibleHeight: visibleHeight)
 
         if qrPayloadBytes != nil, let qrImage {
             // White bg required for camera readability; bordered with CT noise
