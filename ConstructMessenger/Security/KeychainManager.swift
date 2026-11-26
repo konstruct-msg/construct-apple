@@ -5,6 +5,7 @@
 //  Created by Maxim Eliseyev on 13.12.2025.
 //
 
+import LocalAuthentication
 import Security
 import Foundation
 
@@ -698,22 +699,60 @@ final class KeychainManager: Sendable {
     /// keychain is still in the login one, and a listing must not lose it. Attributes only, so
     /// the login keychain lists without a prompt.
     private func accounts(withPrefix prefix: String) -> [String] {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-        var found = Self.accounts(matching: KeychainPlacement.current(query))
+        var found = Self.listingQueries().flatMap { Self.accounts(matching: KeychainPlacement.current($0)) }
         if KeychainPlacement.hasLegacyKeychain {
+            // The login keychain ignores `kSecAttrAccessible`, so it is listed whole. It holds
+            // nothing behind user presence: the recovery phrase is never stored there.
+            let legacyQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecMatchLimit as String: kSecMatchLimitAll,
+                kSecReturnAttributes as String: true
+            ]
             let moved = Set(found)
-            found += Self.accounts(matching: KeychainPlacement.legacy(query)).filter { !moved.contains($0) }
+            found += Self.accounts(matching: KeychainPlacement.legacy(legacyQuery)).filter { !moved.contains($0) }
         }
         return found.filter { $0.hasPrefix(prefix) }
     }
 
+    /// The accessibility classes this app's own items are written with, today and by older
+    /// builds (`WhenUnlocked` is what an add without `kSecAttrAccessible` got).
+    /// `WhenPasscodeSetThisDeviceOnly` is left out on purpose: it is the recovery phrase held
+    /// behind `.userPresence` (`RecoveryPhraseVault`).
+    nonisolated(unsafe) static let listedAccessibilities: [CFString] = [
+        kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        kSecAttrAccessibleAfterFirstUnlock,
+        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        kSecAttrAccessibleWhenUnlocked
+    ]
+
+    /// One query per class in `listedAccessibilities`, never one for every item. On a device, a
+    /// match-all that reaches an item behind `.userPresence` asks for Face ID or the passcode
+    /// synchronously, even for attributes. At launch that is the main thread during scene
+    /// creation, where no prompt can appear: on 2026-11-26 an iPad holding a recovery phrase
+    /// showed a white screen and was killed by the scene-create watchdog (0x8BADF00D) on every
+    /// launch. The simulator lists such an item without asking, so it never showed there.
+    /// The context forbids a prompt in case a listed class ever holds such an item.
+    static func listingQueries() -> [[String: Any]] {
+        listedAccessibilities.map { accessible in
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            return [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecMatchLimit as String: kSecMatchLimitAll,
+                kSecReturnAttributes as String: true,
+                kSecAttrAccessible as String: accessible,
+                kSecUseAuthenticationContext as String: context
+            ]
+        }
+    }
+
     private static func accounts(matching query: [String: Any]) -> [String] {
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecInteractionNotAllowed {
+            Log.fault("Keychain listing refused without a prompt: an item of a listed class needs authentication, and that class is missing from the listing", category: "Keychain")
+        }
+        guard status == errSecSuccess,
               let items = result as? [[String: Any]] else { return [] }
         return items.compactMap { $0[kSecAttrAccount as String] as? String }
     }
