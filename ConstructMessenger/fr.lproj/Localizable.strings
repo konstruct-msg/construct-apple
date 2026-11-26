@@ -871,6 +871,7 @@
 "call_row_failed" = "Échec de l’appel";
 "call_row_incoming" = "Appel entrant";
 "call_row_outgoing" = "Appel sortant";
+"profile_calls" = "Appels";
 "call_failed" = "Échec";
 "call_ended" = "Appel terminé";
 "call_busy" = "Occupé";

@@ -44,7 +44,7 @@ enum A11y {
     enum Tab {
         static let chats    = "tab.chats"
         static let synaps   = "tab.synaps"
-        static let calls    = "tab.calls"
+        static let notes    = "tab.notes"
         static let settings = "tab.settings"
     }
 
@@ -121,6 +121,8 @@ enum A11y {
     enum Profile {
         /// The row into the chat's media gallery (todo 327).
         static let chatMedia = "profile.chatMedia"
+        /// The row into the calls with this person (`CallHistoryView(peerUserId:)`).
+        static let calls = "profile.calls"
     }
 
     // MARK: - Pairing
@@ -149,7 +151,6 @@ enum A11y {
 
     /// Settings → Notes.
     enum Notes {
-        static let open = "settings.notes"
         static let new = "notes.new"
         static let editor = "notes.editor"
         static let save = "notes.save"

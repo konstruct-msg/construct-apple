@@ -882,6 +882,7 @@
 "call_row_failed" = "Звонок не состоялся";
 "call_row_incoming" = "Входящий звонок";
 "call_row_outgoing" = "Исходящий звонок";
+"profile_calls" = "Звонки";
 "call_failed" = "Не состоялся";
 "call_ended" = "Звонок завершён";
 "call_busy" = "Занято";

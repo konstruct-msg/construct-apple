@@ -2,34 +2,46 @@
 //  CallHistoryView.swift
 //  Construct Messenger
 //
-//  Recent calls screen — Construct Terminal design. The iOS Calls tab, and Desktop's Calls window
-//  (DesktopWindowID.calls, since 2026-10-29).
+//  The call log — Construct Terminal design. Desktop's Calls window (DesktopWindowID.calls, since
+//  2026-10-29), and on iOS one person's calls, from their card. The iOS Calls tab gave its place
+//  to Notes on 2026-11-26: a call stands in its conversation now (`CallTranscript`).
 //
 
 import SwiftUI
 
 struct CallHistoryView: View {
+    /// Only the calls with this account, pushed from their card; nil — every call, as Desktop's
+    /// Calls window shows them, in a navigation stack of its own.
+    var peerUserId: String? = nil
+
     /// The log as last read from the call store, read again on each of its changes.
     @State private var records: [CallRecord] = []
     @State private var selectedFilter: CallHistoryFilter = .all
     @State private var showClearConfirm = false
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle(NSLocalizedString("calls_recents", comment: ""))
-                .inlineNavTitle()
-                .toolbar {
-                    if !records.isEmpty {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button(role: .destructive) { showClearConfirm = true } label: {
-                                Label(NSLocalizedString("calls_clear", comment: ""), systemImage: "trash")
-                            }
-                            .barItem()
+        if peerUserId == nil {
+            NavigationStack { titled }
+        } else {
+            titled
+        }
+    }
+
+    private var titled: some View {
+        content
+            .navigationTitle(NSLocalizedString(peerUserId == nil ? "calls_recents" : "profile_calls", comment: ""))
+            .inlineNavTitle()
+            .toolbar {
+                // Clearing is the whole log's; one person's card clears nothing of anyone else's.
+                if peerUserId == nil, !records.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(role: .destructive) { showClearConfirm = true } label: {
+                            Label(NSLocalizedString("calls_clear", comment: ""), systemImage: "trash")
                         }
+                        .barItem()
                     }
                 }
-        }
+            }
     }
 
     private var content: some View {
@@ -93,9 +105,15 @@ struct CallHistoryView: View {
 
     private static let shownLimit = 200
 
+    /// The newest `shownLimit` calls — with `peer` only, when one is named.
+    static func shown(_ store: any CallStore, peer: String?) throws -> [CallRecord] {
+        guard let peer else { return try store.calls(limit: shownLimit) }
+        return Array(try store.calls(limit: Int(Int32.max)).filter { $0.peerUserId == peer }.prefix(shownLimit))
+    }
+
     private func loadRecords() {
         do {
-            records = try LocalRepositories.calls.calls(limit: Self.shownLimit)
+            records = try Self.shown(LocalRepositories.calls, peer: peerUserId)
         } catch {
             Log.error("Failed to read call history: \(error)", category: "CallHistory")
         }

@@ -880,6 +880,7 @@
 "call_row_failed" = "Call failed";
 "call_row_incoming" = "Incoming call";
 "call_row_outgoing" = "Outgoing call";
+"profile_calls" = "Calls";
 "call_failed" = "Failed";
 "call_ended" = "Call Ended";
 "call_busy" = "Busy";
