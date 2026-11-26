@@ -8,7 +8,7 @@
 
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 
 /// Why registration could not be attempted, as opposed to why it failed.

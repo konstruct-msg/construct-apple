@@ -1,6 +1,6 @@
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 /// Executes gRPC RPCs with retry, auth refresh, client-side timeout, and VEIL failover.
 ///

@@ -1,6 +1,6 @@
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 /// Manages the gRPC channel shared by all service clients.
 /// All services route through a single Envoy proxy endpoint.

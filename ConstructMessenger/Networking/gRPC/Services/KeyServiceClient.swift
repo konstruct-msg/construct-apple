@@ -8,7 +8,7 @@
 import Foundation
 import CoreData
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 // MARK: - Key Transparency result store
 

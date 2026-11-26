@@ -7,7 +7,7 @@
 
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 // Defined here as AuthAPI.swift is removed
 struct ChallengeResponse: Codable {

@@ -9,7 +9,7 @@
 
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 final class MLSServiceClient: Sendable {
     static let shared = MLSServiceClient()

@@ -11,7 +11,7 @@ import Foundation
 import UIKit
 #endif
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2TransportServices
 
 /// Manages bidirectional gRPC MessageStream for real-time messaging
 
