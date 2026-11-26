@@ -34,14 +34,22 @@ final class CallKitProvider: NSObject, CXProviderDelegate, @unchecked Sendable {
     }
 
     private override init() {
+        self.provider = CXProvider(configuration: Self.configuration())
+        super.init()
+        provider.setDelegate(self, queue: nil)
+    }
+
+    /// A call stays out of the Phone app's Recents. That list is the system's, synced through iCloud
+    /// to every device on the Apple ID, and it holds who called whom and when — a call history the
+    /// server never keeps. The app lists calls itself. `includesCallsInRecents` is true unless set.
+    static func configuration() -> CXProviderConfiguration {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
         config.maximumCallGroups = 1
         config.supportedHandleTypes = [.generic]
-        self.provider = CXProvider(configuration: config)
-        super.init()
-        provider.setDelegate(self, queue: nil)
+        config.includesCallsInRecents = false
+        return config
     }
 
     /// Thread-safe synchronous variant for use directly inside PushKit's
