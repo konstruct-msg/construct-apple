@@ -190,14 +190,27 @@ final class TranscriptWindow {
 
     // MARK: - What is never a bubble
 
-    /// The transcript's rows: regular content that is neither a leaked control signal nor a text
-    /// delivery receipt from an old build. The managed rows were filtered by `contentTypeRaw == 0`
-    /// in the fetch and by `isControlArtifact` / `isServiceArtifact` after it — the same tests.
+    /// The transcript's rows (`MessageRecord.isListed`).
     static func visible(_ records: [MessageRecord]) -> [MessageRecord] {
-        records.filter { record in
-            guard record.contentType == .regular else { return false }
-            let text = LocalMessagePayload.decode(record.body).displayString
+        records.filter(\.isListed)
+    }
+}
+
+extension MessageRecord {
+    /// Whether the row is shown — in the transcript, and as the chat list's line: regular content
+    /// that is neither a leaked control signal nor a text delivery receipt from an old build, or a
+    /// call (`CallTranscript`). One rule for both: until 2026-11-26 the list wrote its own copy.
+    /// The managed rows were filtered by `contentTypeRaw == 0` in the fetch and by
+    /// `isControlArtifact` / `isServiceArtifact` after it — the same tests.
+    var isListed: Bool {
+        switch contentType {
+        case .call:
+            return true
+        case .regular:
+            let text = payload.displayString
             return !MessageContentType.isControlPayload(text) && !MessageContentType.isLegacyDeliveryReceipt(text)
+        case .profileShare, .media, .sessionPing, .sessionReady, .sessionReset:
+            return false
         }
     }
 }

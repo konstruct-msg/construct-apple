@@ -218,9 +218,9 @@ private struct CallHistoryRow: View {
     var body: some View {
         Button(action: onCallBack) {
             HStack(spacing: 12) {
-                Image(systemName: directionSymbol)
+                Image(systemName: record.directionSymbol)
                     .font(CTIcon.font(CTIcon.caption, weight: .semibold))
-                    .foregroundStyle(directionColor)
+                    .foregroundStyle(record.statusColor)
                     .frame(width: 20, alignment: .center)
                     .accessibilityHidden(true)
 
@@ -287,26 +287,6 @@ private struct CallHistoryRow: View {
             }
         }
         #endif
-    }
-
-    private var directionSymbol: String {
-        switch record.direction {
-        case .outgoing:
-            return "phone.arrow.up.right"
-        case .incoming:
-            return "phone.arrow.down.left"
-        }
-    }
-
-    private var directionColor: Color {
-        switch record.status {
-        case .missed, .declined:
-            return Color.CT.danger
-        case .completed:
-            return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
-        case .failed:
-            return .orange
-        }
     }
 
     private var statusLabel: String {

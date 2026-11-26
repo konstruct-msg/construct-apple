@@ -873,6 +873,13 @@
 "call_incoming" = "Մուտքային";
 "call_missed" = "Բաց թողնված";
 "call_declined" = "Մերժված";
+/* A call in the conversation (CallTranscript) */
+"call_row_missed" = "Բաց թողնված զանգ";
+"call_row_unanswered" = "Պատասխան չկա";
+"call_row_declined" = "Մերժված զանգ";
+"call_row_failed" = "Զանգը ձախողվեց";
+"call_row_incoming" = "Մուտքային զանգ";
+"call_row_outgoing" = "Ելքային զանգ";
 "call_failed" = "Ձախողված";
 "call_ended" = "Զանգն ավարտված է";
 "call_busy" = "Զբաղված";

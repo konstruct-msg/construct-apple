@@ -23,6 +23,9 @@ enum MessageContentType: Int16 {
     case profileShare = 1
     /// Media attachment message.
     case media        = 2
+    /// A call, in the conversation it was with: written here when the call ends, never sent. The
+    /// row holds no call facts — its id names the call log's record (`CallTranscript`).
+    case call         = 3
     /// Session ping control signal (ephemeral, not persisted).
     case sessionPing  = 10
     /// Session-ready handshake confirmation (ephemeral, not persisted).
@@ -34,7 +37,7 @@ enum MessageContentType: Int16 {
     var isEphemeral: Bool {
         switch self {
         case .sessionPing, .sessionReady, .sessionReset, .profileShare: return true
-        case .regular, .media: return false
+        case .regular, .media, .call: return false
         }
     }
 

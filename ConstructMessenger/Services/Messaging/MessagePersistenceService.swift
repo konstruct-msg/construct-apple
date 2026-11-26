@@ -412,8 +412,9 @@ class MessagePersistenceService {
         }
     }
 
-    /// Align the chat's list line with its newest message a list may show — a regular message
-    /// that is not a leaked control or service row — or clear it when there is none. Returns
+    /// Align the chat's list line with its newest message a list may show
+    /// (`MessageRecord.isListed`: a regular message that is not a leaked control or service row, or
+    /// a call) — or clear it when there is none. Returns
     /// whether it wrote. The self-heal for a preview a writer missed or a stamp frozen in the
     /// future, and the first preview of a chat a history import wrote messages into.
     @discardableResult
@@ -428,7 +429,7 @@ class MessagePersistenceService {
             setPreview(ofChat: chat.id, text: nil, at: nil, chats: chats)
             return true
         }
-        let preview = newest.payload.previewHint
+        let preview = CallTranscript.preview(of: newest) ?? newest.payload.previewHint
         if let current = chat.lastMessageTime,
            abs(current.timeIntervalSince(newest.timestamp)) < 0.5,
            (chat.lastMessageText ?? "") == Chat.formatPreviewText(preview) {
@@ -445,11 +446,7 @@ class MessagePersistenceService {
         let page = 8
         var before: (orderKey: String, id: String)?
         while let rows = try? store.messages(inChat: chatId, before: before, limit: page), !rows.isEmpty {
-            if let shown = rows.last(where: { row in
-                guard row.contentType == .regular, !row.contentType.isEphemeral else { return false }
-                let text = row.payload.displayString
-                return !MessageContentType.isControlPayload(text) && !MessageContentType.isLegacyDeliveryReceipt(text)
-            }) {
+            if let shown = rows.last(where: \.isListed) {
                 return shown
             }
             guard rows.count == page, let oldest = rows.first else { return nil }

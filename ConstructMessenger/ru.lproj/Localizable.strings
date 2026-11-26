@@ -875,6 +875,13 @@
 "call_incoming" = "Входящий";
 "call_missed" = "Пропущенный";
 "call_declined" = "Отклонённый";
+/* A call in the conversation (CallTranscript) */
+"call_row_missed" = "Пропущенный звонок";
+"call_row_unanswered" = "Без ответа";
+"call_row_declined" = "Отклонённый звонок";
+"call_row_failed" = "Звонок не состоялся";
+"call_row_incoming" = "Входящий звонок";
+"call_row_outgoing" = "Исходящий звонок";
 "call_failed" = "Не состоялся";
 "call_ended" = "Звонок завершён";
 "call_busy" = "Занято";

@@ -442,7 +442,10 @@ enum AccountWipeKeys {
         "history_sync_body_local_network_mac",
         // Constants nothing reads or writes (`APIConstants`).
         "last_username",
-        "user_id"
+        "user_id",
+        // The id prefix of a call's row in the transcript (`CallTranscript`) — a message id, not a
+        // key; the rows go with the message store.
+        "call-"
     ]
 
     /// Apply the wipe to `defaults`.
