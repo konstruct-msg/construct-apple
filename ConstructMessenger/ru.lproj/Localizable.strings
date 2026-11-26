@@ -7,7 +7,7 @@
 "editor_rotate" = "Повернуть";
 "editor_mirror" = "Отразить";
 "unknown" = "Неизвестно";
-"construct_title" = "КОНСТРУКТ";
+"construct_title" = "KONSTRUCT";
 
 // MARK: - Loading Screen
 "app_loading_state" = "Инициализация защищённого состояния";
