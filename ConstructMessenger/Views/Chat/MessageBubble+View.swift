@@ -15,6 +15,8 @@ extension MessageBubble {
                 // signal like `session_ready`/`session_ping`) that leaked into the
                 // transcript. These are for logs, not the chat — never render a bubble.
                 EmptyView()
+            } else if message.contentType == .call {
+                CallTranscriptRowView(message: message)
             } else if message.fromUserId == "SYSTEM" {
                 // A SYSTEM row with no resolvable text has nothing to show — render
                 // nothing instead of a literal "System message" placeholder. These

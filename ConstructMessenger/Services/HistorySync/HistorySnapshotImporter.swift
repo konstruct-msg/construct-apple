@@ -269,7 +269,7 @@ final class HistorySnapshotImporter {
         var known = try knownCallIds ?? Set(calls.calls(limit: Int(Int32.max)).map(\.id))
         defer { knownCallIds = known }
         if known.contains(unnamed.id) { return .conflictKeepExisting }
-        try calls.upsert(CallRecord(
+        let call = CallRecord(
             id: unnamed.id,
             peerUserId: unnamed.peerUserId,
             peerName: try contacts.contact(unnamed.peerUserId)?.displayName ?? "",
@@ -278,7 +278,13 @@ final class HistorySnapshotImporter {
             startedAt: unnamed.startedAt.map(Date.init(unixMs:)) ?? Date(),
             endedAt: unnamed.endedAt.map(Date.init(unixMs:)),
             durationSeconds: unnamed.durationSeconds
-        ))
+        )
+        try calls.upsert(call)
+        // Its row in the conversation: the sending device left it out of the messages.
+        try CallTranscript.write(
+            call, announce: false, ownUserId: expectedUserId, chatId: openChat(withPeer: call.peerUserId),
+            messages: messages, chats: chats
+        )
         known.insert(unnamed.id)
         return .applied
     }

@@ -204,6 +204,9 @@ final class HistorySnapshotEncoder {
     }
 
     private func lift(_ message: MessageRecord, chatPeer: String?) -> Lifted? {
+        // A call's row is not a message: the call log travels as call records, and the import
+        // writes each call's row from its record (`CallTranscript`).
+        if message.contentType == .call { return nil }
         // iOS rows from before typed control content: a session signal or a control marker
         // stored as text. No other client wrote these.
         let stored = LocalMessagePayload.decode(message.body)

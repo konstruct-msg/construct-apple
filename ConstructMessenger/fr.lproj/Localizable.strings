@@ -864,6 +864,13 @@
 "call_incoming" = "Entrant";
 "call_missed" = "Manqué";
 "call_declined" = "Refusé";
+/* A call in the conversation (CallTranscript) */
+"call_row_missed" = "Appel manqué";
+"call_row_unanswered" = "Pas de réponse";
+"call_row_declined" = "Appel refusé";
+"call_row_failed" = "Échec de l’appel";
+"call_row_incoming" = "Appel entrant";
+"call_row_outgoing" = "Appel sortant";
 "call_failed" = "Échec";
 "call_ended" = "Appel terminé";
 "call_busy" = "Occupé";

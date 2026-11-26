@@ -777,6 +777,13 @@
 "call_incoming" = "着信";
 "call_missed" = "不在着信";
 "call_declined" = "拒否";
+/* A call in the conversation (CallTranscript) */
+"call_row_missed" = "不在着信";
+"call_row_unanswered" = "応答なし";
+"call_row_declined" = "拒否した通話";
+"call_row_failed" = "通話失敗";
+"call_row_incoming" = "着信";
+"call_row_outgoing" = "発信";
 "call_failed" = "失敗";
 "call_ended" = "通話終了";
 "call_busy" = "お話し中";
