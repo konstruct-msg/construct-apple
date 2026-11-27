@@ -12,7 +12,7 @@ four times.
 
 | File | Limit | Notes |
 |---|---|---|
-| `name.txt` | 30 | Shown under the icon. Per-locale on purpose — the product name differs by script. |
+| `name.txt` | 30 | The store name; App Store Connect requires it to be unique across the store. Not the name under the icon (`CFBundleDisplayName`, still `Konstruct`). |
 | `subtitle.txt` | 30 | Under the name on the product page. |
 | `promotional_text.txt` | 170 | The only field changeable **without review**. Keep anything time-sensitive here. |
 | `description.txt` | 4000 | |
@@ -35,3 +35,6 @@ marketing URLs. Those live in App Store Connect and change on a different clock.
 - The product name is `Konstruct`, in Latin, in every locale (owner, 2026-10-20). The
   transliteration (`конструкт`, `コンストラクト`) goes in `keywords.txt`, so a search in the
   local script still finds the app.
+- The store name is `Konstruct Messenger` in every locale: App Store Connect refused
+  `Konstruct` as already taken (2026-11-27). Since `Messenger` is in the name, it is not
+  repeated in the English keywords.
