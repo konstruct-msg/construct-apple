@@ -240,13 +240,21 @@ final class CallAudioRouter: NSObject, RTCAudioDeviceModuleDelegate, @unchecked 
         return 0
     }
 
-    // With an observer set, the module leaves wiring the engine's graph to it.
+    // The graph is the module's to wire, not ours. It connects the output itself before asking,
+    // and connects the microphone to its mixer when the observer has not — inside @try, rolling
+    // the enable back on failure. `AVAudioEngine.connect` raises an Objective-C exception when a
+    // format does not fit the hardware, and from here nothing catches it: it unwinds through
+    // WebRTC's C++ thread and aborts the app. That was every call of a tester's Mac at the moment
+    // media connected (0.3.32, macOS 15.6, `AVAudioIONodeImpl::SetOutputFormat`).
+    // So these only report what the module is about to connect, for the log a tester sends.
     func audioDeviceModule(
         _ module: RTCAudioDeviceModule, engine: AVAudioEngine,
         configureInputFromSource source: AVAudioNode?, toDestination destination: AVAudioNode,
         format: AVAudioFormat, context: [AnyHashable: Any]
     ) -> Int {
-        if let source { engine.connect(source, to: destination, format: format) }
+        if let input = source as? AVAudioInputNode {
+            Log.info("AUDIO[input] \(Self.describe(format)) from \(Self.describe(input.inputFormat(forBus: 0))) on \(Self.describeDevice(input.audioUnit))", category: "Calls")
+        }
         return 0
     }
 
@@ -255,8 +263,30 @@ final class CallAudioRouter: NSObject, RTCAudioDeviceModuleDelegate, @unchecked 
         configureOutputFromSource source: AVAudioNode, toDestination destination: AVAudioNode?,
         format: AVAudioFormat, context: [AnyHashable: Any]
     ) -> Int {
-        if let destination { engine.connect(source, to: destination, format: format) }
+        Log.info("AUDIO[output] \(Self.describe(format)) to \(Self.describe(engine.outputNode.outputFormat(forBus: 0))) on \(Self.describeDevice(engine.outputNode.audioUnit))", category: "Calls")
         return 0
+    }
+
+    private static func describe(_ format: AVAudioFormat) -> String {
+        "\(Int(format.sampleRate))Hz/\(format.channelCount)ch"
+    }
+
+    /// The device by its id and kind — built-in, USB, Bluetooth — never its name, which is often
+    /// the owner's ("…'s AirPods") and goes out in an exported log.
+    private static func describeDevice(_ unit: AudioUnit?) -> String {
+        guard let unit, let id = currentDevice(unit) else { return "no device" }
+        let kind: String
+        switch uint32(id, kAudioDevicePropertyTransportType) ?? 0 {
+        case kAudioDeviceTransportTypeBuiltIn: kind = "built-in"
+        case kAudioDeviceTransportTypeUSB: kind = "usb"
+        case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: kind = "bluetooth"
+        case kAudioDeviceTransportTypeAggregate: kind = "aggregate"
+        case kAudioDeviceTransportTypeVirtual: kind = "virtual"
+        case kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeHDMI: kind = "display"
+        case kAudioDeviceTransportTypeAirPlay: kind = "airplay"
+        default: kind = "other"
+        }
+        return "device \(id) \(kind)"
     }
 
     func audioDeviceModuleDidUpdateDevices(_ module: RTCAudioDeviceModule) {}

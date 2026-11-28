@@ -57,4 +57,26 @@ final class CallAudioRouteTests: XCTestCase {
         )
         XCTAssertEqual(route, .system)
     }
+
+    /// The Mac call's audio observer never wires the engine itself. `AVAudioEngine.connect` raises
+    /// an Objective-C exception on a format the hardware refuses; WebRTC catches it around its own
+    /// connect, and nothing catches it in its observer's callback — every call of a tester's Mac
+    /// aborted there as media connected (Desktop 0.3.32). The callbacks run only on a Mac with
+    /// devices, so the file is read here.
+    ///
+    /// Mutation: put `engine.connect(source, to: destination, format: format)` back into
+    /// `configureInputFromSource` — this reddens.
+    func testTheAudioObserverLeavesTheWiringToWebRTC() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Calls/CallAudioRouting.swift")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(text.contains("configureInputFromSource"), "the observer moved; point this test at it")
+        let calls = text.components(separatedBy: "\n").filter {
+            let t = $0.trimmingCharacters(in: .whitespaces)
+            return !t.hasPrefix("//") && t.contains(".connect(")
+        }
+        XCTAssertEqual(calls, [], "the observer connects engine nodes outside WebRTC's @try")
+    }
 }
