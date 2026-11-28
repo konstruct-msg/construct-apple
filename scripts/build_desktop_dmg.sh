@@ -9,6 +9,16 @@
 #   ./scripts/build_desktop_dmg.sh --arch arm64   one architecture (arm64 | x86_64 | all, default all)
 #   ./scripts/build_desktop_dmg.sh --notarize --publish
 #                                                 plus a GitHub release and the update feeds
+#   ./scripts/build_desktop_dmg.sh --existing-dmg --notarize --publish
+#                                                 the DMGs a plain run left in build/desktop,
+#                                                 notarized and published — nothing is built
+#
+# Two steps when this Mac's network cannot reach the notary: build the signed DMGs here
+# (a plain run), then run --existing-dmg --notarize --publish from the same checkout on a
+# network that can — notarytool uploads to Amazon S3, which some VPNs and proxies do not
+# resolve (0.3.33: the submission is created, the upload never arrives, status stays
+# "In Progress"). A DMG that is already stapled is not submitted again, so a run that
+# stopped half-way is simply repeated.
 #
 # Beta by default — what TestFlight gets on iOS: Release plus the log file and its
 # export (INTERNAL_TOOLS, Config/Beta.xcconfig), against the production server. No
@@ -64,6 +74,7 @@ SPARKLE_ACCOUNT="konstruct-desktop"
 
 CONFIGURATION="Beta"
 BUILD=1
+EXISTING=0
 NOTARIZE=0
 PUBLISH=0
 ARCH_ARG="all"
@@ -73,6 +84,7 @@ PROFILE="${NOTARY_PROFILE:-construct-notary}"
 while [ $# -gt 0 ]; do
     case "$1" in
         --no-build) BUILD=0 ;;
+        --existing-dmg) BUILD=0; EXISTING=1 ;;
         --notarize) NOTARIZE=1 ;;
         --release) CONFIGURATION="Release" ;;
         --arch) ARCH_ARG="$2"; shift ;;
@@ -161,40 +173,56 @@ for ARCH in "${ARCH_LIST[@]}"; do
             ARCHS="$ARCH" ONLY_ACTIVE_ARCH=NO
         thin_app "$ARCHIVE/Products/Applications/$PRODUCT.app" "$ARCH"
     fi
-    [ -d "$ARCHIVE" ] || { echo "no archive at $ARCHIVE — run without --no-build" >&2; exit 1; }
+    [ -d "$ARCHIVE" ] || { echo "no archive at $ARCHIVE — run without --no-build / --existing-dmg" >&2; exit 1; }
 
-    say "export (Developer ID, $ARCH)"
-    rm -rf "${EXPORT:?}"
-    xcodebuild -exportArchive -quiet -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
-        -exportOptionsPlist "$EXPORT_OPTIONS" -allowProvisioningUpdates
-
-    APP="$EXPORT/$PRODUCT.app"
-    codesign --verify --deep --strict "$APP"
+    if [ "$EXISTING" -eq 1 ]; then
+        # The version comes from the archive the DMG was made from; the DMG must already be
+        # there and signed. Nothing is exported or re-signed.
+        APP="$ARCHIVE/Products/Applications/$PRODUCT.app"
+    else
+        say "export (Developer ID, $ARCH)"
+        rm -rf "${EXPORT:?}"
+        xcodebuild -exportArchive -quiet -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
+            -exportOptionsPlist "$EXPORT_OPTIONS" -allowProvisioningUpdates
+        APP="$EXPORT/$PRODUCT.app"
+        codesign --verify --deep --strict "$APP"
+    fi
     [ "$(lipo -archs "$APP/Contents/MacOS/$PRODUCT")" = "$ARCH" ] || { echo "$APP is not $ARCH-only" >&2; exit 1; }
     VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")"
     BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")"
     MIN_SYSTEM="$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
     DMG="$OUT/$PRODUCT $VERSION ($BUILD_NUMBER) $CONFIGURATION $ARCH.dmg"
 
-    # The app inside is not stapled on its own. Notarizing the DMG registers the app's
-    # hash as well, so Gatekeeper finds its ticket online at the first launch; a Mac that
-    # is offline at that moment refuses it. Stapling the app too costs a second submission.
-    say "disk image ($ARCH)"
-    rm -rf "${STAGING:?}" && mkdir -p "$STAGING"
-    ditto "$APP" "$STAGING/$PRODUCT.app"
-    ln -s /Applications "$STAGING/Applications"
-    rm -f "$DMG"
-    hdiutil create -quiet -volname "$PRODUCT" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
-    rm -rf "${STAGING:?}"
-    codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+    if [ "$EXISTING" -eq 1 ]; then
+        [ -f "$DMG" ] || { echo "no DMG at $DMG — build it first: $0 (without --existing-dmg)" >&2; exit 1; }
+        codesign --verify "$DMG" || { echo "$DMG is not signed" >&2; exit 1; }
+        say "existing disk image ($ARCH): $DMG"
+    else
+        # The app inside is not stapled on its own. Notarizing the DMG registers the app's
+        # hash as well, so Gatekeeper finds its ticket online at the first launch; a Mac that
+        # is offline at that moment refuses it. Stapling the app too costs a second submission.
+        say "disk image ($ARCH)"
+        rm -rf "${STAGING:?}" && mkdir -p "$STAGING"
+        ditto "$APP" "$STAGING/$PRODUCT.app"
+        ln -s /Applications "$STAGING/Applications"
+        rm -f "$DMG"
+        hdiutil create -quiet -volname "$PRODUCT" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
+        rm -rf "${STAGING:?}"
+        codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+    fi
 
     if [ "$NOTARIZE" -eq 1 ]; then
-        say "notarization ($ARCH, profile $PROFILE)"
-        if ! xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait; then
-            echo "notarization failed; if the profile is missing: xcrun notarytool store-credentials $PROFILE --apple-id <Apple ID> --team-id $TEAM_ID" >&2
-            exit 1
+        if xcrun stapler validate -q "$DMG" 2>/dev/null; then
+            say "notarization ($ARCH): already stapled, not submitted again"
+        else
+            say "notarization ($ARCH, profile $PROFILE)"
+            if ! xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait; then
+                echo "notarization failed. Missing profile: xcrun notarytool store-credentials $PROFILE --apple-id <Apple ID> --team-id $TEAM_ID" >&2
+                echo "A timeout with the submission still \"In Progress\" (xcrun notarytool history --keychain-profile $PROFILE) is usually the upload to Amazon S3 not getting through this network: run $0 --existing-dmg --notarize --publish on another one." >&2
+                exit 1
+            fi
+            xcrun stapler staple "$DMG"
         fi
-        xcrun stapler staple "$DMG"
         spctl --assess --type open --context context:primary-signature --verbose "$DMG"
     fi
     DMGS+=("$ARCH|$DMG")
